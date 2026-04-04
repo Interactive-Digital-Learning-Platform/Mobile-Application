@@ -1,24 +1,44 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import QueryClientProviderCom from "@/providers/QueryClientProviderCom";
+import { SplashScreen, Stack } from "expo-router";
+import "react-native-reanimated";
+import "../global.css";
+import { useFonts } from "expo-font";
+import { useEffect } from "react";
+import "nativewind";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [fontsLoaded, error] = useFonts({
+    "Author-Bold": require("@/assets/fonts/Author-Bold.otf"),
+    "Author-BoldItalic": require("@/assets/fonts/Author-BoldItalic.otf"),
+    "Author-Italic": require("@/assets/fonts/Author-Italic.otf"),
+    "Author-Light": require("@/assets/fonts/Author-Light.otf"),
+    "Author-Medium": require("@/assets/fonts/Author-Medium.otf"),
+    "Author-Regular": require("@/assets/fonts/Author-Regular.otf"),
+    "Author-Semibold": require("@/assets/fonts/Author-Semibold.otf"),
+    "Author-SemiboldItalic": require("@/assets/fonts/Author-SemiboldItalic.otf"),
+  });
 
+  useEffect(() => {
+    if (error) throw error;
+
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, error]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  if (!fontsLoaded && !error) return null;
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <QueryClientProviderCom>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </QueryClientProviderCom>
   );
 }
