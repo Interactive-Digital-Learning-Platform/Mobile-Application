@@ -1,16 +1,25 @@
+import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect } from "react";
+import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-export default function HomeScreen() {
+export default function Index() {
+  const { isSignedIn, isLoaded } = useAuth();
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (isLoaded && isSignedIn) {
+      router.replace("/(tabs)/ai");
+    } else {
+      router.replace("/(auth)/sign-in");
+    }
+  }, [isLoaded, isSignedIn]);
+
   return (
     <SafeAreaView style={styles.root}>
-      <View>
-        <Text>Index file</Text>
-        <TouchableOpacity onPress={() => router.push("/(tabs)/explore")}>
-          <Text className="font-asemibold text-4xl">Navigate Home</Text>
-        </TouchableOpacity>
-      </View>
+      <ActivityIndicator size="large" />
     </SafeAreaView>
   );
 }
