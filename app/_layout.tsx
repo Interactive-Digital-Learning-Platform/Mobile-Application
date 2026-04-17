@@ -5,6 +5,9 @@ import "../global.css";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import "nativewind";
+import ClerkProviderCom from "@/providers/ClerkProviderCom";
+import Toast from "react-native-toast-message";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,11 +37,17 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !error) return null;
   return (
-    <QueryClientProviderCom>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-      </Stack>
-    </QueryClientProviderCom>
+    <KeyboardProvider>
+      <QueryClientProviderCom>
+        <ClerkProviderCom>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+          </Stack>
+          <Toast />
+        </ClerkProviderCom>
+      </QueryClientProviderCom>
+    </KeyboardProvider>
   );
 }
