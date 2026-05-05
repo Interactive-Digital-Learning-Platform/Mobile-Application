@@ -42,12 +42,12 @@ const InputField = ({
           onBlur={() => setIsFocused(false)}
           placeholder={placeHolder}
           placeholderTextColor="#979797"
-          secureTextEntry={title === "Password" && !passwordVisible}
+          secureTextEntry={keyboardType === "password" && !passwordVisible}
           keyboardType={
             keyboardType === "email-address" ? "email-address" : "default"
           }
         />
-        {title === "Password" && (
+        {keyboardType === "password" && (
           <TouchableOpacity
             style={styles.iconContainer}
             onPress={() => setpasswordVisible((prev) => !prev)}
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     height: 48,
   },
   textInputFocused: {
-    borderColor: "#FACB40",
+    borderColor: "#FC6E20",
   },
   iconContainer: {
     position: "absolute",

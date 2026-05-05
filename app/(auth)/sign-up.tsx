@@ -38,6 +38,7 @@ export default function Signup() {
     const { error } = await signUp.password({
       emailAddress: formData.email,
       password: formData.password,
+      username: formData.username
     });
 
     if (error) {
