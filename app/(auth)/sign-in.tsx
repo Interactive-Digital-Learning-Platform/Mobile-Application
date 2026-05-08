@@ -10,7 +10,7 @@ import { useForm, Controller } from "react-hook-form";
 import z from "zod";
 import { userSignInSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAuth, useSignIn } from "@clerk/expo";
+import { useAuth, useSignIn } from "@/hooks/useAuth";
 import { type signInFormValues } from "@/types";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";

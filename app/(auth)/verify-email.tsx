@@ -9,7 +9,7 @@ import {
 } from "react-native-confirmation-code-field";
 import CustomButton from "@/components/CustomButton";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAuth, useSignUp } from "@clerk/expo";
+import { useAuth, useSignUp } from "@/hooks/useAuth";
 import { Controller, useForm } from "react-hook-form";
 import z from "zod";
 import { emailVerificationSchema } from "@/schemas/userSchemas";
