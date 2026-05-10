@@ -15,7 +15,7 @@ export default function Index() {
     if (!isLoaded) return;
 
     if (isLoaded && isSignedIn) {
-      router.replace("/(tabs)/ai");
+      router.replace("/(tabs)/quiz");
     } else {
       router.replace("/(auth)/sign-in");
     }

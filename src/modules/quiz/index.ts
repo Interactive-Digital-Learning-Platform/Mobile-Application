@@ -1,0 +1,12 @@
+/**
+ * src/modules/quiz/index.ts
+ * ─────────────────────────
+ * Barrel file — re-export everything from the quiz module for clean imports.
+ *
+ * Usage:
+ *   import { useGenerateQuiz, useSubmitQuiz, useAnalytics } from "@/src/modules/quiz";
+ */
+
+export * from "./types";
+export * from "./quizApi";
+export * from "./quizHooks";

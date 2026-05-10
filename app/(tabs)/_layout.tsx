@@ -50,7 +50,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="quiz/index"
+        name="quiz"
         options={{
           title: "Quizzes",
           headerShown: false,
