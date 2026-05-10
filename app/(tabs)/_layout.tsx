@@ -22,7 +22,7 @@ export default function TabLayout() {
           }),
           backgroundColor: "#f0f5fb",
           elevation: 0,
-          shadowOpacity: 0,
+          boxShadow: "none",
           paddingTop: 12,
           paddingBottom: Platform.select({
             ios: 8 + insets.bottom,
@@ -66,7 +66,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="notes/index"
+        name="notes"
         options={{
           title: "Notes",
           headerShown: false,
