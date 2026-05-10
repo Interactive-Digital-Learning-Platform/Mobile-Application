@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useUser } from "@clerk/expo";
+import { useUser } from "@/hooks/clerk-mock";
 import { quickActions } from "@/constants/quickActions";
 import { MessageType, QuickActionType } from "@/types";
 import QuickAction from "@/components/QuickAction";
@@ -62,8 +62,8 @@ export default function AIChat() {
             data={messages}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <Message key={item.id} message={item} />}
-            className="w-full flex-1"
-            contentContainerClassName="w-full h-auto flex-col justify-start"
+            style={{ width: '100%', flex: 1 }}
+            contentContainerStyle={{ width: '100%', paddingBottom: 20 }}
             ListHeaderComponent={
               messages.length === 0 ? (
                 <View className="w-full h-auto mb-12">

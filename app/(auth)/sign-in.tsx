@@ -10,11 +10,13 @@ import { useForm, Controller } from "react-hook-form";
 import z from "zod";
 import { userSignInSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAuth, useSignIn } from "@clerk/expo";
+import { useAuth, useSignIn, useUser } from "@/hooks/clerk-mock";
 import { type signInFormValues } from "@/types";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useEffect } from "react";
+// import { useUser } from "@clerk/expo";
+import { syncUserWithBackend } from "@/services/authService";
 
 export default function Signin() {
   const navigation = useNavigation();
@@ -52,7 +54,20 @@ export default function Signin() {
 
     if (signIn.status === "complete") {
       await signIn.finalize({
-        navigate: ({ session }) => {
+        navigate: async ({ session }) => {
+          if (session?.user) {
+            // Sync with our backend
+            try {
+              await syncUserWithBackend({
+                clerkId: session.user.id,
+                name: session.user.username || session.user.firstName || "Student",
+                email: session.user.primaryEmailAddress?.emailAddress || formData.email,
+              });
+            } catch (err) {
+              console.error("Backend sync failed:", err);
+            }
+          }
+          
           if (session?.currentTask) {
             console.log("Current task: ", session?.currentTask);
             return;
@@ -124,6 +139,20 @@ export default function Signin() {
           </View>
           <View className="mt-5 justify-center items-center">
             <Text className="font-amedium text-xl">OR</Text>
+          </View>
+          <View className="mt-5">
+            <CustomButton
+              title="Bypass Login (Example User)"
+              handlePress={() => {
+                syncUserWithBackend({
+                  clerkId: "mock_clerk_id_123",
+                  name: "Test User",
+                  email: "testuser@example.com",
+                }).then(() => router.push("/(tabs)/ai"));
+              }}
+              backgroundColor={colors.primary}
+              textStyles={{ color: "white" }}
+            />
           </View>
           <View className="mt-5">
             <CustomButton

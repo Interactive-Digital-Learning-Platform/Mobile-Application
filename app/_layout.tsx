@@ -1,9 +1,9 @@
+import React, { useEffect } from "react";
 import QueryClientProviderCom from "@/providers/QueryClientProviderCom";
 import { SplashScreen, Stack } from "expo-router";
 import "react-native-reanimated";
 import "../global.css";
 import { useFonts } from "expo-font";
-import { useEffect } from "react";
 import "nativewind";
 import ClerkProviderCom from "@/providers/ClerkProviderCom";
 import Toast from "react-native-toast-message";
@@ -35,7 +35,6 @@ export default function RootLayout() {
     return null;
   }
 
-  if (!fontsLoaded && !error) return null;
   return (
     <KeyboardProvider>
       <QueryClientProviderCom>
@@ -43,6 +42,7 @@ export default function RootLayout() {
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(main)" options={{ headerShown: false }} />
             <Stack.Screen name="index" options={{ headerShown: false }} />
           </Stack>
           <Toast />

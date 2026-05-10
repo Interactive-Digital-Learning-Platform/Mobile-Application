@@ -9,7 +9,7 @@ import {
 } from "react-native-confirmation-code-field";
 import CustomButton from "@/components/CustomButton";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAuth, useSignUp } from "@clerk/expo";
+import { useAuth, useSignUp, useUser } from "@/hooks/clerk-mock";
 import { Controller, useForm } from "react-hook-form";
 import z from "zod";
 import { emailVerificationSchema } from "@/schemas/userSchemas";
@@ -17,6 +17,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useEffect } from "react";
+import { syncUserWithBackend } from "@/services/authService";
+// import { useUser } from "@clerk/expo";
 
 export default function VerifyEmail() {
   const params = useLocalSearchParams();
@@ -52,7 +54,20 @@ export default function VerifyEmail() {
 
     if (signUp.status === "complete") {
       await signUp.finalize({
-        navigate: ({ session }) => {
+        navigate: async ({ session }) => {
+          if (session?.user) {
+            // Sync with our backend
+            try {
+              await syncUserWithBackend({
+                clerkId: session.user.id,
+                name: params.username as string || "Student",
+                email: session.user.primaryEmailAddress?.emailAddress || params.email as string,
+              });
+            } catch (err) {
+              console.error("Backend sync failed:", err);
+            }
+          }
+
           if (session?.currentTask) {
             console.log("Current task: ", session?.currentTask);
             return;

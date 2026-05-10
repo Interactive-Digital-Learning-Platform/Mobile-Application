@@ -1,5 +1,5 @@
 import { QuickActionType } from "@/types";
-import { Atom, MessageCircleQuestionMark, Route } from "lucide-react-native";
+import { Atom, MessageCircleQuestion, Route } from "lucide-react-native";
 
 export const quickActions: QuickActionType[] = [
   {
@@ -13,7 +13,7 @@ export const quickActions: QuickActionType[] = [
     prompt: "Provide step-by-step solution",
   },
   {
-    icon: MessageCircleQuestionMark,
+    icon: MessageCircleQuestion,
     title: "Help me understand",
     prompt: "Help me understand something",
   },
