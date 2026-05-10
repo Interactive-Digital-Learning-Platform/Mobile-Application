@@ -168,42 +168,49 @@ export default function NoteDetail() {
                 title="Structured Notes"
                 color="#3b82f6"
                 isReady={materialsOverview?.generatedTypes.includes('structured_notes')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/structured_notes`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "structured_notes" } })}
               />
               <MaterialCard 
                 icon={<Layers size={24} color="#8b5cf6" />}
                 title="Flashcards"
                 color="#8b5cf6"
                 isReady={materialsOverview?.generatedTypes.includes('flashcards')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/flashcards`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "flashcards" } })}
               />
               <MaterialCard 
                 icon={<FileText size={24} color="#10b981" />}
                 title="Revision Summary"
                 color="#10b981"
                 isReady={materialsOverview?.generatedTypes.includes('revision_summary')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/revision_summary`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "revision_summary" } })}
               />
               <MaterialCard 
                 icon={<AlertCircle size={24} color="#ef4444" />}
                 title="Learning Gaps"
                 color="#ef4444"
                 isReady={materialsOverview?.generatedTypes.includes('learning_points')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/learning_points`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "learning_points" } })}
               />
               <MaterialCard 
                 icon={<Play size={24} color="#f59e0b" />}
                 title="Audio Lesson"
                 color="#f59e0b"
                 isReady={materialsOverview?.generatedTypes.includes('audio')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/audio`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "audio" } })}
               />
               <MaterialCard 
                 icon={<BookOpen size={24} color="#6366f1" />}
                 title="Definitions"
                 color="#6366f1"
                 isReady={materialsOverview?.generatedTypes.includes('definitions')}
-                onPress={() => router.push(`/(tabs)/notes/${id}/material/definitions`)}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "definitions" } })}
+              />
+              <MaterialCard 
+                icon={<Layers size={24} color="#ec4899" />}
+                title="Mind Map"
+                color="#ec4899"
+                isReady={materialsOverview?.generatedTypes.includes('mindmap')}
+                onPress={() => router.push({ pathname: "/(tabs)/notes/material/[type]", params: { id, type: "mindmap" } })}
               />
             </View>
           </>

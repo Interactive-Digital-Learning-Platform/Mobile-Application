@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { X, Upload, Camera, Image as ImageIcon } from "lucide-react-native";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@clerk/expo";
 import { notesApi } from "@/services/api";
 import { colors } from "@/constants/colors";
 import InputField from "@/components/InputField";

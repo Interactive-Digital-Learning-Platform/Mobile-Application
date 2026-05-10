@@ -10,7 +10,7 @@ import { useForm, Controller } from "react-hook-form";
 import z from "zod";
 import { userSignupSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useAuth, useSignUp } from "@/hooks/useAuth";
+import { useSignUp } from "@clerk/expo";
 import { signUpFormValues } from "@/types";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
@@ -38,6 +38,7 @@ export default function Signup() {
     const { error } = await signUp.password({
       emailAddress: formData.email,
       password: formData.password,
+      username: formData.username
     });
 
     if (error) {
