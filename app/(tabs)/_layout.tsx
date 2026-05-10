@@ -20,7 +20,7 @@ export default function TabLayout() {
             ios: 64 + insets.bottom,
             android: 64 + insets.bottom,
           }),
-          backgroundColor: "white",
+          backgroundColor: "#f0f5fb",
           elevation: 0,
           boxShadow: "none",
           paddingTop: 12,
