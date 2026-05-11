@@ -169,7 +169,7 @@ function SubjectBarChart({
           return (
             <View key={s.subject} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Text
-                style={{ width: 88, fontSize: 11, fontWeight: "600", color: "#64748b" }}
+                style={{ width: 80, fontSize: 11, fontWeight: "600", color: "#64748b" }}
                 numberOfLines={1}
               >
                 {s.subject}
@@ -505,7 +505,7 @@ export default function Profile() {
                     {feedback.motivational_note}
                   </Text>
                   {feedback.generated_at && (
-                    <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 9, marginTop: 8 }}>
+                    <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 8 ,fontWeight: "500"}}>
                       Generated {new Date(feedback.generated_at).toLocaleTimeString([], {
                         hour: "2-digit", minute: "2-digit",
                       })}
