@@ -3,10 +3,11 @@
  *
  * Sections:
  *   1. Header with user info (useUserMeQuery)
- *   2. Overview stats: accuracy, sessions, avg response time
- *   3. Subject breakdown cards
+ *   2. Overview: accuracy donut ring + sessions/speed tiles
+ *   3. Horizontal bar chart — subject accuracy
  *   4. Strong / weak subject pills
- *   5. AI feedback section with refresh (useAnalyticsFeedbackQuery)
+ *   5. Per-subject detail cards
+ *   6. AI feedback section with refresh (useAnalyticsFeedbackQuery)
  */
 
 import { useState } from "react";
@@ -17,14 +18,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import {
   User,
   Trophy,
   Clock,
   BarChart2,
-  BookOpen,
   TrendingUp,
   TrendingDown,
   Sparkles,
@@ -35,112 +37,196 @@ import {
   Target,
   Heart,
 } from "lucide-react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
-import { useUserMeQuery } from "@/src/modules/quiz/quizHooks";
-import { useAnalyticsMeQuery } from "@/src/modules/quiz/quizHooks";
-import { useAnalyticsFeedbackQuery } from "@/src/modules/quiz/quizHooks";
+import Animated, { FadeIn } from "react-native-reanimated";
+import {
+  useUserMeQuery,
+  useAnalyticsMeQuery,
+  useAnalyticsFeedbackQuery,
+  quizKeys,
+} from "@/src/modules/quiz/quizHooks";
 import { useQueryClient } from "@tanstack/react-query";
-import { quizKeys } from "@/src/modules/quiz/quizHooks";
 
-// ── Small reusable stat tile ──────────────────────────────────────────────────
+// ── Primary palette ───────────────────────────────────────────────────────────
+
+const C = {
+  p50:  "#FFF3EC",
+  p100: "#FFE4CF",
+  p200: "#FFCCA8",
+  p300: "#FFA87A",
+  p400: "#FF8C50",
+  p500: "#FC6E20",
+  p600: "#E55B10",
+  p700: "#CC4D08",
+  p800: "#A33C06",
+};
+
+
+// ── Shared stylesheet ─────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  iconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionLabel: {
+    color: "#1e293b",
+    fontWeight: "900",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  pillStrong: {
+    backgroundColor: C.p100,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pillWeak: {
+    backgroundColor: "#FFE4E6",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+});
+
+// ── Accuracy donut ring ───────────────────────────────────────────────────────
+
+function AccuracyRing({ accuracy }: { accuracy: number }) {
+  const SIZE = 114;
+  const SW = 11;
+  const R = (SIZE - SW) / 2;
+  const CIRC = 2 * Math.PI * R;
+  const pct = Math.min(Math.max(accuracy, 0), 100);
+  const filled = (pct / 100) * CIRC;
+  const cx = SIZE / 2;
+  const cy = SIZE / 2;
+
+  return (
+    <View style={{ alignItems: "center", justifyContent: "center" }}>
+      <Svg width={SIZE} height={SIZE} style={{ position: "absolute" }}>
+        <Circle
+          cx={cx} cy={cy} r={R}
+          stroke={C.p100} strokeWidth={SW} fill="transparent"
+        />
+        <Circle
+          cx={cx} cy={cy} r={R}
+          stroke={C.p500} strokeWidth={SW} fill="transparent"
+          strokeDasharray={`${filled} ${CIRC - filled}`}
+          strokeLinecap="round"
+          transform={`rotate(-90, ${cx}, ${cy})`}
+        />
+      </Svg>
+      <View style={{ width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: C.p700, fontSize: 22, fontWeight: "900", lineHeight: 26 }}>
+          {Math.round(pct)}%
+        </Text>
+        <Text style={{ color: C.p400, fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 }}>
+          Accuracy
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Horizontal bar chart ──────────────────────────────────────────────────────
+
+function SubjectBarChart({
+  subjects,
+}: {
+  subjects: { subject: string; accuracy: number }[];
+}) {
+  if (!subjects.length) return null;
+
+  return (
+    <View style={[styles.card, { marginBottom: 12 }]}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 14 }}>
+        <View style={[styles.iconBadge, { backgroundColor: C.p100 }]}>
+          <BarChart2 size={14} color={C.p500} strokeWidth={2} />
+        </View>
+        <Text style={styles.sectionLabel}>Subject Accuracy</Text>
+      </View>
+
+      <View style={{ gap: 10 }}>
+        {subjects.map((s) => {
+          const pct = Math.min(Math.max(s.accuracy, 0), 100);
+          const isStrong = pct >= 70;
+
+          return (
+            <View key={s.subject} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text
+                style={{ width: 88, fontSize: 11, fontWeight: "600", color: "#64748b" }}
+                numberOfLines={1}
+              >
+                {s.subject}
+              </Text>
+              <View style={{ flex: 1, height: 14, backgroundColor: C.p50, borderRadius: 7, overflow: "hidden" }}>
+                <View style={{
+                  width: `${pct}%`,
+                  height: "100%",
+                  backgroundColor: isStrong ? C.p500 : C.p300,
+                  borderRadius: 7,
+                }} />
+              </View>
+              <Text style={{ width: 36, fontSize: 11, fontWeight: "800", textAlign: "right", color: isStrong ? C.p600 : C.p400 }}>
+                {Math.round(pct)}%
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── Small stat tile ───────────────────────────────────────────────────────────
 
 function StatTile({
-  icon: Icon,
-  iconColor,
-  iconBg,
-  label,
-  value,
+  icon: Icon, iconColor, iconBg, label, value,
 }: {
-  icon: any;
-  iconColor: string;
-  iconBg: string;
-  label: string;
-  value: string | number;
+  icon: any; iconColor: string; iconBg: string; label: string; value: string | number;
 }) {
   return (
-    <View className="flex-1 bg-white rounded-2xl p-4 items-center border border-slate-100 shadow-sm shadow-black/5">
-      <View className={`w-10 h-10 rounded-full justify-center items-center mb-2 ${iconBg}`}>
-        <Icon size={20} color={iconColor} strokeWidth={2} />
+    <View style={[styles.card, { flex: 1, alignItems: "center", paddingVertical: 14 }]}>
+      <View style={[styles.iconBadge, { backgroundColor: iconBg, width: 40, height: 40, borderRadius: 20 }]}>
+        <Icon size={18} color={iconColor} strokeWidth={2} />
       </View>
-      <Text className="text-slate-800 font-black text-lg">{value}</Text>
-      <Text className="text-slate-400 text-[10px] font-semibold uppercase tracking-wide mt-0.5">
+      <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 16, marginTop: 6 }}>{value}</Text>
+      <Text style={{ color: "#94a3b8", fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>
         {label}
       </Text>
     </View>
   );
 }
 
-// ── Subject accuracy card ─────────────────────────────────────────────────────
-
-function SubjectCard({
-  subject,
-  accuracy,
-  avgResponseTime,
-  weakTopic,
-}: {
-  subject: string;
-  accuracy: number;
-  avgResponseTime: number;
-  weakTopic: string | null;
-}) {
-  const pct = Math.round(accuracy);
-  const isStrong = pct >= 70;
-
-  return (
-    <View className="bg-white rounded-2xl p-4 mb-3 border border-slate-100 shadow-sm shadow-black/5">
-      <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center gap-2 flex-1">
-          <View className={`w-8 h-8 rounded-full justify-center items-center ${
-            isStrong ? "bg-emerald-100" : "bg-rose-100"
-          }`}>
-            <BookOpen size={16} color={isStrong ? "#10B981" : "#EF4444"} strokeWidth={2} />
-          </View>
-          <Text className="text-slate-800 font-black text-sm flex-1" numberOfLines={1}>
-            {subject}
-          </Text>
-        </View>
-        <View className={`px-2.5 py-1 rounded-full ${isStrong ? "bg-emerald-500" : "bg-rose-500"}`}>
-          <Text className="text-white text-xs font-black">{pct}%</Text>
-        </View>
-      </View>
-
-      {/* Accuracy bar */}
-      <View className="h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
-        <View
-          className={`h-full rounded-full ${isStrong ? "bg-emerald-500" : "bg-rose-400"}`}
-          style={{ width: `${Math.min(pct, 100)}%` }}
-        />
-      </View>
-
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center gap-1">
-          <Clock size={11} color="#94a3b8" strokeWidth={2} />
-          <Text className="text-slate-400 text-[11px] font-medium">
-            {avgResponseTime.toFixed(1)}s avg
-          </Text>
-        </View>
-        {weakTopic && (
-          <Text className="text-slate-400 text-[11px] font-medium" numberOfLines={1}>
-            Weak: {weakTopic}
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-// ── Loading skeleton for stats ────────────────────────────────────────────────
+// ── Loading skeleton ──────────────────────────────────────────────────────────
 
 function StatsSkeleton() {
   return (
-    <View className="px-4 mt-4 gap-4">
-      <View className="flex-row gap-3">
-        {[0, 1, 2].map((i) => (
-          <View key={i} className="flex-1 h-24 bg-slate-100 rounded-2xl animate-pulse" />
-        ))}
+    <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flex: 1.2, height: 140, backgroundColor: C.p50, borderRadius: 18 }} />
+        <View style={{ flex: 1, gap: 10 }}>
+          <View style={{ flex: 1, backgroundColor: C.p50, borderRadius: 18 }} />
+          <View style={{ flex: 1, backgroundColor: C.p50, borderRadius: 18 }} />
+        </View>
       </View>
-      {[0, 1, 2].map((i) => (
-        <View key={i} className="h-20 bg-slate-100 rounded-2xl animate-pulse" />
+      {[0, 1].map((i) => (
+        <View key={i} style={{ height: 72, backgroundColor: C.p50, borderRadius: 18 }} />
       ))}
     </View>
   );
@@ -150,20 +236,20 @@ function StatsSkeleton() {
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <View className="flex-1 justify-center items-center px-8 py-12">
-      <View className="w-14 h-14 rounded-full bg-rose-100 justify-center items-center mb-4">
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 48 }}>
+      <View style={[styles.iconBadge, { backgroundColor: "#FEE2E2", width: 56, height: 56, borderRadius: 28, marginBottom: 16 }]}>
         <AlertCircle size={24} color="#EF4444" strokeWidth={2} />
       </View>
-      <Text className="text-slate-800 font-black text-base text-center mb-1">
+      <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 16, textAlign: "center", marginBottom: 4 }}>
         Could not load analytics
       </Text>
-      <Text className="text-slate-400 text-sm text-center mb-5">{message}</Text>
+      <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", marginBottom: 20 }}>{message}</Text>
       <TouchableOpacity
-        className="bg-primary px-6 py-3 rounded-2xl"
+        style={{ backgroundColor: C.p500, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}
         activeOpacity={0.85}
         onPress={onRetry}
       >
-        <Text className="text-white font-black text-sm">Try Again</Text>
+        <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>Try Again</Text>
       </TouchableOpacity>
     </View>
   );
@@ -176,14 +262,12 @@ export default function Profile() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: user } = useUserMeQuery();
-
   const {
     data: analytics,
     isLoading: analyticsLoading,
     error: analyticsError,
     refetch: refetchAnalytics,
   } = useAnalyticsMeQuery();
-
   const {
     data: feedback,
     isLoading: feedbackLoading,
@@ -201,41 +285,82 @@ export default function Profile() {
   };
 
   const displayName = user?.username ?? "Student";
-  const joinDate    = user?.created_at
+  const joinDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : null;
 
   return (
-    <SafeAreaView edges={["top"]} className="flex-1 bg-slate-50">
+    <SafeAreaView edges={["top"]} style={{ flex: 1 }} className="bg-primary">
+      <View className="bg-white">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#FC6E20"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.p500} />
         }
+        className="bg-primary"
       >
-        {/* ── Profile header ── */}
-        <View className="bg-primary px-6 pt-6 pb-10">
-          <View className="flex-row items-center gap-4">
-            <View className="w-16 h-16 rounded-full bg-white/20 border-2 border-white/40 justify-center items-center">
-              <User size={28} color="#fff" strokeWidth={1.8} />
+        <View className="bg-white">
+
+        
+      
+
+      
+        {/* ── Header ── */}
+        <View style={{
+          backgroundColor: C.p500,
+          paddingHorizontal: 20,
+          paddingTop: 20,
+          paddingBottom: 44,
+          borderBottomLeftRadius: 30,
+          borderBottomRightRadius: 30,
+          overflow: "hidden",
+        }}>
+          
+          
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View style={{
+              width: 64, height: 64, borderRadius: 32,
+              backgroundColor: "rgba(255,255,255,0.2)",
+              borderWidth: 2, borderColor: "rgba(255,255,255,0.4)",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <User size={26} color="#fff" strokeWidth={1.8} />
             </View>
-            <View className="flex-1">
-              <Text className="text-white font-black text-xl">{displayName}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "white", fontWeight: "900", fontSize: 20, lineHeight: 24 }}>
+                {displayName}
+              </Text>
               {joinDate && (
-                <Text className="text-white/60 text-xs mt-0.5">Member since {joinDate}</Text>
+                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, marginTop: 3 }}>
+                  Member since {joinDate}
+                </Text>
               )}
             </View>
+            {analytics && (
+              <View style={{
+                backgroundColor: "rgba(255,255,255,0.18)",
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.25)",
+              }}>
+                <Text style={{ color: "white", fontWeight: "900", fontSize: 18, lineHeight: 22 }}>
+                  {analytics.total_sessions}
+                </Text>
+                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Sessions
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
-        <View className="mt-[-24px]">
+        {/* ── Body ── */}
+        <View style={{ marginTop: -22 }}>
 
-          {/* ── Overview stats ── */}
           {analyticsLoading ? (
             <StatsSkeleton />
           ) : analyticsError ? (
@@ -244,65 +369,64 @@ export default function Profile() {
               onRetry={refetchAnalytics}
             />
           ) : analytics ? (
-            <Animated.View entering={FadeIn.duration(300)} className="px-4">
-              {/* Top 3 stat tiles */}
-              <View className="flex-row gap-3 mb-4">
-                <StatTile
-                  icon={BarChart2}
-                  iconColor="#FC6E20"
-                  iconBg="bg-orange-100"
-                  label="Sessions"
-                  value={analytics.total_sessions}
-                />
-                <StatTile
-                  icon={Trophy}
-                  iconColor="#F59E0B"
-                  iconBg="bg-amber-100"
-                  label="Accuracy"
-                  value={`${Math.round(analytics.overall_accuracy)}%`}
-                />
-                <StatTile
-                  icon={Clock}
-                  iconColor="#3B82F6"
-                  iconBg="bg-blue-100"
-                  label="Avg / Q"
-                  value={`${analytics.overall_avg_response_time.toFixed(1)}s`}
-                />
+            <Animated.View entering={FadeIn.duration(300)} style={{ paddingHorizontal: 16 }}>
+
+              {/* Accuracy ring + quick tiles */}
+              <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+                <View style={[styles.card, { flex: 1.15, alignItems: "center", justifyContent: "center", paddingVertical: 18 }]}>
+                  <AccuracyRing accuracy={analytics.overall_accuracy} />
+                </View>
+                <View style={{ flex: 1, gap: 10 }}>
+                  <StatTile
+                    icon={Trophy}
+                    iconColor={C.p500}
+                    iconBg={C.p100}
+                    label="Sessions"
+                    value={analytics.total_sessions}
+                  />
+                  <StatTile
+                    icon={Clock}
+                    iconColor={C.p600}
+                    iconBg={C.p100}
+                    label="Avg / Q"
+                    value={`${analytics.overall_avg_response_time.toFixed(1)}s`}
+                  />
+                </View>
               </View>
 
-              {/* Strong / weak subjects */}
+              {/* Bar chart */}
+              {analytics.subjects.length > 0 && (
+                <SubjectBarChart subjects={analytics.subjects} />
+              )}
+
+              {/* Strong / weak pills */}
               {(analytics.strong_subjects.length > 0 || analytics.weak_subjects.length > 0) && (
-                <View className="bg-white rounded-2xl p-4 mb-4 border border-slate-100 shadow-sm shadow-black/5">
+                <View style={[styles.card, { marginBottom: 12 }]}>
                   {analytics.strong_subjects.length > 0 && (
-                    <View className="mb-3">
-                      <View className="flex-row items-center gap-2 mb-2">
-                        <TrendingUp size={16} color="#10B981" strokeWidth={2} />
-                        <Text className="text-emerald-700 font-black text-xs uppercase tracking-wide">
-                          Strong
-                        </Text>
+                    <View style={{ marginBottom: analytics.weak_subjects.length > 0 ? 12 : 0 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <TrendingUp size={14} color={C.p500} strokeWidth={2} />
+                        <Text style={[styles.sectionLabel, { color: C.p600 }]}>Strong</Text>
                       </View>
-                      <View className="flex-row flex-wrap gap-2">
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                         {analytics.strong_subjects.map((s) => (
-                          <View key={s} className="bg-emerald-100 px-3 py-1.5 rounded-full">
-                            <Text className="text-emerald-700 text-xs font-semibold">{s}</Text>
+                          <View key={s} style={styles.pillStrong}>
+                            <Text style={{ color: C.p700, fontSize: 11, fontWeight: "600" }}>{s}</Text>
                           </View>
                         ))}
                       </View>
                     </View>
                   )}
-
                   {analytics.weak_subjects.length > 0 && (
                     <View>
-                      <View className="flex-row items-center gap-2 mb-2">
-                        <TrendingDown size={16} color="#EF4444" strokeWidth={2} />
-                        <Text className="text-rose-600 font-black text-xs uppercase tracking-wide">
-                          Needs Work
-                        </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <TrendingDown size={14} color="#EF4444" strokeWidth={2} />
+                        <Text style={[styles.sectionLabel, { color: "#DC2626" }]}>Needs Work</Text>
                       </View>
-                      <View className="flex-row flex-wrap gap-2">
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                         {analytics.weak_subjects.map((s) => (
-                          <View key={s} className="bg-rose-100 px-3 py-1.5 rounded-full">
-                            <Text className="text-rose-600 text-xs font-semibold">{s}</Text>
+                          <View key={s} style={styles.pillWeak}>
+                            <Text style={{ color: "#DC2626", fontSize: 11, fontWeight: "600" }}>{s}</Text>
                           </View>
                         ))}
                       </View>
@@ -311,35 +435,13 @@ export default function Profile() {
                 </View>
               )}
 
-              {/* Per-subject breakdown */}
-              {analytics.subjects.length > 0 && (
-                <>
-                  <Text className="text-slate-800 font-black text-sm mb-3 px-1">
-                    Subject Breakdown
-                  </Text>
-                  {analytics.subjects.map((s, i) => (
-                    <Animated.View
-                      key={s.subject}
-                      entering={FadeInDown.delay(i * 60).duration(250)}
-                    >
-                      <SubjectCard
-                        subject={s.subject}
-                        accuracy={s.accuracy}
-                        avgResponseTime={s.avg_response_time}
-                        weakTopic={s.weak_topic}
-                      />
-                    </Animated.View>
-                  ))}
-                </>
-              )}
-
               {analytics.total_sessions === 0 && (
-                <View className="bg-white rounded-2xl p-6 items-center border border-slate-100">
-                  <Target size={32} color="#FC6E20" strokeWidth={1.8} />
-                  <Text className="text-slate-800 font-black text-base mt-3 mb-1">
+                <View style={[styles.card, { alignItems: "center", paddingVertical: 36 }]}>
+                  <Target size={32} color={C.p500} strokeWidth={1.8} />
+                  <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 15, marginTop: 12, marginBottom: 4 }}>
                     No quiz data yet
                   </Text>
-                  <Text className="text-slate-400 text-sm text-center">
+                  <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center" }}>
                     Complete a quiz to see your analytics here.
                   </Text>
                 </View>
@@ -348,53 +450,62 @@ export default function Profile() {
           ) : null}
 
           {/* ── AI Feedback ── */}
-          <View className="px-4 mt-2">
-            <View className="flex-row items-center justify-between mb-3 px-1">
-              <View className="flex-row items-center gap-2">
-                <Sparkles size={18} color="#7C3AED" strokeWidth={2} />
-                <Text className="text-slate-800 font-black text-sm">AI Feedback</Text>
+          <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingLeft: 2 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Sparkles size={16} color={C.p500} strokeWidth={2} />
+                <Text style={styles.sectionLabel}>AI Feedback</Text>
               </View>
               <TouchableOpacity
-                className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-100"
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 5,
+                  paddingHorizontal: 12, paddingVertical: 6,
+                  borderRadius: 12, backgroundColor: C.p100,
+                }}
                 activeOpacity={0.8}
                 onPress={() => refetchFeedback()}
                 disabled={feedbackLoading}
               >
                 {feedbackLoading ? (
-                  <ActivityIndicator size="small" color="#7C3AED" />
+                  <ActivityIndicator size="small" color={C.p500} />
                 ) : (
-                  <RefreshCw size={12} color="#7C3AED" strokeWidth={2.5} />
+                  <RefreshCw size={11} color={C.p600} strokeWidth={2.5} />
                 )}
-                <Text className="text-violet-700 text-xs font-bold">Refresh</Text>
+                <Text style={{ color: C.p700, fontSize: 11, fontWeight: "700" }}>Refresh</Text>
               </TouchableOpacity>
             </View>
 
             {feedbackLoading ? (
-              <View className="bg-white rounded-2xl p-6 items-center border border-slate-100">
-                <ActivityIndicator size="large" color="#7C3AED" />
-                <Text className="text-slate-400 text-sm mt-3">Generating AI feedback…</Text>
+              <View style={[styles.card, { alignItems: "center", paddingVertical: 36 }]}>
+                <ActivityIndicator size="large" color={C.p500} />
+                <Text style={{ color: "#94a3b8", fontSize: 13, marginTop: 12 }}>Generating AI feedback…</Text>
               </View>
             ) : feedbackError ? (
-              <View className="bg-white rounded-2xl p-4 border border-rose-100">
-                <Text className="text-rose-500 text-sm font-medium text-center">
+              <View style={[styles.card, { borderColor: "#FEE2E2" }]}>
+                <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500", textAlign: "center" }}>
                   Could not load feedback. Pull to refresh or tap Refresh.
                 </Text>
               </View>
             ) : feedback ? (
-              <Animated.View entering={FadeIn.duration(300)} className="gap-3">
+              <Animated.View entering={FadeIn.duration(300)} style={{ gap: 10 }}>
                 {/* Motivational note */}
-                <View className="bg-gradient-to-br from-violet-500 to-purple-600 bg-violet-600 rounded-2xl p-4">
-                  <View className="flex-row items-center gap-2 mb-2">
-                    <Heart size={16} color="#fff" strokeWidth={2} />
-                    <Text className="text-white font-black text-xs uppercase tracking-wide">
+                <View style={{ backgroundColor: C.p500, borderRadius: 18, padding: 16, overflow: "hidden" }}>
+                  <View style={{
+                    position: "absolute", top: -16, right: -16,
+                    width: 80, height: 80, borderRadius: 40,
+                    backgroundColor: C.p600, opacity: 0.4,
+                  }} />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Heart size={13} color="#fff" strokeWidth={2} />
+                    <Text style={{ color: "rgba(255,255,255,0.85)", fontWeight: "900", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>
                       Motivation
                     </Text>
                   </View>
-                  <Text className="text-white text-sm leading-5 font-medium">
+                  <Text style={{ color: "white", fontSize: 13, lineHeight: 20, fontWeight: "500" }}>
                     {feedback.motivational_note}
                   </Text>
                   {feedback.generated_at && (
-                    <Text className="text-white/40 text-[10px] mt-2">
+                    <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 9, marginTop: 8 }}>
                       Generated {new Date(feedback.generated_at).toLocaleTimeString([], {
                         hour: "2-digit", minute: "2-digit",
                       })}
@@ -402,60 +513,24 @@ export default function Profile() {
                   )}
                 </View>
 
-                {/* Strong areas */}
-                {feedback.strong_areas.length > 0 && (
-                  <View className="bg-white rounded-2xl p-4 border border-slate-100">
-                    <View className="flex-row items-center gap-2 mb-3">
-                      <CheckCircle2 size={16} color="#10B981" strokeWidth={2} />
-                      <Text className="text-emerald-700 font-black text-xs uppercase tracking-wide">
-                        Strong Areas
-                      </Text>
-                    </View>
-                    <View className="gap-2">
-                      {feedback.strong_areas.map((area, i) => (
-                        <View key={i} className="flex-row items-start gap-2">
-                          <View className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5" />
-                          <Text className="text-slate-700 text-sm leading-5 flex-1">{area}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Weak areas */}
-                {feedback.weak_areas.length > 0 && (
-                  <View className="bg-white rounded-2xl p-4 border border-slate-100">
-                    <View className="flex-row items-center gap-2 mb-3">
-                      <TrendingDown size={16} color="#EF4444" strokeWidth={2} />
-                      <Text className="text-rose-600 font-black text-xs uppercase tracking-wide">
-                        Focus Areas
-                      </Text>
-                    </View>
-                    <View className="gap-2">
-                      {feedback.weak_areas.map((area, i) => (
-                        <View key={i} className="flex-row items-start gap-2">
-                          <View className="w-1.5 h-1.5 rounded-full bg-rose-400 mt-1.5" />
-                          <Text className="text-slate-700 text-sm leading-5 flex-1">{area}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
+                
 
                 {/* Suggestions */}
                 {feedback.suggestions.length > 0 && (
-                  <View className="bg-white rounded-2xl p-4 border border-slate-100">
-                    <View className="flex-row items-center gap-2 mb-3">
-                      <Lightbulb size={16} color="#F59E0B" strokeWidth={2} />
-                      <Text className="text-amber-600 font-black text-xs uppercase tracking-wide">
-                        Suggestions
-                      </Text>
+                  <View style={[styles.card, { borderColor: "#FEF3C7" }]} className="mb-5">
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                      <Lightbulb size={14} color="#F59E0B" strokeWidth={2} />
+                      <Text style={[styles.sectionLabel, { color: "#D97706" }]}>Suggestions</Text>
                     </View>
-                    <View className="gap-2.5">
+                    <View style={{ gap: 8 }}>
                       {feedback.suggestions.map((tip, i) => (
-                        <View key={i} className="flex-row items-start gap-2.5 bg-amber-50 rounded-xl px-3 py-2.5">
-                          <Text className="text-amber-600 font-black text-xs mt-0.5">{i + 1}</Text>
-                          <Text className="text-slate-700 text-sm leading-5 flex-1">{tip}</Text>
+                        <View key={i} style={{
+                          flexDirection: "row", alignItems: "flex-start", gap: 10,
+                          backgroundColor: C.p50, borderRadius: 12,
+                          paddingHorizontal: 12, paddingVertical: 10,
+                        }}>
+                          <Text style={{ color: C.p500, fontWeight: "900", fontSize: 11, marginTop: 2 }}>{i + 1}</Text>
+                          <Text style={{ color: "#334155", fontSize: 13, lineHeight: 20, flex: 1 }}>{tip}</Text>
                         </View>
                       ))}
                     </View>
@@ -466,7 +541,9 @@ export default function Profile() {
           </View>
 
         </View>
+        </View>
       </ScrollView>
+    </View>
     </SafeAreaView>
   );
 }
