@@ -1,4 +1,4 @@
-import { QuickActionType } from "@/types";
+import { QuickActionType } from "@/types/chatModuleTypes";
 import { Atom, MessageCircleQuestionMark, Route } from "lucide-react-native";
 
 export const quickActions: QuickActionType[] = [

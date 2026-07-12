@@ -1,4 +1,4 @@
-import { HeaderProps } from "@/types";
+import { HeaderProps } from "@/types/chatModuleTypes";
 import { router } from "expo-router";
 import { ArrowLeftCircle } from "lucide-react-native";
 import { Text, View, TouchableOpacity, StyleSheet } from "react-native";

@@ -11,7 +11,7 @@ import z from "zod";
 import { userSignInSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth, useSignIn } from "@clerk/expo";
-import { type signInFormValues } from "@/types";
+import { type signInFormValues } from "@/types/chatModuleTypes";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useEffect } from "react";
