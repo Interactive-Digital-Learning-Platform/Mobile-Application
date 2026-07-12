@@ -1,4 +1,4 @@
-import { TabIconType } from "@/types";
+import { TabIconType } from "@/types/chatModuleTypes";
 import { Image, Text, View } from "react-native";
 
 export default function TabIcon({ icon, name, color, focused }: TabIconType) {
