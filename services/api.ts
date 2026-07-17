@@ -1,5 +1,4 @@
 import axios from 'axios';
-import * as FileSystem from 'expo-file-system';
 
 // In development, this usually needs to be your machine's local IP (e.g., 192.168.1.x)
 // since "localhost" refers to the Android emulator or physical device itself.
@@ -8,7 +7,7 @@ const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://10.0.2.2:3001';
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 10000,
+  timeout: 30000, // 30s — needed for OCR + AI pipeline responses
 });
 
 import { Platform } from 'react-native';
