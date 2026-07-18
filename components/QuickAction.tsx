@@ -1,5 +1,5 @@
 import { colors } from "@/constants/colors";
-import { QuickActionType } from "@/types";
+import { QuickActionType } from "@/types/chatModuleTypes";
 import { Text, View } from "react-native";
 
 export default function QuickAction({ icon: Icon, title }: QuickActionType) {
