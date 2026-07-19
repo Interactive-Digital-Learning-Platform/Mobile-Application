@@ -6,8 +6,10 @@ import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import "nativewind";
 import ClerkProviderCom from "@/providers/ClerkProviderCom";
+import AuthSyncBoundary from "@/providers/AuthSyncBoundary";
 import Toast from "react-native-toast-message";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,17 +39,21 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !error) return null;
   return (
-    <KeyboardProvider>
-      <QueryClientProviderCom>
-        <ClerkProviderCom>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-          </Stack>
-          <Toast />
-        </ClerkProviderCom>
-      </QueryClientProviderCom>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <QueryClientProviderCom>
+          <ClerkProviderCom>
+            <AuthSyncBoundary>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+              </Stack>
+              <Toast />
+            </AuthSyncBoundary>
+          </ClerkProviderCom>
+        </QueryClientProviderCom>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

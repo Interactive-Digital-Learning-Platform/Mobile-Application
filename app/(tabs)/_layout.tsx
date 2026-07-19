@@ -82,7 +82,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="lab/index"
+        name="lab"
         options={{
           title: "Lab",
           headerShown: false,
