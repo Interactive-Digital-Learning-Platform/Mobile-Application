@@ -45,6 +45,8 @@ import {
   quizKeys,
 } from "@/src/modules/quiz/quizHooks";
 import { useQueryClient } from "@tanstack/react-query";
+import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
+import Skeleton from "@/components/Skeleton";
 
 // ── Primary palette ───────────────────────────────────────────────────────────
 
@@ -148,7 +150,7 @@ function AccuracyRing({ accuracy }: { accuracy: number }) {
 function SubjectBarChart({
   subjects,
 }: {
-  subjects: { subject: string; accuracy: number }[];
+  subjects: { subject: string; accuracy: number; current_difficulty: string }[];
 }) {
   if (!subjects.length) return null;
 
@@ -158,33 +160,38 @@ function SubjectBarChart({
         <View style={[styles.iconBadge, { backgroundColor: C.p100 }]}>
           <BarChart2 size={14} color={C.p500} strokeWidth={2} />
         </View>
-        <Text style={styles.sectionLabel}>Subject Accuracy</Text>
+        <Text style={styles.sectionLabel}>Subject Accuracy & Difficulty</Text>
       </View>
 
-      <View style={{ gap: 10 }}>
+      <View style={{ gap: 12 }}>
         {subjects.map((s) => {
           const pct = Math.min(Math.max(s.accuracy, 0), 100);
           const isStrong = pct >= 70;
 
           return (
-            <View key={s.subject} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text
-                style={{ width: 80, fontSize: 11, fontWeight: "600", color: "#64748b" }}
-                numberOfLines={1}
-              >
-                {s.subject}
-              </Text>
-              <View style={{ flex: 1, height: 14, backgroundColor: C.p50, borderRadius: 7, overflow: "hidden" }}>
-                <View style={{
-                  width: `${pct}%`,
-                  height: "100%",
-                  backgroundColor: isStrong ? C.p500 : C.p300,
-                  borderRadius: 7,
-                }} />
+            <View key={s.subject} style={{ gap: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text
+                  style={{ flex: 1, fontSize: 11, fontWeight: "600", color: "#64748b" }}
+                  numberOfLines={1}
+                >
+                  {s.subject}
+                </Text>
+                <DifficultyBadge difficulty={s.current_difficulty} size="xs" showDot={false} />
               </View>
-              <Text style={{ width: 36, fontSize: 11, fontWeight: "800", textAlign: "right", color: isStrong ? C.p600 : C.p400 }}>
-                {Math.round(pct)}%
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ flex: 1, height: 14, backgroundColor: C.p50, borderRadius: 7, overflow: "hidden" }}>
+                  <View style={{
+                    width: `${pct}%`,
+                    height: "100%",
+                    backgroundColor: isStrong ? C.p500 : C.p300,
+                    borderRadius: 7,
+                  }} />
+                </View>
+                <Text style={{ width: 36, fontSize: 11, fontWeight: "800", textAlign: "right", color: isStrong ? C.p600 : C.p400 }}>
+                  {Math.round(pct)}%
+                </Text>
+              </View>
             </View>
           );
         })}
@@ -219,15 +226,27 @@ function StatsSkeleton() {
   return (
     <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
       <View style={{ flexDirection: "row", gap: 10 }}>
-        <View style={{ flex: 1.2, height: 140, backgroundColor: C.p50, borderRadius: 18 }} />
+        <Skeleton width="100%" height={140} borderRadius={18} color={C.p50} style={{ flex: 1.2 }} />
         <View style={{ flex: 1, gap: 10 }}>
-          <View style={{ flex: 1, backgroundColor: C.p50, borderRadius: 18 }} />
-          <View style={{ flex: 1, backgroundColor: C.p50, borderRadius: 18 }} />
+          <Skeleton width="100%" height="100%" borderRadius={18} color={C.p50} style={{ flex: 1 }} />
+          <Skeleton width="100%" height="100%" borderRadius={18} color={C.p50} style={{ flex: 1 }} />
         </View>
       </View>
-      {[0, 1].map((i) => (
-        <View key={i} style={{ height: 72, backgroundColor: C.p50, borderRadius: 18 }} />
-      ))}
+      {/* Subject accuracy/difficulty rows */}
+      <View style={{ backgroundColor: "white", borderRadius: 18, padding: 14, gap: 12 }}>
+        <Skeleton width={140} height={14} />
+        {[0, 1, 2].map((i) => (
+          <View key={i} style={{ gap: 4 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Skeleton width={90} height={11} />
+              <Skeleton width={40} height={16} borderRadius={999} />
+            </View>
+            <Skeleton width="100%" height={14} borderRadius={7} />
+          </View>
+        ))}
+      </View>
+      {/* Strong/weak pills */}
+      <Skeleton width="100%" height={72} borderRadius={18} color={C.p50} />
     </View>
   );
 }
@@ -251,6 +270,28 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
       >
         <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>Try Again</Text>
       </TouchableOpacity>
+    </View>
+  );
+}
+
+// ── AI feedback loading skeleton ───────────────────────────────────────────────
+
+function FeedbackSkeleton() {
+  return (
+    <View style={{ gap: 10 }}>
+      {/* Motivational note card */}
+      <View style={{ backgroundColor: C.p100, borderRadius: 18, padding: 16, gap: 10 }}>
+        <Skeleton width={90} height={11} color={C.p200} />
+        <Skeleton width="100%" height={13} color={C.p200} />
+        <Skeleton width="70%" height={13} color={C.p200} />
+      </View>
+      {/* Suggestions card */}
+      <View style={[styles.card, { gap: 10 }]}>
+        <Skeleton width={100} height={12} />
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} width="100%" height={38} borderRadius={12} color={C.p50} />
+        ))}
+      </View>
     </View>
   );
 }
@@ -476,10 +517,7 @@ export default function Profile() {
             </View>
 
             {feedbackLoading ? (
-              <View style={[styles.card, { alignItems: "center", paddingVertical: 36 }]}>
-                <ActivityIndicator size="large" color={C.p500} />
-                <Text style={{ color: "#94a3b8", fontSize: 13, marginTop: 12 }}>Generating AI feedback…</Text>
-              </View>
+              <FeedbackSkeleton />
             ) : feedbackError ? (
               <View style={[styles.card, { borderColor: "#FEE2E2" }]}>
                 <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500", textAlign: "center" }}>

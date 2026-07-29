@@ -4,7 +4,7 @@
  * Barrel file — re-export everything from the quiz module for clean imports.
  *
  * Usage:
- *   import { useGenerateQuiz, useSubmitQuiz, useAnalytics } from "@/src/modules/quiz";
+ *   import { useGenerateQuizMutation, useSubmitQuizMutation, useAnalyticsMeQuery } from "@/src/modules/quiz";
  */
 
 export * from "./types";

@@ -163,6 +163,9 @@ export interface SubjectAnalytics {
   accuracy: number;
   avg_response_time: number;
   weak_topic: string | null;
+  // The difficulty level the student is currently on for this subject —
+  // "easy" | "medium" | "hard", auto-adjusted based on performance.
+  current_difficulty: string;
 }
 
 export interface UserAnalyticsResponse {

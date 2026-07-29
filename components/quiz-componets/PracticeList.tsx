@@ -1,17 +1,56 @@
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, FlatList } from "react-native";
 import { useState, useCallback } from "react";
 import { Plus, ChevronDown, Check, Brain } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import CreateQuizModal, { QuizConfig } from "@/components/quiz-componets/CreateQuizModal";
-import { DIFF_DOT } from "@/constants/quizStyles";
-import type { Difficulty } from "@/components/quiz-componets/QuizPracticeCard";
-import QuizPracticeCard, { type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
+import { DIFF_DOT, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
+import { capitalize } from "@/constants/quizHelpers";
+import QuizPracticeCard, { type Difficulty, type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
+import Skeleton from "@/components/Skeleton";
 import { useQuizSessionsQuery } from "@/src/modules/quiz/quizHooks";
 
-const DIFFICULTIES: Array<"All" | Difficulty> = ["All", "Easy", "Medium", "Hard"];
-const SUBJECTS = ["All", "Mathematics", "Science", "History", "English", "Geography", "Programming"];
+const DIFFICULTIES: ("All" | Difficulty)[] = ["All", "Easy", "Medium", "Hard"];
+const SUBJECTS = ["All", ...ALL_SUBJECTS];
 
 type ActiveDropdown = "difficulty" | "subject" | null;
+
+// ── Loading skeleton — mirrors QuizPracticeCard's layout ───────────────────────
+
+function PracticeCardSkeleton() {
+  return (
+    <View className="bg-white mx-4 mb-3 rounded-2xl p-4 border border-slate-100">
+      <View className="flex-row items-start gap-3">
+        <Skeleton width={44} height={44} borderRadius={12} />
+        <View className="flex-1 gap-2">
+          <Skeleton width="55%" height={13} />
+          <View className="flex-row gap-2">
+            <Skeleton width={50} height={16} borderRadius={999} />
+            <Skeleton width={70} height={11} />
+          </View>
+        </View>
+        <Skeleton width={40} height={10} />
+      </View>
+      <View className="mt-3 gap-1">
+        <View className="flex-row justify-between">
+          <Skeleton width={90} height={10} />
+          <Skeleton width={28} height={10} />
+        </View>
+        <Skeleton width="100%" height={6} borderRadius={3} />
+      </View>
+      <Skeleton width="100%" height={38} borderRadius={12} style={{ marginTop: 12 }} />
+    </View>
+  );
+}
+
+function PracticeListSkeleton() {
+  return (
+    <View className="pt-1">
+      {[0, 1, 2, 3].map((i) => (
+        <PracticeCardSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
 
 function FilterChip({
   label, value, isOpen, onPress,
@@ -80,7 +119,11 @@ export default function PracticeList() {
   const [subject, setSubject] = useState("All");
   const [modalVisible, setModalVisible] = useState(false);
 
-  const { data: sessions, isLoading: loadingSessions, isFetching, refetch } = useQuizSessionsQuery();
+  // `isFetching` covers the initial load AND every subsequent background
+  // refetch (tab-switch focus, post-delete invalidation, pull-to-refresh) —
+  // using it alone means every one of those states shows the same skeleton
+  // instead of a mix of skeletons and small inline spinners.
+  const { data: sessions, isFetching, refetch } = useQuizSessionsQuery();
 
   useFocusEffect(
     useCallback(() => { refetch(); }, [refetch])
@@ -113,8 +156,6 @@ export default function PracticeList() {
 
   const toggle = (type: "difficulty" | "subject") =>
     setActiveDropdown((prev) => (prev === type ? null : type));
-
-  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
   const items: PracticeItem[] = (sessions ?? []).map((s) => ({
     id:         String(s.session_id),
@@ -157,9 +198,6 @@ export default function PracticeList() {
             isOpen={activeDropdown === "subject"}
             onPress={() => toggle("subject")}
           />
-          {isFetching && !loadingSessions && (
-            <ActivityIndicator size="small" color="#FC6E20" />
-          )}
         </View>
 
         {activeDropdown === "difficulty" && (
@@ -188,10 +226,8 @@ export default function PracticeList() {
       </View>
 
       {/* Content */}
-      {loadingSessions ? (
-        <View className="flex-1 justify-center items-center pb-16">
-          <ActivityIndicator size="large" color="#FC6E20" />
-        </View>
+      {isFetching ? (
+        <PracticeListSkeleton />
       ) : filtered.length === 0 ? (
         <View className="flex-1 justify-center items-center px-8 pb-16">
           <View className="w-16 h-16 rounded-full bg-orange-100 justify-center items-center mb-4">

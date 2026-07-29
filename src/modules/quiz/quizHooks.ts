@@ -4,15 +4,17 @@
  * React Query hooks for the Personalized Quiz Service.
  *
  * Hook overview:
- *   useUserMeQuery              — query:    GET  /api/v1/user/me
- *   useUserSyncMutation         — mutation: POST /api/v1/user/sync
- *   useGenerateQuizMutation     — mutation: POST /api/v1/quiz/generate
- *   useQuizSessionQuery         — query:    GET  /api/v1/quiz/sessions/:id
- *   useSaveQuizProgressMutation — mutation: POST /api/v1/quiz/progress/save
- *   useSubmitQuizMutation       — mutation: POST /api/v1/quiz/submit
- *   useSubmitQuizTimeoutMutation— mutation: POST /api/v1/quiz/submit-timeout
- *   useAnalyticsMeQuery         — query:    GET  /api/v1/analytics/me
- *   useAnalyticsFeedbackQuery   — query:    GET  /api/v1/analytics/feedback
+ *   useUserMeQuery              — query:    GET    /api/v1/user/me
+ *   useUserSyncMutation         — mutation: POST   /api/v1/user/sync
+ *   useGenerateQuizMutation     — mutation: POST   /api/v1/quiz/generate
+ *   useQuizSessionsQuery        — query:    GET    /api/v1/quiz/sessions
+ *   useQuizSessionQuery         — query:    GET    /api/v1/quiz/sessions/:id
+ *   useSaveQuizProgressMutation — mutation: POST   /api/v1/quiz/progress/save
+ *   useDeleteQuizSessionMutation— mutation: DELETE /api/v1/quiz/sessions/:id
+ *   useSubmitQuizMutation       — mutation: POST   /api/v1/quiz/submit
+ *   useSubmitQuizTimeoutMutation— mutation: POST   /api/v1/quiz/submit-timeout
+ *   useAnalyticsMeQuery         — query:    GET    /api/v1/analytics/me
+ *   useAnalyticsFeedbackQuery   — query:    GET    /api/v1/analytics/feedback
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -61,9 +63,6 @@ export function useUserMeQuery() {
   });
 }
 
-/** @deprecated Use useUserMeQuery */
-export const useMe = useUserMeQuery;
-
 // ── useUserSyncMutation ───────────────────────────────────────────────────────
 
 /**
@@ -80,9 +79,6 @@ export function useUserSyncMutation() {
     },
   });
 }
-
-/** @deprecated Use useUserSyncMutation */
-export const useSyncUser = useUserSyncMutation;
 
 // ── useGenerateQuizMutation ───────────────────────────────────────────────────
 
@@ -118,9 +114,6 @@ export function useQuizSessionsQuery() {
   });
 }
 
-/** @deprecated Use useGenerateQuizMutation */
-export const useGenerateQuiz = useGenerateQuizMutation;
-
 // ── useQuizSessionQuery ───────────────────────────────────────────────────────
 
 /**
@@ -137,9 +130,6 @@ export function useQuizSessionQuery(sessionId: number | null) {
     staleTime: 5 * 60 * 1000,
   });
 }
-
-/** @deprecated Use useQuizSessionQuery */
-export const useQuizSession = useQuizSessionQuery;
 
 // ── useSaveQuizProgressMutation ───────────────────────────────────────────────
 
@@ -195,9 +185,6 @@ export function useSubmitQuizMutation() {
   });
 }
 
-/** @deprecated Use useSubmitQuizMutation */
-export const useSubmitQuiz = useSubmitQuizMutation;
-
 // ── useSubmitQuizTimeoutMutation ──────────────────────────────────────────────
 
 /**
@@ -235,9 +222,6 @@ export function useAnalyticsMeQuery() {
   });
 }
 
-/** @deprecated Use useAnalyticsMeQuery */
-export const useAnalytics = useAnalyticsMeQuery;
-
 // ── useAnalyticsFeedbackQuery ─────────────────────────────────────────────────
 
 /**
@@ -254,6 +238,3 @@ export function useAnalyticsFeedbackQuery(enabled = true) {
     retry: 1,
   });
 }
-
-/** @deprecated Use useAnalyticsFeedbackQuery */
-export const useAIFeedback = useAnalyticsFeedbackQuery;

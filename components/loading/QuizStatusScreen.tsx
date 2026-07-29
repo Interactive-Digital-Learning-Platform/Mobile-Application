@@ -1,8 +1,9 @@
 /**
- * QuizGeneratingScreen.tsx
+ * QuizStatusScreen.tsx
  * ─────────────────────────
- * Animated loading screen shown while the AI quiz is being generated.
- * Used exclusively by the quiz-session screen.
+ * Animated loading screen shown while a quiz is being generated or an
+ * existing session is being retrieved. Parameterized by `title` and `steps`
+ * so both cases share one implementation instead of two near-identical copies.
  */
 
 import { useState, useEffect } from "react";
@@ -19,31 +20,31 @@ import Animated, {
   FadeIn,
   FadeOut,
 } from "react-native-reanimated";
-import { Brain, BookOpen, Zap, Sparkles } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-// ── Step definitions ───────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const LOADING_STEPS = [
-  { icon: Brain,    text: "Analysing your subject…"    },
-  { icon: BookOpen, text: "Crafting questions with AI…" },
-  { icon: Zap,      text: "Tuning to your difficulty…" },
-  { icon: Sparkles, text: "Almost ready!"              },
-];
+export interface QuizStatusStep {
+  icon: LucideIcon;
+  text: string;
+}
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
-interface QuizGeneratingScreenProps {
+interface QuizStatusScreenProps {
+  title: string;
+  steps: QuizStatusStep[];
   subject: string;
   difficulty: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function QuizGeneratingScreen({
+export default function QuizStatusScreen({
+  title,
+  steps,
   subject,
   difficulty,
-}: QuizGeneratingScreenProps) {
+}: QuizStatusScreenProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const rotation = useSharedValue(0);
   const pulse    = useSharedValue(1);
@@ -67,7 +68,7 @@ export default function QuizGeneratingScreen({
     );
 
     const interval = setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % LOADING_STEPS.length);
+      setStepIndex((prev) => (prev + 1) % steps.length);
     }, 1800);
 
     return () => {
@@ -75,7 +76,7 @@ export default function QuizGeneratingScreen({
       cancelAnimation(pulse);
       clearInterval(interval);
     };
-  }, []);
+  }, [steps.length]);
 
   const spinStyle  = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value * 360}deg` }],
@@ -84,7 +85,7 @@ export default function QuizGeneratingScreen({
     transform: [{ scale: pulse.value }],
   }));
 
-  const { icon: StepIcon, text } = LOADING_STEPS[stepIndex];
+  const { icon: StepIcon, text } = steps[stepIndex];
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1 }} className="bg-primary">
@@ -120,7 +121,7 @@ export default function QuizGeneratingScreen({
         {/* Title + subject/difficulty */}
         <View style={{ alignItems: "center" }}>
           <Text className="text-white text-2xl font-black text-center">
-            Generating Quiz
+            {title}
           </Text>
           <Text className="text-white/70 text-sm mt-1 font-semibold text-center">
             {subject} · {difficulty}
@@ -141,7 +142,7 @@ export default function QuizGeneratingScreen({
 
         {/* Dot indicator */}
         <View style={{ flexDirection: "row", gap: 8 }}>
-          {LOADING_STEPS.map((_, i) => (
+          {steps.map((_, i) => (
             <View
               key={i}
               style={{

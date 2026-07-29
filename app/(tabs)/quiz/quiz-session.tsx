@@ -36,6 +36,11 @@ import {
   Clock,
   BarChart2,
   BookOpen,
+  Brain,
+  Zap,
+  Sparkles,
+  Database,
+  RotateCcw,
 } from "lucide-react-native";
 
 import { getDifficultyStyle } from "@/constants/quizStyles";
@@ -53,9 +58,22 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { buildDraftAnswers, buildAnswerPayload } from "@/src/modules/quiz/quizApi";
 import type { QuestionOut } from "@/src/modules/quiz/types";
-import QuizGeneratingScreen from "@/components/loading/QuizGeneratingScreen";
-import QuizRetrievingScreen from "@/components/loading/QuizRetrievingScreen";
+import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import QuizErrorScreen      from "@/components/loading/QuizErrorScreen";
+
+const GENERATING_STEPS: QuizStatusStep[] = [
+  { icon: Brain,    text: "Analysing your subject…"    },
+  { icon: BookOpen, text: "Crafting questions with AI…" },
+  { icon: Zap,      text: "Tuning to your difficulty…" },
+  { icon: Sparkles, text: "Almost ready!"              },
+];
+
+const RETRIEVING_STEPS: QuizStatusStep[] = [
+  { icon: Database,  text: "Connecting to server…"    },
+  { icon: BookOpen,  text: "Fetching your questions…" },
+  { icon: RotateCcw, text: "Restoring your progress…" },
+  { icon: Sparkles,  text: "Almost ready!"            },
+];
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -455,8 +473,8 @@ export default function QuizSession() {
     // Difficulty/lesson aren't known yet while generating — the AI picks both
     // as part of this same call. "Adaptive" reflects that instead of a guess.
     return shouldGenerate
-      ? <QuizGeneratingScreen subject={subject ?? "Quiz"} difficulty="Adaptive" />
-      : <QuizRetrievingScreen subject={subject ?? "Quiz"} difficulty="Adaptive" />;
+      ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" />
+      : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" />;
   }
 
   if (activeError || questions.length === 0) {

@@ -12,6 +12,7 @@ import {
   Globe, Code2, HelpCircle,
   type LucideIcon,
 } from "lucide-react-native";
+import { capitalize } from "@/constants/quizHelpers";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -78,6 +79,10 @@ export const SUBJECT_ICONS: Record<string, LucideIcon> = {
 
 export { HelpCircle as SubjectIconFallback };
 
+// Single source of truth for the list of selectable subjects — derived from
+// SUBJECT_ICONS so adding/removing a subject only requires editing one place.
+export const SUBJECTS = Object.keys(SUBJECT_ICONS);
+
 // ─── Type-safe lookup helper ──────────────────────────────
 
 /**
@@ -89,7 +94,6 @@ export { HelpCircle as SubjectIconFallback };
  *   const diff = getDifficultyStyle(difficulty); // no cast needed
  */
 export function getDifficultyStyle(raw: string | undefined | null) {
-  const normalized = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : "";
-  const key = normalized as Difficulty;
+  const key = (raw ? capitalize(raw) : "") as Difficulty;
   return DIFFICULTY_STYLES[key] ?? DIFFICULTY_STYLES.Easy;
 }

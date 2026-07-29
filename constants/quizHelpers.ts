@@ -9,6 +9,14 @@
 export const OPTION_LABELS = ["A", "B", "C", "D"] as const;
 
 /**
+ * Capitalizes the first letter, lowercases the rest.
+ * @example capitalize("EASY") → "Easy"
+ */
+export function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+/**
  * Formats a seconds value as MM:SS.
  * @example formatTime(125) → "02:05"
  */

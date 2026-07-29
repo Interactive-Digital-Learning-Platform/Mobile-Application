@@ -1,8 +1,7 @@
 import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useState, useEffect } from "react";
 import { X, Sparkles, Plus, Minus } from "lucide-react-native";
-
-const SUBJECTS = ["Mathematics", "Science", "History", "English", "Geography", "Programming"];
+import { SUBJECTS } from "@/constants/quizStyles";
 
 
 export interface QuizConfig {
