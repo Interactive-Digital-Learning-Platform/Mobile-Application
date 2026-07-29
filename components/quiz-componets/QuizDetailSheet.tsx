@@ -31,8 +31,29 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
   const diff = DIFFICULTY_STYLES[item.difficulty];
   const hasStarted = item.progress > 0;
   const isComplete = item.progress === 100;
-  const completedQuestions = Math.round((item.progress / 100) * item.questions);
-  const remaining = item.questions - completedQuestions;
+  const correctCount = item.correct_count ?? 0;
+  const remaining = item.questions - item.answered_count;
+
+  // Same logic as QuizPracticeCard: completed shows how many were answered
+  // CORRECTLY; in progress shows how many have been answered so far.
+  const displayCount = isComplete ? correctCount : item.answered_count;
+  const displayPct = item.questions > 0
+    ? Math.round((displayCount / item.questions) * 100)
+    : 0;
+  const barColor = !hasStarted
+    ? "bg-slate-200"
+    : !isComplete
+    ? "bg-primary"
+    : displayPct >= 70 ? "bg-emerald-500"
+    : displayPct >= 50 ? "bg-amber-500"
+    : "bg-rose-500";
+  const textColor = !hasStarted
+    ? "text-slate-500"
+    : !isComplete
+    ? "text-primary"
+    : displayPct >= 70 ? "text-emerald-500"
+    : displayPct >= 50 ? "text-amber-500"
+    : "text-rose-500";
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -64,8 +85,8 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
             <StatTile icon={Clock}      label="Duration"  value={item.timer} />
             <StatTile
               icon={BarChart2}
-              label={isComplete ? "Accuracy" : "Progress"}
-              value={isComplete ? `${Math.round(item.accuracy ?? 0)}%` : `${item.progress}%`}
+              label={isComplete ? "Correct" : "Progress"}
+              value={isComplete ? `${correctCount}/${item.questions}` : `${item.progress}%`}
             />
           </View>
 
@@ -73,19 +94,22 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-xs font-bold text-slate-600">
                 {isComplete
-                  ? "Quiz completed"
+                  ? `${displayCount} of ${item.questions} correct`
                   : hasStarted
-                  ? `${completedQuestions} of ${item.questions} answered`
+                  ? `${displayCount} of ${item.questions} answered`
                   : "Not started yet"}
               </Text>
               {hasStarted && !isComplete && (
                 <Text className="text-xs text-slate-400">{remaining} remaining</Text>
               )}
+              {isComplete && (
+                <Text className={`text-xs font-bold ${textColor}`}>{displayPct}%</Text>
+              )}
             </View>
             <View className="h-2 bg-slate-100 rounded-full overflow-hidden">
               <View
-                className={`h-full rounded-full ${isComplete ? "bg-emerald-500" : hasStarted ? "bg-primary" : "bg-slate-200"}`}
-                style={{ width: `${item.progress}%` }}
+                className={`h-full rounded-full ${barColor}`}
+                style={{ width: `${displayPct}%` }}
               />
             </View>
           </View>
@@ -106,7 +130,6 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
                 pathname: "/(tabs)/quiz/quiz-session",
                 params: {
                   subject:          item.subject,
-                  lesson:           item.subject,
                   difficulty:       item.difficulty.toLowerCase(),
                   questionCount:    String(item.questions),
                   timer:            item.timer.replace(" min", ""),

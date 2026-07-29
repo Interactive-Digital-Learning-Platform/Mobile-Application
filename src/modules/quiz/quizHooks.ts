@@ -89,6 +89,8 @@ export const useSyncUser = useUserSyncMutation;
 /**
  * Mutation: POST /api/v1/quiz/generate
  * Generates or retrieves a cached quiz. Button is disabled (isPending) while running.
+ * Invalidates the sessions list AND analytics — a new session changes
+ * `total_sessions`, which StatisticButton reads via useAnalyticsMeQuery.
  */
 export function useGenerateQuizMutation() {
   const queryClient = useQueryClient();
@@ -96,6 +98,7 @@ export function useGenerateQuizMutation() {
     mutationFn: (payload: GenerateQuizRequest) => generateQuiz(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
     },
   });
 }
@@ -155,8 +158,9 @@ export function useSaveQuizProgressMutation() {
 
 /**
  * Mutation: DELETE /api/v1/quiz/sessions/:id
- * Deletes the session + its records. The Analytics aggregate is preserved.
- * Invalidates the sessions list on success.
+ * Deletes the session + its records. The per-subject Analytics aggregate
+ * (accuracy/weak_topic) is preserved, but `total_sessions` is a live count
+ * that changes — invalidate analytics too so StatisticButton stays in sync.
  */
 export function useDeleteQuizSessionMutation() {
   const queryClient = useQueryClient();
@@ -164,6 +168,7 @@ export function useDeleteQuizSessionMutation() {
     mutationFn: (sessionId: number) => deleteQuizSession(sessionId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
     },
   });
 }

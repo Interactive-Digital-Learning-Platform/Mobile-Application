@@ -87,14 +87,12 @@ export default function PracticeList() {
   );
 
   const handleGenerate = (config: QuizConfig) => {
-    // Collect question IDs from all existing sessions for the same subject + difficulty
-    // so the backend can serve unseen questions instead of repeating the same pool.
+    // Collect question IDs from all existing sessions for the same subject
+    // so the backend can serve unseen questions instead of repeating the same
+    // pool. Lesson and difficulty are no longer chosen here — the backend
+    // picks both automatically (AI lesson choice + adaptive difficulty).
     const seenIds = (sessions ?? [])
-      .filter(
-        (s) =>
-          s.subject.toLowerCase() === config.subject.toLowerCase() &&
-          s.difficulty.toLowerCase() === config.difficulty.toLowerCase(),
-      )
+      .filter((s) => s.subject.toLowerCase() === config.subject.toLowerCase())
       .flatMap((s) => s.question_ids ?? []);
 
     const uniqueExcluded = [...new Set(seenIds)];
@@ -103,8 +101,6 @@ export default function PracticeList() {
       pathname: "/(tabs)/quiz/quiz-session",
       params: {
         subject:       config.subject,
-        lesson:        config.subject,
-        difficulty:    config.difficulty.toLowerCase(),
         questionCount: String(config.questions),
         timer:         String(config.timer),
         grade:         "10",
@@ -132,8 +128,10 @@ export default function PracticeList() {
       : s.question_count > 0
       ? Math.min(Math.round((s.answered_count / s.question_count) * 100), 99)
       : 0,
-    accuracy:   s.accuracy,
-    created_at: s.created_at,
+    answered_count: s.answered_count,
+    accuracy:      s.accuracy,
+    correct_count: s.correct_count,
+    created_at:    s.created_at,
   }));
 
   const filtered = items.filter((item) => {

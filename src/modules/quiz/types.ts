@@ -13,8 +13,11 @@
 export interface GenerateQuizRequest {
   grade?: number;         // defaults to 10 on backend if omitted
   subject: string;
-  lesson: string;
-  difficulty: "easy" | "medium" | "hard";
+  // Both omitted by default — the backend chooses them automatically:
+  // lesson via AI (groq_service.choose_lesson), difficulty via accuracy
+  // history (difficulty_service). Only set these to force a manual override.
+  lesson?: string;
+  difficulty?: "easy" | "medium" | "hard";
   question_count: number; // 1–30
   excluded_question_ids?: number[]; // IDs already seen by this user — backend excludes them for variety
   force_cache?: boolean;            // Skip AI, serve from DB pool — user-chosen fallback after AI failure
@@ -35,6 +38,10 @@ export interface GenerateQuizResponse {
   session_id: number;
   questions: QuestionOut[];
   cache_hit: boolean;
+  // The difficulty/lesson the backend actually used — chosen automatically
+  // unless the request explicitly overrode them.
+  difficulty: string;
+  lesson: string;
 }
 
 // ── Progress save ──────────────────────────────────────────────────────────────
@@ -83,6 +90,7 @@ export interface QuizSessionSummary {
   answered_count: number;
   is_completed: boolean;
   accuracy: number | null;
+  correct_count: number | null;
   question_ids: number[];
 }
 

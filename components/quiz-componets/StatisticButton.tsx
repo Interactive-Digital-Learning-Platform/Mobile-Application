@@ -1,4 +1,6 @@
 import { Text, TouchableOpacity, View, ActivityIndicator } from "react-native";
+import { useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import { useAnalyticsMeQuery } from "@/src/modules/quiz/quizHooks";
 
 function StatCell({
@@ -23,7 +25,17 @@ function StatCell({
 }
 
 export default function StatisticButton() {
-  const { data: analytics, isLoading } = useAnalyticsMeQuery();
+  const { data: analytics, isLoading, refetch } = useAnalyticsMeQuery();
+
+  // Belt-and-suspenders: the generate/submit/delete mutations already
+  // invalidate this query, but refetching on focus too (same pattern as
+  // PracticeList) keeps this in sync even if a screen is reached some other
+  // way, without requiring an app restart.
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const sessions  = analytics?.total_sessions ?? 0;
   const accuracy  = analytics ? `${Math.round(analytics.overall_accuracy)}%` : "—";

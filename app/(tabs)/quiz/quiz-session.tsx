@@ -35,6 +35,7 @@ import {
   Flag,
   Clock,
   BarChart2,
+  BookOpen,
 } from "lucide-react-native";
 
 import { getDifficultyStyle } from "@/constants/quizStyles";
@@ -72,8 +73,11 @@ export default function QuizSession() {
     excludedQuestionIds:  excludedQuestionIdsStr,
   } = useLocalSearchParams<{
     subject:               string;
-    lesson:                string;
-    difficulty:            string;
+    // lesson/difficulty are optional — normally omitted so the backend picks
+    // them automatically (AI lesson choice + adaptive difficulty). Only
+    // present if some future flow explicitly wants to override them.
+    lesson?:               string;
+    difficulty?:           string;
     questionCount:         string;
     timer:                 string;
     grade:                 string;
@@ -88,7 +92,6 @@ export default function QuizSession() {
 
   const totalQ       = parseInt(questionCount ?? "10");
   const totalSec     = parseInt(timerMinutes  ?? "10") * 60;
-  const diff         = getDifficultyStyle(difficulty);
   const isResuming   = !!resumeSessionIdStr;
   const resumeId     = isResuming ? parseInt(resumeSessionIdStr!) : null;
   const isRestartMode = restartSessionStr === "true";
@@ -134,6 +137,13 @@ export default function QuizSession() {
   const isSubmitting = isSubmittingNormal || isSubmittingTimeout;
   const submitData   = submitNormalData ?? submitTimeoutData;
 
+  // The difficulty actually used — chosen automatically by the backend
+  // (adaptive difficulty) unless a route param explicitly overrides it. Only
+  // known once generation/resume completes. Lesson is shown per-question
+  // instead (each question is independently assigned a random lesson).
+  const displayDifficulty = quizData?.difficulty ?? savedSession?.difficulty ?? difficulty ?? "";
+  const diff = getDifficultyStyle(displayDifficulty || "medium");
+
   // Stable flag set at construction: true = new quiz (generate), false = resume (load from DB)
   const [shouldGenerate] = useState(() => !resumeSessionIdStr);
 
@@ -141,8 +151,10 @@ export default function QuizSession() {
     generateQuiz({
       grade:                 parseInt(grade ?? "10"),
       subject:               subject ?? "Mathematics",
-      lesson:                lesson  ?? subject ?? "General",
-      difficulty:            (difficulty?.toLowerCase() as "easy" | "medium" | "hard") ?? "medium",
+      // Omitted when not explicitly set — backend auto-picks lesson (AI) and
+      // difficulty (accuracy history) instead of trusting a client value.
+      lesson:                lesson || undefined,
+      difficulty:            difficulty ? (difficulty.toLowerCase() as "easy" | "medium" | "hard") : undefined,
       question_count:        totalQ,
       excluded_question_ids: excludedQuestionIds,
       force_cache:           forceCache,
@@ -388,7 +400,7 @@ export default function QuizSession() {
       pathname: "/(tabs)/quiz/quiz-results",
       params: {
         subject,
-        difficulty,
+        difficulty: displayDifficulty,
         questionCount,
         timer:             timerMinutes,
         sessionId:         String(sessionId ?? ""),
@@ -440,9 +452,11 @@ export default function QuizSession() {
   const activeError = isResuming ? sessionError : generateError;
 
   if (isLoading) {
+    // Difficulty/lesson aren't known yet while generating — the AI picks both
+    // as part of this same call. "Adaptive" reflects that instead of a guess.
     return shouldGenerate
-      ? <QuizGeneratingScreen subject={subject ?? "Quiz"} difficulty={difficulty ?? "medium"} />
-      : <QuizRetrievingScreen subject={subject ?? "Quiz"} difficulty={difficulty ?? "medium"} />;
+      ? <QuizGeneratingScreen subject={subject ?? "Quiz"} difficulty="Adaptive" />
+      : <QuizRetrievingScreen subject={subject ?? "Quiz"} difficulty="Adaptive" />;
   }
 
   if (activeError || questions.length === 0) {
@@ -476,8 +490,9 @@ export default function QuizSession() {
 
         <View className="items-center justify-center">
           <Text className="text-md font-black text-slate-800">{subject}</Text>
+          {/* Lesson varies per question (random by default), so it's shown per-question below, not here */}
           <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
-            <Text className={`text-[12px] font-bold ${diff.text}`}>{difficulty}</Text>
+            <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
           </View>
         </View>
 
@@ -555,6 +570,16 @@ export default function QuizSession() {
           <View className="flex-row items-center gap-1 absolute ps-5 pt-5">
             <Flag size={11} color="#7C3AED" strokeWidth={2.5} fill="#EDE9FE" />
             <Text className="text-[11px] text-[#7C3AED] font-semibold">Flagged for review</Text>
+          </View>
+        )}
+        {/* Each question is independently assigned a random lesson within the
+            subject, so it's shown per-question here rather than once in the header. */}
+        {!!q?.lesson && (
+          <View className="self-start flex-row items-center gap-1 px-2 py-1 rounded-full bg-orange-50 mb-3">
+            <BookOpen size={11} color="#FC6E20" strokeWidth={2.5} />
+            <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
+              {q.lesson}
+            </Text>
           </View>
         )}
         <Text className="font-bold text-slate-800 leading-6 text-xl">{q?.question}</Text>

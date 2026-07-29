@@ -1,16 +1,13 @@
 import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useState, useEffect } from "react";
 import { X, Sparkles, Plus, Minus } from "lucide-react-native";
-import { DIFFICULTY_STYLES, type Difficulty } from "@/constants/quizStyles";
 
 const SUBJECTS = ["Mathematics", "Science", "History", "English", "Geography", "Programming"];
-const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard"];
 
 
 export interface QuizConfig {
   subject: string;
   questions: number;
-  difficulty: Difficulty;
   timer: number;
 }
 
@@ -23,7 +20,6 @@ interface CreateQuizModalProps {
 export default function CreateQuizModal({ visible, onClose, onGenerate }: CreateQuizModalProps) {
   const [subject, setSubject] = useState("Mathematics");
   const [questions, setQuestions] = useState(10);
-  const [difficulty, setDifficulty] = useState<Difficulty>("Easy");
   const [timer, setTimer] = useState(10);
   const [timerCustomized, setTimerCustomized] = useState(false);
 
@@ -37,7 +33,6 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
     if (!visible) {
       setSubject("Mathematics");
       setQuestions(10);
-      setDifficulty("Easy");
       setTimer(10);
       setTimerCustomized(false);
     }
@@ -111,26 +106,6 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
             </TouchableOpacity>
           </View>
 
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Difficulty
-          </Text>
-          <View className="flex-row gap-2 mb-5">
-            {DIFFICULTIES.map((d) => (
-              <TouchableOpacity
-                key={d}
-                className={`flex-1 py-2.5 rounded-xl items-center border ${
-                  difficulty === d ? DIFFICULTY_STYLES[d].active : "bg-white border-slate-200"
-                }`}
-                activeOpacity={0.8}
-                onPress={() => setDifficulty(d)}
-              >
-                <Text className={`text-xs font-bold ${difficulty === d ? "text-white" : "text-slate-500"}`}>
-                  {d}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
           <View className="flex-row items-center justify-between mb-7">
             <View>
               <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
@@ -161,11 +136,15 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
             </View>
           </View>
 
+          <Text className="text-[10px] text-slate-400 text-center mb-3">
+            Lesson and difficulty are picked automatically by AI based on your progress.
+          </Text>
+
           <TouchableOpacity
             className="bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl shadow-lg shadow-primary/30"
             activeOpacity={0.85}
             onPress={() => {
-              onGenerate({ subject, questions, difficulty, timer });
+              onGenerate({ subject, questions, timer });
               onClose();
             }}
           >

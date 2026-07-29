@@ -16,7 +16,9 @@ export interface PracticeItem {
   questions: number;
   timer: string;
   progress: number;
+  answered_count: number;
   accuracy: number | null;
+  correct_count: number | null;
   created_at: string;
 }
 
@@ -36,16 +38,31 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const Icon: LucideIcon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
-  const isComplete  = item.progress === 100;
-  const hasStarted  = item.progress > 0;
-  const accuracy    = Math.round(item.accuracy ?? 0);
-  const accuracyBar = isComplete ? accuracy : item.progress;
-  const accuracyColor =
-    accuracy >= 70 ? "bg-emerald-500" :
-    accuracy >= 50 ? "bg-amber-500"   : "bg-rose-500";
-  const accuracyText =
-    accuracy >= 70 ? "text-emerald-500" :
-    accuracy >= 50 ? "text-amber-500"   : "text-rose-500";
+  const isComplete   = item.progress === 100;
+  const hasStarted   = item.progress > 0;
+  const correctCount = item.correct_count ?? 0;
+
+  // Completed: show how many were answered CORRECTLY (e.g. "7/10 correct").
+  // In progress: show how many have been answered so far (correctness isn't
+  // known until submission). Not started: neutral gray, no fraction.
+  const displayCount = isComplete ? correctCount : item.answered_count;
+  const displayPct = item.questions > 0
+    ? Math.round((displayCount / item.questions) * 100)
+    : 0;
+  const barColor = !hasStarted
+    ? "bg-slate-200"
+    : !isComplete
+    ? "bg-primary"
+    : displayPct >= 70 ? "bg-emerald-500"
+    : displayPct >= 50 ? "bg-amber-500"
+    : "bg-rose-500";
+  const textColor = !hasStarted
+    ? "text-slate-500"
+    : !isComplete
+    ? "text-primary"
+    : displayPct >= 70 ? "text-emerald-500"
+    : displayPct >= 50 ? "text-amber-500"
+    : "text-rose-500";
 
   const { mutate: deleteSession, isPending: isDeleting } = useDeleteQuizSessionMutation();
 
@@ -101,22 +118,20 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
         <View className="mt-3">
           <View className="flex-row justify-between items-center mb-1">
             <Text className="text-[10px] text-slate-400 font-medium">
-              {isComplete
-                ? "Accuracy"
-                : item.progress === 0
+              {!hasStarted
                 ? "Not started"
-                : `${Math.round((item.progress / 100) * item.questions)}/${item.questions} answered`}
+                : isComplete
+                ? `${displayCount}/${item.questions} correct`
+                : `${displayCount}/${item.questions} answered`}
             </Text>
-            <Text className={`text-[10px] font-bold ${isComplete ? accuracyText : "text-slate-500"}`}>
-              {isComplete ? `${accuracy}%` : `${item.progress}%`}
+            <Text className={`text-[10px] font-bold ${textColor}`}>
+              {displayPct}%
             </Text>
           </View>
           <View className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <View
-              className={`h-full rounded-full ${
-                isComplete ? accuracyColor : item.progress > 0 ? "bg-primary" : "bg-slate-200"
-              }`}
-              style={{ width: `${accuracyBar}%` }}
+              className={`h-full rounded-full ${barColor}`}
+              style={{ width: `${displayPct}%` }}
             />
           </View>
         </View>
