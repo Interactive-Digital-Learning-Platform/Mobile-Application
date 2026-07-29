@@ -639,7 +639,7 @@ export default function QuizSession() {
       </View>
 
       {/* ── Nav buttons ── */}
-      <View className="flex-row justify-between items-center absolute bottom-0 px-4 py-5 w-full bg-white/90">
+      <View className="flex-row justify-between items-center absolute bottom-8 px-4 py-5 w-full bg-white/90">
         <TouchableOpacity
           className={`w-[49%] flex-row justify-center items-center gap-2 py-3.5 rounded-2xl ${
             current === 0 ? "bg-white border border-slate-200 opacity-40" : "bg-slate-100"
