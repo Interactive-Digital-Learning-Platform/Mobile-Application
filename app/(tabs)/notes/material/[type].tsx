@@ -17,12 +17,10 @@ import {
   Pause,
   Volume2,
   Info,
-  Lightbulb,
   RotateCcw,
   CheckCircle2,
-  ChevronRight,
-  ChevronLeft as ChevLeft,
 } from "lucide-react-native";
+
 import { materialsApi } from "@/services/api";
 import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
@@ -36,15 +34,8 @@ const { width: SCREEN_W } = Dimensions.get("window");
 // FLASHCARD — Flip animation
 // ═══════════════════════════════════════════════════════════════════════════
 
-const Flashcard = ({
-  card,
-  index,
-  total,
-}: {
-  card: any;
-  index: number;
-  total: number;
-}) => {
+const Flashcard = ({ card }: { card: any }) => {
+
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
 
@@ -82,11 +73,6 @@ const Flashcard = ({
 
   return (
     <View style={styles.flashcardScene}>
-      {/* Counter */}
-      <Text style={styles.flashcardCounter}>
-        {index + 1} / {total}
-      </Text>
-
       <TouchableOpacity activeOpacity={0.95} onPress={flip} style={styles.flashcardWrapper}>
         {/* Front */}
         <Animated.View
@@ -124,51 +110,36 @@ const Flashcard = ({
   );
 };
 
+
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASHCARD SWIPER — Swipe through cards
+// FLASHCARD LIST — Vertical scroll through all cards
 // ═══════════════════════════════════════════════════════════════════════════
 
-const FlashcardSwiper = ({ flashcards }: { flashcards: any[] }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
   const [completed, setCompleted] = useState<Set<number>>(new Set());
 
-  const goNext = () => {
-    if (currentIndex < flashcards.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-  };
-
-  const goPrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
-
-  const markDone = () => {
+  const toggleDone = (index: number) => {
     const next = new Set(completed);
-    next.add(currentIndex);
+    if (next.has(index)) next.delete(index);
+    else next.add(index);
     setCompleted(next);
-    if (currentIndex < flashcards.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
   };
 
   const allDone = completed.size === flashcards.length;
 
   return (
-    <View style={styles.swiperContainer}>
-      {/* Progress dots */}
-      <View style={styles.progressDots}>
-        {flashcards.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.progressDot,
-              i === currentIndex && styles.progressDotActive,
-              completed.has(i) && styles.progressDotDone,
-            ]}
-          />
-        ))}
+    <View style={styles.flashcardListContainer}>
+      {/* Summary row */}
+      <View style={styles.flashcardListHeader}>
+        <Text style={styles.flashcardListCount}>
+          {flashcards.length} cards · tap to flip
+        </Text>
+        <View style={styles.flashcardDoneCount}>
+          <CheckCircle2 size={14} color="#16A34A" />
+          <Text style={styles.flashcardDoneText}>
+            {completed.size} / {flashcards.length}
+          </Text>
+        </View>
       </View>
 
       {/* Completion banner */}
@@ -179,68 +150,38 @@ const FlashcardSwiper = ({ flashcards }: { flashcards: any[] }) => {
         </View>
       )}
 
-      {/* Current card */}
-      <Flashcard
-        card={flashcards[currentIndex]}
-        index={currentIndex}
-        total={flashcards.length}
-      />
+      {/* All cards stacked vertically */}
+      {flashcards.map((card, i) => (
+        <View key={i} style={styles.flashcardListItem}>
+          {/* Card number + done toggle */}
+          <View style={styles.flashcardListMeta}>
+            <Text style={styles.flashcardListNum}>#{i + 1}</Text>
+            <TouchableOpacity
+              style={[
+                styles.flashcardDoneBtn,
+                completed.has(i) && styles.flashcardDoneBtnActive,
+              ]}
+              onPress={() => toggleDone(i)}
+              activeOpacity={0.7}
+            >
+              <CheckCircle2
+                size={14}
+                color={completed.has(i) ? "#16A34A" : "#CBD5E1"}
+              />
+              <Text
+                style={[
+                  styles.flashcardDoneBtnText,
+                  completed.has(i) && { color: "#16A34A" },
+                ]}
+              >
+                {completed.has(i) ? "Done" : "Mark done"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Flashcard card={card} />
 
-      {/* Navigation */}
-      <View style={styles.swiperNav}>
-        <TouchableOpacity
-          style={[styles.navBtn, currentIndex === 0 && styles.navBtnDisabled]}
-          onPress={goPrev}
-          disabled={currentIndex === 0}
-        >
-          <ChevLeft size={20} color={currentIndex === 0 ? "#CBD5E1" : colors.primaryBlack} />
-          <Text style={[styles.navBtnText, currentIndex === 0 && { color: "#CBD5E1" }]}>
-            Prev
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.markDoneBtn, completed.has(currentIndex) && styles.markDoneBtnDone]}
-          onPress={markDone}
-        >
-          <CheckCircle2
-            size={16}
-            color={completed.has(currentIndex) ? "#16A34A" : "#fff"}
-          />
-          <Text
-            style={[
-              styles.markDoneBtnText,
-              completed.has(currentIndex) && { color: "#16A34A" },
-            ]}
-          >
-            {completed.has(currentIndex) ? "Done!" : "Got it"}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.navBtn,
-            currentIndex === flashcards.length - 1 && styles.navBtnDisabled,
-          ]}
-          onPress={goNext}
-          disabled={currentIndex === flashcards.length - 1}
-        >
-          <Text
-            style={[
-              styles.navBtnText,
-              currentIndex === flashcards.length - 1 && { color: "#CBD5E1" },
-            ]}
-          >
-            Next
-          </Text>
-          <ChevronRight
-            size={20}
-            color={
-              currentIndex === flashcards.length - 1 ? "#CBD5E1" : colors.primaryBlack
-            }
-          />
-        </TouchableOpacity>
-      </View>
+        </View>
+      ))}
     </View>
   );
 };
@@ -524,16 +465,16 @@ export default function MaterialViewer() {
       );
     }
 
-    // ── Flashcards ─────────────────────────────────────────────────────────
+    // ── Flashcards ─────────────────────────────────────────────────────────────────
     if (type === "flashcards" && material.flashcards?.length > 0) {
       return (
         <View style={styles.contentPad}>
           <View style={styles.materialHero}>
             <Text style={styles.heroSub}>
-              {material.flashcards.length} cards · tap to flip · swipe to navigate
+              {material.flashcards.length} cards · scroll down · tap each to flip
             </Text>
           </View>
-          <FlashcardSwiper flashcards={material.flashcards} />
+          <FlashcardList flashcards={material.flashcards} />
         </View>
       );
     }
@@ -782,41 +723,49 @@ const styles = StyleSheet.create({
   },
   resetBtnText: { fontSize: 12, color: "#6B7280", fontFamily: "Author-Medium" },
 
-  swiperNav: {
+  // ── Flashcard vertical list ──────────────────────────────────────────────────────────
+  flashcardListContainer: { gap: 16 },
+  flashcardListHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    width: "100%",
-    marginTop: 20,
+    marginBottom: 4,
+  },
+  flashcardListCount: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontFamily: "Author-Medium",
+  },
+  flashcardDoneCount: { flexDirection: "row", alignItems: "center", gap: 4 },
+  flashcardDoneText: { fontSize: 13, color: "#16A34A", fontFamily: "Author-SemiBold" },
+  flashcardListItem: { gap: 6 },
+  flashcardListMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 4,
   },
-  navBtn: {
+  flashcardListNum: {
+    fontSize: 12,
+    fontFamily: "Author-Bold",
+    color: "#CBD5E1",
+    letterSpacing: 0.5,
+  },
+  flashcardDoneBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: "#F1F5F9",
   },
-  navBtnDisabled: { opacity: 0.4 },
-  navBtnText: { fontSize: 14, fontFamily: "Author-Medium", color: colors.primaryBlack },
-  markDoneBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+  flashcardDoneBtnActive: { backgroundColor: "#DCFCE7" },
+  flashcardDoneBtnText: {
+    fontSize: 11,
+    fontFamily: "Author-SemiBold",
+    color: "#94A3B8",
   },
-  markDoneBtnDone: { backgroundColor: "#DCFCE7", shadowOpacity: 0 },
-  markDoneBtnText: { fontSize: 15, fontFamily: "Author-SemiBold", color: "#fff" },
 
   // ── Mind Map ─────────────────────────────────────────────────────────────────
 
