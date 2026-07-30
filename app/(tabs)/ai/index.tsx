@@ -12,34 +12,66 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useUser } from "@clerk/expo";
 import { quickActions } from "@/constants/quickActions";
-import { MessageType, QuickActionType } from "@/types";
+import { QuickActionType } from "@/types/chatModuleTypes";
 import QuickAction from "@/components/QuickAction";
-import { FlashList, FlashListRef } from "@shopify/flash-list";
-import { sampleMessages } from "@/constants/messages";
+import { FlashList } from "@shopify/flash-list";
 import Message from "@/components/Message";
-import { useRef, useState } from "react";
+import { chatInputSchema, type ChatInputValues } from "@/schemas/chatSchemas";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import Toast from "react-native-toast-message";
+import { useChat } from "@/hooks/use-chat";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
-  const chatRef = useRef<FlashListRef<MessageType>>(null);
-  const [messages, setMessages] = useState(sampleMessages);
-  const [input, setInput] = useState("");
 
-  const handleSendMessage = () => {
-    const msg: MessageType = {
-      id: "29",
-      content: input,
-      type: "text",
-      role: "user",
-      createdAt: new Date(),
-    };
-    setMessages((prevMessages) => [...prevMessages, msg]);
-    setInput("");
+  const { messages, sendMessage, isSending, chatRef } = useChat();
 
-    setTimeout(() => {
-      chatRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-  };
+  const { control, handleSubmit, reset, watch } = useForm<ChatInputValues>({
+    resolver: zodResolver(chatInputSchema),
+    mode: "onChange",
+    defaultValues: {
+      message: "",
+    },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    const trimmed = values.message.trim();
+    if (!trimmed) return;
+
+    reset({ message: "" });
+
+    if (!user?.id) {
+      Toast.show({
+        type: "error",
+        text1: "Not ready",
+        text2: "User session is not available yet.",
+      });
+      return;
+    }
+
+    try {
+      console.log(
+        "AI API URL:",
+        process.env.EXPO_PUBLIC_AI_ASSISTANT_SERVICE_API
+      );
+      await sendMessage(values);
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Message failed",
+        text2: "Unable to reach the AI service." + error,
+      });
+    }
+  });
+
+  const inputValue = watch("message");
+  const isSendDisabled = !inputValue?.trim() || isSending;
+
+  console.log(
+    "AIChat render:",
+    messages[messages.length - 1]?.content
+  );
 
   return (
     <LinearGradient
@@ -60,7 +92,7 @@ export default function AIChat() {
           <FlashList
             ref={chatRef}
             data={messages}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.localID}
             renderItem={({ item }) => <Message key={item.id} message={item} />}
             className="w-full flex-1"
             contentContainerClassName="w-full h-auto flex-col justify-start"
@@ -97,19 +129,27 @@ export default function AIChat() {
           <View className="w-full h-16 flex-row justify-center items-center gap-4 mb-4">
             <View className="flex-1 h-full px-4 rounded-full flex-row justify-center items-center gap-4 bg-white border border-[#E3E1E1]">
               <Paperclip color={"#979797"} />
-              <TextInput
-                className="text-lg font-amedium w-full flex-1 h-10"
-                placeholder="Ask anything..."
-                placeholderTextColor="#979797"
-                style={{ paddingVertical: 0 }}
-                textAlignVertical="center"
-                multiline
-                onChangeText={(text) => setInput(text)}
-                value={input}
+              <Controller
+                control={control}
+                name="message"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <TextInput
+                    className="text-lg font-amedium w-full flex-1 h-10"
+                    placeholder="Ask anything..."
+                    placeholderTextColor="#979797"
+                    style={{ paddingVertical: 0 }}
+                    textAlignVertical="center"
+                    multiline
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    value={value}
+                  />
+                )}
               />
             </View>
             <Pressable
-              onPress={handleSendMessage}
+              onPress={onSubmit}
+              disabled={isSendDisabled}
               className="w-[10%] h-auto justify-center items-center"
             >
               <Send size={25} color={colors.primaryBlack} />
