@@ -70,7 +70,6 @@ export default function AIChat() {
   const inputValue = watch("message");
   const isSendDisabled = !inputValue?.trim() || isSending;
 
-
   return (
     <>
       <StatusBar
@@ -95,6 +94,7 @@ export default function AIChat() {
           >
             <View className="w-full h-auto flex-row justify-between items-center pt-6">
               <TextAlignStart
+                
                 size={28}
                 color="#ffffff"
               />
