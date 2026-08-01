@@ -31,26 +31,27 @@ export const notesApi = {
     return response.data;
   },
 
-  // Upload a note
-  uploadNote: async (userId: string, title: string, fileUri: string) => {
+  // Upload a single or multi-page note
+  uploadNote: async (userId: string, title: string, fileUris: string | string[]) => {
     try {
-      console.log('Uploading note:', { userId, title, fileUri, platform: Platform.OS });
+      const uris = Array.isArray(fileUris) ? fileUris : [fileUris];
+      console.log('Uploading note pages:', { userId, title, pageCount: uris.length, platform: Platform.OS });
       
       const formData = new FormData();
       
-      if (Platform.OS === 'web') {
-        // For Web, we must fetch the blob
-        const response = await fetch(fileUri);
-        const blob = await response.blob();
-        formData.append('image', blob, 'note-image.jpg');
-      } else {
-        // For Native (Expo Go / Android / iOS), we can append the file object directly to FormData
-        // React Native's FormData expects this specific object format
-        formData.append('image', {
-          uri: fileUri,
-          name: 'note-image.jpg',
-          type: 'image/jpeg',
-        } as any);
+      for (let i = 0; i < uris.length; i++) {
+        const uri = uris[i];
+        if (Platform.OS === 'web') {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          formData.append('images', blob, `note-page-${i + 1}.jpg`);
+        } else {
+          formData.append('images', {
+            uri,
+            name: `note-page-${i + 1}.jpg`,
+            type: 'image/jpeg',
+          } as any);
+        }
       }
       
       formData.append('userId', userId);
@@ -62,14 +63,12 @@ export const notesApi = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        // Important for some Axios versions on Native to not try and transform the data
         transformRequest: (data) => data,
       });
 
       return apiResponse.data;
     } catch (error: any) {
       console.error('Upload error details:', error);
-      // If the error is a network error, it's likely the Local IP issue
       if (error.message === 'Network Error' && Platform.OS !== 'web') {
         throw new Error("Network Error: Make sure EXPO_PUBLIC_BACKEND_URL in .env uses your computer's local IP (e.g. 192.168.x.x) instead of localhost.");
       }

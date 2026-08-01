@@ -26,6 +26,8 @@ interface Note {
   title: string;
   status: string;
   createdAt: string;
+  pageCount?: number;
+  imageUrls?: string[];
   analysis?: {
     subject: string;
     topic: string;
@@ -177,10 +179,11 @@ export default function NotesIndex() {
             </Text>
             {item.analysis ? (
               <Text style={styles.cardMeta} numberOfLines={1}>
-                {item.analysis.subject} · {item.analysis.topic}
+                {item.analysis.subject} · {item.analysis.topic}{item.pageCount && item.pageCount > 1 ? ` (${item.pageCount} pgs)` : ""}
               </Text>
             ) : (
               <Text style={styles.cardDate}>
+                {item.pageCount && item.pageCount > 1 ? `${item.pageCount} Pages · ` : ""}
                 {new Date(item.createdAt).toLocaleDateString("en-GB", {
                   day: "numeric",
                   month: "short",

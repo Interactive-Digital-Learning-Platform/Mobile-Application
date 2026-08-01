@@ -56,6 +56,8 @@ interface Note {
   _id: string;
   title: string;
   imageUrl: string;
+  imageUrls?: string[];
+  pageCount?: number;
   rawText: string;
   status: "uploaded" | "processing" | "analyzed" | "failed";
   errorMessage?: string;
@@ -150,6 +152,7 @@ export default function NoteDetail() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [ocrExpanded, setOcrExpanded] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
+  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
 
@@ -484,33 +487,92 @@ export default function NoteDetail() {
               </View>
             )}
 
-            {/* ── Note Image (Collapsible) ── */}
-            <View style={styles.section}>
-              <TouchableOpacity
-                style={styles.collapseHeader}
-                onPress={() => setImageExpanded(!imageExpanded)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.sectionTitleRow}>
-                  <FileText size={18} color="#6B7280" />
-                  <Text style={[styles.sectionTitle, { color: "#6B7280" }]}>
-                    Original Note Image
-                  </Text>
+            {/* ── Original Note Images (Collapsible Multi-Page Gallery) ── */}
+            {(() => {
+              const allPages =
+                note.imageUrls && note.imageUrls.length > 0
+                  ? note.imageUrls
+                  : [note.imageUrl];
+
+              return (
+                <View style={styles.section}>
+                  <TouchableOpacity
+                    style={styles.collapseHeader}
+                    onPress={() => setImageExpanded(!imageExpanded)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.sectionTitleRow}>
+                      <FileText size={18} color="#6B7280" />
+                      <Text style={[styles.sectionTitle, { color: "#6B7280" }]}>
+                        Original Note Image{allPages.length > 1 ? `s (${allPages.length} Pages)` : ""}
+                      </Text>
+                    </View>
+                    {imageExpanded ? (
+                      <ChevronUp size={18} color="#6B7280" />
+                    ) : (
+                      <ChevronDown size={18} color="#6B7280" />
+                    )}
+                  </TouchableOpacity>
+
+                  {imageExpanded && (
+                    <View style={{ marginTop: 12 }}>
+                      {allPages.length > 1 ? (
+                        <>
+                          {/* Page Selector Tabs */}
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.pageTabList}
+                          >
+                            {allPages.map((_, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                style={[
+                                  styles.pageTab,
+                                  selectedPageIndex === idx && styles.pageTabActive,
+                                ]}
+                                onPress={() => setSelectedPageIndex(idx)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.pageTabText,
+                                    selectedPageIndex === idx && styles.pageTabTextActive,
+                                  ]}
+                                >
+                                  Page {idx + 1}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+
+                          {/* Selected Page View */}
+                          <View style={styles.noteImageWrap}>
+                            <Image
+                              source={{
+                                uri: `${API_URL}${allPages[selectedPageIndex] || allPages[0]}`,
+                              }}
+                              style={styles.noteImage}
+                              resizeMode="contain"
+                            />
+                            <View style={styles.pageNumberOverlay}>
+                              <Text style={styles.pageNumberOverlayText}>
+                                Page {selectedPageIndex + 1} of {allPages.length}
+                              </Text>
+                            </View>
+                          </View>
+                        </>
+                      ) : (
+                        <Image
+                          source={{ uri: `${API_URL}${allPages[0]}` }}
+                          style={styles.noteImage}
+                          resizeMode="contain"
+                        />
+                      )}
+                    </View>
+                  )}
                 </View>
-                {imageExpanded ? (
-                  <ChevronUp size={18} color="#6B7280" />
-                ) : (
-                  <ChevronDown size={18} color="#6B7280" />
-                )}
-              </TouchableOpacity>
-              {imageExpanded && (
-                <Image
-                  source={{ uri: `${API_URL}${note.imageUrl}` }}
-                  style={styles.noteImage}
-                  resizeMode="contain"
-                />
-              )}
-            </View>
+              );
+            })()}
 
             {/* ── OCR Text (Collapsible) ── */}
             {note.rawText ? (
@@ -906,10 +968,53 @@ const styles = StyleSheet.create({
   },
   noteImage: {
     width: "100%",
-    height: 300,
-    marginTop: 12,
+    height: 320,
+    marginTop: 8,
     borderRadius: 12,
     backgroundColor: "#F1F5F9",
+  },
+  noteImageWrap: {
+    position: "relative",
+    width: "100%",
+  },
+  pageTabList: {
+    flexDirection: "row",
+    gap: 8,
+    paddingBottom: 8,
+  },
+  pageTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  pageTabActive: {
+    backgroundColor: colors.primaryBlack,
+    borderColor: colors.primaryBlack,
+  },
+  pageTabText: {
+    fontSize: 12,
+    fontFamily: "Author-Medium",
+    color: "#64748B",
+  },
+  pageTabTextActive: {
+    color: "#FFFFFF",
+  },
+  pageNumberOverlay: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pageNumberOverlayText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: "Author-SemiBold",
   },
 
   // Materials
