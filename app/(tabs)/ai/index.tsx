@@ -21,7 +21,6 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { useChat } from "@/hooks/use-chat";
-import { SERVICE_URLS } from "@/api/apiClients";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
@@ -52,10 +51,6 @@ export default function AIChat() {
     }
 
     try {
-      console.log(
-        "AI API URL:",
-        SERVICE_URLS.assistant,
-      );
       await sendMessage(values);
     } catch (error) {
       Toast.show({
@@ -69,10 +64,6 @@ export default function AIChat() {
   const inputValue = watch("message");
   const isSendDisabled = !inputValue?.trim() || isSending;
 
-  console.log(
-    "AIChat render:",
-    messages[messages.length - 1]?.content
-  );
 
   return (
     <LinearGradient
