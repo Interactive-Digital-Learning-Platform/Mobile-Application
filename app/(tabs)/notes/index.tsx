@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Plus, FileText, ChevronRight } from "lucide-react-native";
 import { useAuth } from "@clerk/expo";
-import { notesApi } from "@/services/api";
+import { notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 
 export default function NotesIndex() {

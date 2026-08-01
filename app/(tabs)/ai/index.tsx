@@ -70,6 +70,7 @@ export default function AIChat() {
   const inputValue = watch("message");
   const isSendDisabled = !inputValue?.trim() || isSending;
 
+
   return (
     <>
       <StatusBar
