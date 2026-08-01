@@ -5,7 +5,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { X, Upload, Camera, Image as ImageIcon } from "lucide-react-native";
 import { useAuth } from "@clerk/expo";
-import { notesApi } from "@/services/api";
+import { notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import InputField from "@/components/InputField";
 import Toast from "react-native-toast-message";
@@ -105,6 +105,7 @@ export default function UploadNote() {
           placeHolder="e.g. Biology - Photosynthesis"
           value={title}
           handleChange={setTitle}
+          keyboardType="default"
         />
 
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Note Image</Text>

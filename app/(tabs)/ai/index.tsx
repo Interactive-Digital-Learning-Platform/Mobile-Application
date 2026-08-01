@@ -21,6 +21,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { useChat } from "@/hooks/use-chat";
+import { SERVICE_URLS } from "@/api/apiClients";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
@@ -53,7 +54,7 @@ export default function AIChat() {
     try {
       console.log(
         "AI API URL:",
-        process.env.EXPO_PUBLIC_AI_ASSISTANT_SERVICE_API
+        SERVICE_URLS.assistant,
       );
       await sendMessage(values);
     } catch (error) {

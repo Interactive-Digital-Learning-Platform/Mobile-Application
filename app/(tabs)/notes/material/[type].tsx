@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Play, Pause, BookOpen, Volume2, Info, Lightbulb } from "lucide-react-native";
-import { materialsApi } from "@/services/api";
+import {
+  getNotesResourceUrl,
+  notesAssetsClient,
+} from "@/api/apiClients";
+import { materialsApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import Markdown from 'react-native-markdown-display';
 import { Audio } from 'expo-av';
-import axios from "axios";
-
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://10.0.2.2:3001';
 
 // --- Sub-component: Flippable Flashcard ---
 const Flashcard = ({ card }: { card: any }) => {
@@ -82,7 +83,7 @@ export default function MaterialViewer() {
           
           // If it's an audio script fallback, fetch the text
           if (type === 'audio' && response.data.audioUrl?.endsWith('.txt')) {
-            const scriptRes = await axios.get(`${API_URL}${response.data.audioUrl}`);
+            const scriptRes = await notesAssetsClient.get(response.data.audioUrl);
             setFallbackScript(scriptRes.data);
           }
         }
@@ -120,7 +121,7 @@ export default function MaterialViewer() {
           setIsPlaying(true);
         }
       } else {
-        const fullUrl = `${API_URL}${url}`;
+        const fullUrl = getNotesResourceUrl(url);
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: fullUrl },
           { shouldPlay: true }

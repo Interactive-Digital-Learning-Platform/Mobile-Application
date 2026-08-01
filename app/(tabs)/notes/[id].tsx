@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Brain, BookOpen, Clock, FileText, Layers, AlertCircle, Play } from "lucide-react-native";
-import { notesApi, materialsApi } from "@/services/api";
+import { materialsApi, notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 
 export default function NoteDetail() {
