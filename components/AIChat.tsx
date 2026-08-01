@@ -27,11 +27,9 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { useChat } from "@/hooks/use-chat";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
-  const navigation = useNavigation();
 
   const { messages, sendMessage, isSending, chatRef } = useChat();
 
@@ -96,7 +94,7 @@ export default function AIChat() {
           >
             <View className="w-full h-auto flex-row justify-between items-center pt-6">
               <TextAlignStart
-                onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+                
                 size={28}
                 color="#ffffff"
               />
