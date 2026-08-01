@@ -94,6 +94,7 @@ export default function AIChat() {
           >
             <View className="w-full h-auto flex-row justify-between items-center pt-6">
               <TextAlignStart
+                
                 size={28}
                 color="#ffffff"
               />
