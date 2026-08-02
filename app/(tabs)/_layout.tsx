@@ -33,7 +33,22 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarActiveTintColor: "#FC6E20",
         tabBarInactiveTintColor: "#d3d2d2ff",
-        tabBarStyle,
+        tabBarStyle: {
+          height: Platform.select({
+            ios: 64 + insets.bottom,
+            android: 64 + insets.bottom,
+          }),
+          backgroundColor: "#f0f5fb",
+          elevation: 0,
+          boxShadow: "none",
+          paddingTop: 12,
+          paddingBottom: Platform.select({
+            ios: 8 + insets.bottom,
+            android: 8 + insets.bottom,
+          }),
+          borderTopWidth: 1,
+          borderColor: "#0000001A",
+        },
       }}
     >
       <Tabs.Screen
@@ -78,7 +93,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="notes/index"
+        name="notes"
         options={{
           title: "Notes",
           headerShown: false,
