@@ -6,7 +6,8 @@
  *   2. Overview: accuracy donut ring + sessions/speed tiles
  *   3. Horizontal bar chart — subject accuracy
  *   4. Strong / weak subject pills
- *   5. Per-subject detail cards
+ *   5. Performance summary / progress trend / topic performance / growth /
+ *      recommendations / difficulty progress (components/profile/*)
  *   6. AI feedback section with refresh (useAnalyticsFeedbackQuery)
  */
 
@@ -18,7 +19,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -32,7 +32,6 @@ import {
   Sparkles,
   RefreshCw,
   AlertCircle,
-  CheckCircle2,
   Lightbulb,
   Target,
   Heart,
@@ -47,64 +46,15 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import Skeleton from "@/components/Skeleton";
-
-// ── Primary palette ───────────────────────────────────────────────────────────
-
-const C = {
-  p50:  "#FFF3EC",
-  p100: "#FFE4CF",
-  p200: "#FFCCA8",
-  p300: "#FFA87A",
-  p400: "#FF8C50",
-  p500: "#FC6E20",
-  p600: "#E55B10",
-  p700: "#CC4D08",
-  p800: "#A33C06",
-};
-
-
-// ── Shared stylesheet ─────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "white",
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  iconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sectionLabel: {
-    color: "#1e293b",
-    fontWeight: "900",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  pillStrong: {
-    backgroundColor: C.p100,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  pillWeak: {
-    backgroundColor: "#FFE4E6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-});
+import { filterTestSubjects, filterTestSubjectNames } from "@/constants/quizHelpers";
+import { C, profileStyles as styles } from "@/components/profile/profileTheme";
+import StatTile from "@/components/profile/StatTile";
+import PerformanceSummarySection from "@/components/profile/PerformanceSummarySection";
+import ProgressTrendSection from "@/components/profile/ProgressTrendSection";
+import TopicPerformanceSection from "@/components/profile/TopicPerformanceSection";
+import GrowthSection from "@/components/profile/GrowthSection";
+import RecommendationsSection from "@/components/profile/RecommendationsSection";
+import DifficultyProgressSection from "@/components/profile/DifficultyProgressSection";
 
 // ── Accuracy donut ring ───────────────────────────────────────────────────────
 
@@ -200,26 +150,6 @@ function SubjectBarChart({
   );
 }
 
-// ── Small stat tile ───────────────────────────────────────────────────────────
-
-function StatTile({
-  icon: Icon, iconColor, iconBg, label, value,
-}: {
-  icon: any; iconColor: string; iconBg: string; label: string; value: string | number;
-}) {
-  return (
-    <View style={[styles.card, { flex: 1, alignItems: "center", paddingVertical: 14 }]}>
-      <View style={[styles.iconBadge, { backgroundColor: iconBg, width: 40, height: 40, borderRadius: 20 }]}>
-        <Icon size={18} color={iconColor} strokeWidth={2} />
-      </View>
-      <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 16, marginTop: 6 }}>{value}</Text>
-      <Text style={{ color: "#94a3b8", fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 
 function StatsSkeleton() {
@@ -247,6 +177,13 @@ function StatsSkeleton() {
       </View>
       {/* Strong/weak pills */}
       <Skeleton width="100%" height={72} borderRadius={18} color={C.p50} />
+      {/* Performance summary / progress trend / topic performance / growth / recommendations / difficulty progress */}
+      <Skeleton width="100%" height={160} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={130} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={180} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={160} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={180} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={130} borderRadius={18} color={C.p50} />
     </View>
   );
 }
@@ -325,6 +262,10 @@ export default function Profile() {
     setRefreshing(false);
   };
 
+  const visibleSubjects = analytics ? filterTestSubjects(analytics.subjects) : [];
+  const visibleStrongSubjects = analytics ? filterTestSubjectNames(analytics.strong_subjects) : [];
+  const visibleWeakSubjects = analytics ? filterTestSubjectNames(analytics.weak_subjects) : [];
+
   const displayName = user?.username ?? "Student";
   const joinDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
@@ -342,10 +283,6 @@ export default function Profile() {
       >
         <View className="bg-white">
 
-        
-      
-
-      
         {/* ── Header ── */}
         <View style={{
           backgroundColor: C.p500,
@@ -356,8 +293,6 @@ export default function Profile() {
           borderBottomRightRadius: 30,
           overflow: "hidden",
         }}>
-          
-          
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
             <View style={{
@@ -436,21 +371,21 @@ export default function Profile() {
               </View>
 
               {/* Bar chart */}
-              {analytics.subjects.length > 0 && (
-                <SubjectBarChart subjects={analytics.subjects} />
+              {visibleSubjects.length > 0 && (
+                <SubjectBarChart subjects={visibleSubjects} />
               )}
 
               {/* Strong / weak pills */}
-              {(analytics.strong_subjects.length > 0 || analytics.weak_subjects.length > 0) && (
+              {(visibleStrongSubjects.length > 0 || visibleWeakSubjects.length > 0) && (
                 <View style={[styles.card, { marginBottom: 12 }]}>
-                  {analytics.strong_subjects.length > 0 && (
-                    <View style={{ marginBottom: analytics.weak_subjects.length > 0 ? 12 : 0 }}>
+                  {visibleStrongSubjects.length > 0 && (
+                    <View style={{ marginBottom: visibleWeakSubjects.length > 0 ? 12 : 0 }}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                         <TrendingUp size={14} color={C.p500} strokeWidth={2} />
                         <Text style={[styles.sectionLabel, { color: C.p600 }]}>Strong</Text>
                       </View>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                        {analytics.strong_subjects.map((s) => (
+                        {visibleStrongSubjects.map((s) => (
                           <View key={s} style={styles.pillStrong}>
                             <Text style={{ color: C.p700, fontSize: 11, fontWeight: "600" }}>{s}</Text>
                           </View>
@@ -458,14 +393,14 @@ export default function Profile() {
                       </View>
                     </View>
                   )}
-                  {analytics.weak_subjects.length > 0 && (
+                  {visibleWeakSubjects.length > 0 && (
                     <View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
                         <TrendingDown size={14} color="#EF4444" strokeWidth={2} />
                         <Text style={[styles.sectionLabel, { color: "#DC2626" }]}>Needs Work</Text>
                       </View>
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                        {analytics.weak_subjects.map((s) => (
+                        {visibleWeakSubjects.map((s) => (
                           <View key={s} style={styles.pillWeak}>
                             <Text style={{ color: "#DC2626", fontSize: 11, fontWeight: "600" }}>{s}</Text>
                           </View>
@@ -475,6 +410,29 @@ export default function Profile() {
                   )}
                 </View>
               )}
+
+              {/* 1. Performance summary */}
+              <PerformanceSummarySection
+                totalQuestionsAttempted={analytics.total_questions_attempted}
+                totalCorrectAnswers={analytics.total_correct_answers}
+                completionRate={analytics.completion_rate}
+                avgResponseTime={analytics.overall_avg_response_time}
+              />
+
+              {/* 2. Progress trend */}
+              <ProgressTrendSection trend={analytics.performance_trend} />
+
+              {/* 3. Topic performance */}
+              <TopicPerformanceSection subjects={visibleSubjects} />
+
+              {/* 4. Growth */}
+              <GrowthSection growth={analytics.growth} />
+
+              {/* 5. Recommendations */}
+              <RecommendationsSection recommendations={analytics.recommendations} />
+
+              {/* 6. Difficulty progress */}
+              <DifficultyProgressSection subjects={visibleSubjects} />
 
               {analytics.total_sessions === 0 && (
                 <View style={[styles.card, { alignItems: "center", paddingVertical: 36 }]}>

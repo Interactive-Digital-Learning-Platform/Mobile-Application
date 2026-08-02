@@ -21,6 +21,10 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
   const [questions, setQuestions] = useState(10);
   const [timer, setTimer] = useState(10);
   const [timerCustomized, setTimerCustomized] = useState(false);
+  // Guards against a fast double-tap firing onGenerate (and the subsequent
+  // router.push) twice, which used to mount two quiz-session screens and
+  // create two duplicate QuizSession rows for a single tap.
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!timerCustomized) {
@@ -34,6 +38,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
       setQuestions(10);
       setTimer(10);
       setTimerCustomized(false);
+      setIsSubmitting(false);
     }
   }, [visible]);
 
@@ -140,9 +145,14 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
           </Text>
 
           <TouchableOpacity
-            className="bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl shadow-lg shadow-primary/30"
+            className={`bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl shadow-lg shadow-primary/30 ${
+              isSubmitting ? "opacity-60" : ""
+            }`}
             activeOpacity={0.85}
+            disabled={isSubmitting}
             onPress={() => {
+              if (isSubmitting) return;
+              setIsSubmitting(true);
               onGenerate({ subject, questions, timer });
               onClose();
             }}

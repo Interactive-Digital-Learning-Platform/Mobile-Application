@@ -184,6 +184,7 @@ export default function QuizSession() {
     generateTriggeredRef.current = false;
     setFrozenQuestions([]);
     setFrozenSessionId(null);
+    setReadyToShowQuiz(false);
   }, [resetGenerate]);
 
   // Retry AI generation
@@ -210,6 +211,11 @@ export default function QuizSession() {
   // ── Frozen quiz state — set once, never cleared, so restart works ──────────
   const [frozenQuestions,  setFrozenQuestions]  = useState<QuestionOut[]>([]);
   const [frozenSessionId,  setFrozenSessionId]  = useState<number | null>(null);
+
+  // True only once QuizStatusScreen's ring has visually finished filling to
+  // 100% — the actual quiz UI doesn't render until this flips, so the ring
+  // never gets cut off mid-fill by data simply having arrived in the background.
+  const [readyToShowQuiz, setReadyToShowQuiz] = useState(false);
 
   // Freeze from newly generated quiz
   useEffect(() => {
@@ -468,13 +474,22 @@ export default function QuizSession() {
     ? (isLoadingSession || !isReady)
     : (isGenerating || (!frozenQuestions.length && !generateError));
   const activeError = isResuming ? sessionError : generateError;
+  // Data has genuinely arrived — but the screen doesn't swap away until the
+  // ring has actually visually finished filling to 100% (see readyToShowQuiz).
+  const isSuccess = !isLoading && !activeError && questions.length > 0;
 
-  if (isLoading) {
+  // A generation/retrieval failure (AI + cache both failing) can leave the
+  // user stuck mid-flow with no other way out, so only the error state gets
+  // an explicit way back to the main quiz list — the loading state is a
+  // transient in-flight step, not a dead end.
+  const goBackToQuizList = () => router.replace("/(tabs)/quiz");
+
+  if (isLoading || (isSuccess && !readyToShowQuiz)) {
     // Difficulty/lesson aren't known yet while generating — the AI picks both
     // as part of this same call. "Adaptive" reflects that instead of a guess.
     return shouldGenerate
-      ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" />
-      : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" />;
+      ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />
+      : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />;
   }
 
   if (activeError || questions.length === 0) {
@@ -483,6 +498,7 @@ export default function QuizSession() {
         message={(activeError as Error)?.message ?? "No questions were returned."}
         onRetry={handleRetry}
         onUseCache={!isResuming ? handleUseCache : undefined}
+        onBack={goBackToQuizList}
       />
     );
   }

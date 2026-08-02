@@ -316,7 +316,7 @@ export default function QuizResultsScreen() {
             {!submitData && (
               <View className="mt-4 bg-white/10 rounded-xl px-4 py-2">
                 <Text className="text-white/60 text-[11px] text-center">
-                  ⚠️ Could not save to server — results shown locally
+                  Could not save to server — results shown locally
                 </Text>
               </View>
             )}

@@ -31,8 +31,15 @@ const axiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  // 15-second timeout — AI generation can take a moment
-  timeout: 15_000,
+  // 45-second timeout. Covers both AI generation (Groq + retry backoff on
+  // transient errors) and quiz submission — submit isn't AI-backed, but it's
+  // a chain of several sequential DB round-trips (grade answers, write
+  // attempts, update mastery, update analytics) against a remote Neon
+  // Postgres, which was measured taking 18s+ for even a 10-question quiz.
+  // The previous 15s timeout was tuned only for generation and fired before
+  // submit could ever finish, making the app report "Could not save to
+  // server" on saves that were actually succeeding a few seconds later.
+  timeout: 45_000,
 });
 
 // ── Request interceptor — attach Bearer token when available ──────────────────

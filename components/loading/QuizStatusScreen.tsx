@@ -4,24 +4,46 @@
  * Animated loading screen shown while a quiz is being generated or an
  * existing session is being retrieved. Parameterized by `title` and `steps`
  * so both cases share one implementation instead of two near-identical copies.
+ *
+ * No back button here on purpose — this screen is a transient in-flight
+ * state, not a dead end. If generation/retrieval fails, the flow lands on
+ * QuizErrorScreen instead, which is where the way out belongs.
+ *
+ * The ring is tied to the REAL request state via `isComplete`, not a fixed
+ * timer — there's no server-side progress percentage to report (generation
+ * is one opaque network call), so while `isComplete` is false the ring
+ * climbs toward (but never reaches) 92% with a decelerating curve, the
+ * standard "still working" pattern for an operation of unknown duration.
+ * The instant `isComplete` flips true it snaps the rest of the way to 100%,
+ * and `onComplete` — fired only once that snap animation actually
+ * finishes — is the caller's cue to swap away to the real quiz UI. This
+ * keeps the ring and the screen transition in sync instead of the ring
+ * being cut off mid-fill at a random point, which is what happened when it
+ * ran on its own fixed-duration loop independent of the real request.
  */
 
 import { useState, useEffect } from "react";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import Animated, {
   useSharedValue,
+  useAnimatedProps,
   useAnimatedStyle,
+  useAnimatedReaction,
   withSequence,
   withTiming,
   withRepeat,
   cancelAnimation,
+  runOnJS,
   Easing,
   FadeIn,
   FadeOut,
 } from "react-native-reanimated";
 import type { LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,7 +57,25 @@ interface QuizStatusScreenProps {
   steps: QuizStatusStep[];
   subject: string;
   difficulty: string;
+  /** True once the real generation/retrieval call has actually succeeded. */
+  isComplete: boolean;
+  /** Fires once the ring's fill-to-100% animation visually finishes — this
+   *  is when the caller should swap away to the real quiz UI. */
+  onComplete: () => void;
 }
+
+// ── Ring geometry ─────────────────────────────────────────────────────────────
+
+const RING_SIZE = 180;
+const RING_STROKE = 8;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+// How far the ring climbs on its own while still waiting for a real result —
+// deliberately short of 100% so it never falsely claims to be done.
+const PENDING_CAP = 0.92;
+const PENDING_CLIMB_MS = 20000;
+const COMPLETE_SNAP_MS = 350;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -44,42 +84,67 @@ export default function QuizStatusScreen({
   steps,
   subject,
   difficulty,
+  isComplete,
+  onComplete,
 }: QuizStatusScreenProps) {
   const [stepIndex, setStepIndex] = useState(0);
-  const rotation = useSharedValue(0);
-  const pulse    = useSharedValue(1);
+  const [percent, setPercent] = useState(0);
+  const fill  = useSharedValue(0);
+  const pulse = useSharedValue(1);
+
+  // Step icon/text rotation — purely cosmetic reassurance, not tied to any
+  // real backend milestone (the generation call has no sub-step reporting).
+  useEffect(() => {
+    const stepTimer = setInterval(() => {
+      setStepIndex((prev) => (prev + 1) % steps.length);
+    }, 1800);
+    return () => clearInterval(stepTimer);
+  }, [steps.length]);
 
   useEffect(() => {
-    // Animate 0→1 (not 0→360) so each repeat cycle starts cleanly from 0.
-    // withRepeat resets to the animation's start value on each cycle;
-    // if start==end (e.g. 360→360 after first cycle) nothing moves.
-    rotation.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.linear }),
-      -1,
-      false
-    );
     pulse.value = withRepeat(
       withSequence(
-        withTiming(1.12, { duration: 700 }),
+        withTiming(1.08, { duration: 700 }),
         withTiming(1,    { duration: 700 })
       ),
       -1,
       true
     );
+    return () => cancelAnimation(pulse);
+  }, []);
 
-    const interval = setInterval(() => {
-      setStepIndex((prev) => (prev + 1) % steps.length);
-    }, 1800);
+  // The ring itself — climbs toward PENDING_CAP while waiting, snaps to 100%
+  // and reports back only once the real result has actually arrived.
+  useEffect(() => {
+    cancelAnimation(fill);
+    if (isComplete) {
+      fill.value = withTiming(
+        1,
+        { duration: COMPLETE_SNAP_MS, easing: Easing.out(Easing.cubic) },
+        (finished) => {
+          if (finished) runOnJS(onComplete)();
+        }
+      );
+    } else {
+      fill.value = withTiming(PENDING_CAP, {
+        duration: PENDING_CLIMB_MS,
+        easing: Easing.out(Easing.cubic),
+      });
+    }
+    return () => cancelAnimation(fill);
+  }, [isComplete]);
 
-    return () => {
-      cancelAnimation(rotation);
-      cancelAnimation(pulse);
-      clearInterval(interval);
-    };
-  }, [steps.length]);
+  // Mirrors the ring's actual animated value into a JS-rendered percentage,
+  // so the number on screen can never drift from what the ring is showing.
+  useAnimatedReaction(
+    () => Math.round(fill.value * 100),
+    (current, previous) => {
+      if (current !== previous) runOnJS(setPercent)(current);
+    }
+  );
 
-  const spinStyle  = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value * 360}deg` }],
+  const ringProps = useAnimatedProps(() => ({
+    strokeDashoffset: RING_CIRCUMFERENCE * (1 - fill.value),
   }));
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
@@ -93,28 +158,30 @@ export default function QuizStatusScreen({
         colors={["#FC6E20", "#FF8F30"]}
         style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 32, paddingHorizontal: 32 }}
       >
-        {/* Ring + icon: fixed 180×180 box so absolute ring has real bounds */}
-        <View style={{ width: 180, height: 180, justifyContent: "center", alignItems: "center" }}>
-          {/* Rotating ring — absolutely fills the 180×180 box */}
-          <Animated.View style={[spinStyle, { position: "absolute", width: 180, height: 180 }]}>
-            <View
-              style={{
-                width: 180,
-                height: 180,
-                borderRadius: 90,
-                borderWidth: 8,
-                borderColor: "rgba(255,255,255,0.2)",
-                borderTopColor: "#ffffff",
-              }}
+        {/* Ring + icon: fixed box so the absolutely-positioned SVG ring has real bounds */}
+        <View style={{ width: RING_SIZE, height: RING_SIZE, justifyContent: "center", alignItems: "center" }}>
+          <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute" }}>
+            <Circle
+              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
+              stroke="rgba(255,255,255,0.2)" strokeWidth={RING_STROKE} fill="transparent"
             />
-          </Animated.View>
+            <AnimatedCircle
+              cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
+              stroke="#ffffff" strokeWidth={RING_STROKE} fill="transparent"
+              strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+              strokeLinecap="round"
+              animatedProps={ringProps}
+              transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
+            />
+          </Svg>
 
-          {/* Pulsing centre icon */}
+          {/* Pulsing centre content: step icon + fill percentage */}
           <Animated.View
             style={pulseStyle}
             className="w-[100px] h-[100px] rounded-full bg-white/20 justify-center items-center border-2 border-white/40"
           >
-            <StepIcon size={42} color="#fff" strokeWidth={1.5} />
+            <StepIcon size={30} color="#fff" strokeWidth={1.8} />
+            <Text className="text-white text-base font-black mt-1">{percent}%</Text>
           </Animated.View>
         </View>
 
