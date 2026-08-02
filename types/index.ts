@@ -72,6 +72,11 @@ export type ChemicalState = "solid" | "liquid" | "gas" | "aqueous";
 
 export type SafetyClassification = "safe" | "caution" | "hazardous" | "corrosive" | "flammable" | "toxic";
 
+// "element" = a raw first-20-syllabus-or-not element; "compound" = a substance made of multiple
+// elements, either handed to the student ready-made or (if isBuildableFromElements) constructible
+// via the Compound Builder from elements with atomicNumber <= 20.
+export type ChemicalKind = "element" | "compound";
+
 export type ChemicalType = {
   _id: string;
   name: string;
@@ -82,6 +87,8 @@ export type ChemicalType = {
   group?: number | null;
   period?: number | null;
   category: ChemicalCategory;
+  chemicalType: ChemicalKind;
+  isBuildableFromElements?: boolean;
   state: ChemicalState;
   color: string;
   concentration?: string | null;
@@ -218,8 +225,47 @@ export type SessionType = {
 };
 
 export type SelectionResultType =
-  | { complete: true; correct: string[]; unnecessaryCount: 0; missingCount: 0; nextPhase: string }
-  | { complete: false; correct: string[]; unnecessaryItems: string[]; missingCount: number; hint: string };
+  | { complete: true; correct: string[]; unnecessaryCount: 0; missingCount: 0; missingBuildsCount: 0; nextPhase: string }
+  | {
+      complete: false;
+      correct: string[];
+      unnecessaryItems: string[];
+      missingCount: number;
+      missingBuildsCount: number;
+      hint: string;
+    };
+
+// --- Compound Builder domain types ---
+
+export type CompoundBuildParticipantType = {
+  chemicalId: string;
+  name: string;
+  symbol: string;
+  color: string;
+};
+
+export type CompoundBuildTemplateType = {
+  compound: { _id: string; name: string; symbol: string; formula: string | null; color: string };
+  reactants: CompoundBuildParticipantType[];
+  products: CompoundBuildParticipantType[];
+  coefficientOptions: number[];
+};
+
+export type CompoundBuildRequestType = {
+  compoundId: string;
+  reactantCoefficients: { chemicalId: string; coefficient: number }[];
+  productCoefficient: number;
+};
+
+export type CompoundBuildResultType =
+  | {
+      correct: true;
+      attempts: number;
+      compound: { name: string; symbol: string };
+      balancedEquation: string;
+      educationalInfo: ReactionEducationalInfo;
+    }
+  | { correct: false; attempts: number; hint: string };
 
 export type LogStepActionRequestType = {
   stepId: number;

@@ -14,6 +14,7 @@ export default function EquipmentSelection() {
   const { mutate: startSession, data: session, isPending: startingSession, isError: sessionError } = useStartSession();
   const [selected, setSelected] = useState<string[]>([]);
   const [result, setResult] = useState<SelectionResultType | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const submitMutation = useSubmitEquipmentSelection(session?._id);
 
@@ -22,11 +23,26 @@ export default function EquipmentSelection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [experimentId]);
 
+  // startSession can resume an existing in_progress session that's already past this phase
+  // (e.g. the student left mid-practical last time) — jump to wherever it actually left off
+  // instead of letting them fill this screen out against a session that will reject it.
+  useEffect(() => {
+    if (!session || session.phase === "equipment_selection") return;
+    const target =
+      session.phase === "chemical_selection"
+        ? "chemicals"
+        : session.phase === "procedure"
+          ? "workspace"
+          : "report";
+    router.replace(`/(tabs)/lab/chemistry/${experimentId}/${target}?sessionId=${session._id}` as never);
+  }, [session, experimentId]);
+
   const toggle = (key: string) => {
     setSelected((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
   const handleSubmit = () => {
+    setSubmitError(null);
     submitMutation.mutate(selected, {
       onSuccess: (data) => {
         setResult(data);
@@ -35,6 +51,9 @@ export default function EquipmentSelection() {
             router.replace(`/(tabs)/lab/chemistry/${experimentId}/chemicals?sessionId=${session?._id}` as never);
           }, 900);
         }
+      },
+      onError: () => {
+        setSubmitError("Couldn't check your selection. Check your connection and try again.");
       },
     });
   };
@@ -111,6 +130,12 @@ export default function EquipmentSelection() {
         {result?.complete && (
           <View className="mt-5 p-4 rounded-xl bg-green-50">
             <Text className="font-amedium text-green-900">Correct equipment selected! Moving on...</Text>
+          </View>
+        )}
+
+        {submitError && (
+          <View className="mt-5 p-4 rounded-xl bg-red-50">
+            <Text className="font-amedium text-red-900">{submitError}</Text>
           </View>
         )}
       </ScrollView>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { Lightbulb } from "lucide-react-native";
+import { ChevronDown, ChevronUp, FlaskConical, Hammer, Lightbulb } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
 import { useExperiment } from "@/hooks/use-experiments";
@@ -13,7 +13,8 @@ import {
   useRequestStepHint,
   useCompleteSession,
 } from "@/hooks/use-lab-session";
-import { InterventionType, ReactionResultType } from "@/types";
+import CompoundBuilder from "@/components/lab/CompoundBuilder";
+import { ChemicalType, InterventionType, ReactionResultType } from "@/types";
 
 export default function Workspace() {
   const { experimentId, sessionId } = useLocalSearchParams<{ experimentId: string; sessionId: string }>();
@@ -29,6 +30,9 @@ export default function Workspace() {
   const [reactionResult, setReactionResult] = useState<ReactionResultType | null>(null);
   const [intervention, setIntervention] = useState<InterventionType>(null);
   const [stepStartedAt, setStepStartedAt] = useState(Date.now());
+  const [builderTarget, setBuilderTarget] = useState<ChemicalType | null>(null);
+  const [builtIds, setBuiltIds] = useState<string[]>([]);
+  const [builderDrawerOpen, setBuilderDrawerOpen] = useState(false);
 
   const logAction = useLogStepAction(sessionId);
   const requestHint = useRequestStepHint(sessionId);
@@ -40,8 +44,13 @@ export default function Workspace() {
 
   const confirmedChemicals = (allChemicals || []).filter((c) => session?.chemicalSelection?.selected.includes(c._id));
   const confirmedEquipment = LAB_EQUIPMENT_CATALOG.filter((e) => session?.equipmentSelection?.selected.includes(e.key));
+  const buildableConfirmed = confirmedChemicals.filter((c) => c.isBuildableFromElements);
   const step = experiment?.steps.find((s) => s.stepId === currentStep);
   const totalSteps = experiment?.steps.length || 0;
+
+  const handleBuilt = (compoundId: string) => {
+    setBuiltIds((prev) => (prev.includes(compoundId) ? prev : [...prev, compoundId]));
+  };
 
   const resetStepUI = () => {
     setSelectedChemicalIds([]);
@@ -130,6 +139,28 @@ export default function Workspace() {
 
   return (
     <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+      {/* Equipment shelf — top */}
+      <View className="py-3 border-b" style={{ borderColor: colors.borderColorLight }}>
+        <Text className="font-amedium text-xs px-4 mb-2" style={{ color: "#979797" }}>
+          EQUIPMENT
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+          {confirmedEquipment.map((e) => (
+            <View
+              key={e.key}
+              className="flex-row items-center gap-2 px-3 py-2 rounded-full border"
+              style={{ borderColor: colors.borderColorLight }}
+            >
+              <FlaskConical size={14} color={colors.primary} />
+              <Text className="font-amedium text-xs" style={{ color: colors.primaryBlack }}>
+                {e.label}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Experiment area — center */}
       <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
         <Text className="font-aregular text-xs text-[#979797]">
           Step {currentStep} of {totalSteps}
@@ -215,6 +246,73 @@ export default function Workspace() {
         )}
       </ScrollView>
 
+      {/* Materials shelf — bottom */}
+      <View className="py-3 border-t" style={{ borderColor: colors.borderColorLight }}>
+        <Text className="font-amedium text-xs px-4 mb-2" style={{ color: "#979797" }}>
+          MATERIALS
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+          {confirmedChemicals.map((c) => (
+            <View
+              key={c._id}
+              className="flex-row items-center gap-2 px-3 py-2 rounded-full border"
+              style={{ borderColor: colors.borderColorLight }}
+            >
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.color, borderWidth: 1, borderColor: "#00000022" }} />
+              <Text className="font-amedium text-xs" style={{ color: colors.primaryBlack }}>
+                {c.name}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Compound Builder drawer — collapsed by default, lets a student build/rebuild a
+          buildable compound mid-experiment without leaving the workspace. */}
+      {buildableConfirmed.length > 0 && (
+        <View className="border-t" style={{ borderColor: colors.borderColorLight }}>
+          <Pressable
+            onPress={() => setBuilderDrawerOpen((v) => !v)}
+            className="flex-row items-center justify-between px-4 py-3"
+          >
+            <View className="flex-row items-center gap-2">
+              <Hammer size={16} color="#FC6E20" />
+              <Text className="font-amedium text-sm" style={{ color: colors.primaryBlack }}>
+                Compound Builder
+              </Text>
+            </View>
+            {builderDrawerOpen ? (
+              <ChevronUp size={18} color={colors.primaryBlack} />
+            ) : (
+              <ChevronDown size={18} color={colors.primaryBlack} />
+            )}
+          </Pressable>
+
+          {builderDrawerOpen && (
+            <View className="px-4 pb-4 gap-2">
+              {buildableConfirmed.map((c) => (
+                <Pressable
+                  key={c._id}
+                  onPress={() => setBuilderTarget(c)}
+                  className="flex-row items-center justify-between px-3 py-2 rounded-xl border"
+                  style={{ borderColor: builtIds.includes(c._id) ? "#4CAF50" : colors.borderColorLight }}
+                >
+                  <Text className="font-amedium text-sm" style={{ color: colors.primaryBlack }}>
+                    {c.name}
+                  </Text>
+                  <Text
+                    className="font-aregular text-xs"
+                    style={{ color: builtIds.includes(c._id) ? "#2E7D32" : "#979797" }}
+                  >
+                    {builtIds.includes(c._id) ? "Built ✓" : "Tap to build"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       <View className="p-4 flex-row gap-3">
         <Pressable onPress={handleHint} className="px-4 py-3 rounded-xl border items-center justify-center" style={{ borderColor: colors.borderColorLight }}>
           <Lightbulb size={20} color={colors.primary} />
@@ -233,6 +331,16 @@ export default function Workspace() {
           </Text>
         </Pressable>
       </View>
+
+      {builderTarget && (
+        <CompoundBuilder
+          experimentId={experimentId}
+          sessionId={sessionId}
+          compoundId={builderTarget._id}
+          onClose={() => setBuilderTarget(null)}
+          onBuilt={handleBuilt}
+        />
+      )}
     </SafeAreaView>
   );
 }
