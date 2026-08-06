@@ -30,7 +30,7 @@ import {
   submitQuiz,
   submitQuizTimeout,
   syncUser,
-} from "./quizApi";
+} from "@/api/quizAPI";
 import type {
   GenerateQuizRequest,
   SaveProgressRequest,

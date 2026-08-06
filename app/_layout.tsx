@@ -1,4 +1,3 @@
-import "expo/fetch";
 import QueryClientProviderCom from "@/providers/QueryClientProviderCom";
 import { SplashScreen, Stack } from "expo-router";
 import "react-native-reanimated";

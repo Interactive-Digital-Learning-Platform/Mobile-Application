@@ -119,11 +119,13 @@ export default function PracticeList() {
   const [subject, setSubject] = useState("All");
   const [modalVisible, setModalVisible] = useState(false);
 
-  // `isFetching` covers the initial load AND every subsequent background
-  // refetch (tab-switch focus, post-delete invalidation, pull-to-refresh) —
-  // using it alone means every one of those states shows the same skeleton
-  // instead of a mix of skeletons and small inline spinners.
-  const { data: sessions, isFetching, refetch } = useQuizSessionsQuery();
+  // `isLoading` is only true on the very first, cache-less fetch — background
+  // refetches (tab-switch focus, post-delete invalidation, pull-to-refresh)
+  // report `isFetching` instead while `data` stays populated, so gating the
+  // skeleton on `isLoading` keeps the existing list on screen during those
+  // instead of wiping it back to a full skeleton every time the tab regains
+  // focus, which looked like the app was reloading on every tab switch.
+  const { data: sessions, isLoading, isFetching, refetch } = useQuizSessionsQuery();
 
   useFocusEffect(
     useCallback(() => { refetch(); }, [refetch])
@@ -226,7 +228,7 @@ export default function PracticeList() {
       </View>
 
       {/* Content */}
-      {isFetching ? (
+      {isLoading ? (
         <PracticeListSkeleton />
       ) : filtered.length === 0 ? (
         <View className="flex-1 justify-center items-center px-8 pb-16">

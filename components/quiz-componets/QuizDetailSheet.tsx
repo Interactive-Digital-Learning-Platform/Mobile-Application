@@ -1,5 +1,13 @@
 import { Modal, View, Text, TouchableOpacity } from "react-native";
+import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  Easing,
+} from "react-native-reanimated";
 import {
   Clock, BarChart2, ListChecks, Play, RotateCcw, X, HelpCircle,
   type LucideIcon,
@@ -7,6 +15,10 @@ import {
 import { DIFFICULTY_STYLES, SUBJECT_ICONS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 
+// How far below the screen the sheet starts/ends — generous enough to clear
+// the sheet's own height (content + safe area) on any device.
+const SHEET_OFFSCREEN_Y = 700;
+const ANIM_MS = 250;
 
 interface QuizDetailSheetProps {
   item: PracticeItem;
@@ -27,6 +39,39 @@ function StatTile({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 
 export default function QuizDetailSheet({ item, visible, onClose, onAction }: QuizDetailSheetProps) {
   const router = useRouter();
+
+  // RN's <Modal> unmounts its content the instant `visible` goes false, which
+  // would cut the fade/slide-out animation short. Keeping it mounted a beat
+  // longer (until the exit animation actually finishes) lets it play out.
+  const [isMounted, setIsMounted] = useState(visible);
+  const backdropOpacity = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(SHEET_OFFSCREEN_Y);
+
+  // Backdrop fades in/out; the sheet keeps its original slide-up-from-bottom
+  // motion — they're animated independently since RN's built-in
+  // `animationType` can only apply one transition to the whole subtree.
+  useEffect(() => {
+    if (visible) {
+      setIsMounted(true);
+      backdropOpacity.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.ease) });
+      sheetTranslateY.value = withTiming(0, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
+    } else {
+      backdropOpacity.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.ease) });
+      sheetTranslateY.value = withTiming(
+        SHEET_OFFSCREEN_Y,
+        { duration: ANIM_MS, easing: Easing.in(Easing.cubic) },
+        (finished) => {
+          if (finished) runOnJS(setIsMounted)(false);
+        }
+      );
+    }
+  }, [visible]);
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
+  }));
+
   const Icon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
   const diff = DIFFICULTY_STYLES[item.difficulty];
   const hasStarted = item.progress > 0;
@@ -56,9 +101,9 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
     : "text-rose-500";
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/40">
-        <View className="bg-white rounded-t-[32px] px-6 pt-6 pb-10">
+    <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[{ flex: 1, justifyContent: "flex-end" }, backdropStyle]} className="bg-black/40">
+        <Animated.View style={sheetStyle} className="bg-white rounded-t-[32px] px-6 pt-6 pb-10">
           <TouchableOpacity
             className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 justify-center items-center"
             activeOpacity={0.7}
@@ -150,8 +195,8 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
               {isComplete ? "Retake Quiz" : hasStarted ? "Continue Quiz" : "Start Quiz"}
             </Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }

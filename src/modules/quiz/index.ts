@@ -8,5 +8,5 @@
  */
 
 export * from "./types";
-export * from "./quizApi";
+export * from "@/api/quizAPI";
 export * from "./quizHooks";

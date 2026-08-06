@@ -1,5 +1,5 @@
 /**
- * quizApi.ts
+ * quizAPI.ts
  * ──────────
  * Typed Axios functions for every quiz-service endpoint.
  *
@@ -22,7 +22,7 @@ import {
   SubmitQuizResponse,
   UserAnalyticsResponse,
   UserOut,
-} from "./types";
+} from "@/src/modules/quiz/types";
 
 // ── User ──────────────────────────────────────────────────────────────────────
 

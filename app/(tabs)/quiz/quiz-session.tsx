@@ -56,7 +56,7 @@ import {
   quizKeys,
 } from "@/src/modules/quiz/quizHooks";
 import { useQueryClient } from "@tanstack/react-query";
-import { buildDraftAnswers, buildAnswerPayload } from "@/src/modules/quiz/quizApi";
+import { buildDraftAnswers, buildAnswerPayload } from "@/api/quizAPI";
 import type { QuestionOut } from "@/src/modules/quiz/types";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import QuizErrorScreen      from "@/components/loading/QuizErrorScreen";

@@ -1,15 +1,11 @@
-import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { tr } from "zod/v4/locales";
 
 export default function Index() {
-  // const { isSignedIn, isLoaded } = useAuth();
-
-  let isSignedIn = true;
-  let isLoaded = true;
+  const isSignedIn = true;
+  const isLoaded = true;
 
   useEffect(() => {
     if (!isLoaded) return;

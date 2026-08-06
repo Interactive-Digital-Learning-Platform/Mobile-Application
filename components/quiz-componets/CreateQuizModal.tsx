@@ -1,8 +1,19 @@
 import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useState, useEffect } from "react";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  Easing,
+} from "react-native-reanimated";
 import { X, Sparkles, Plus, Minus } from "lucide-react-native";
 import { SUBJECTS } from "@/constants/quizStyles";
 
+// How far below the screen the sheet starts/ends — generous enough to clear
+// the sheet's own height (content + safe area) on any device.
+const SHEET_OFFSCREEN_Y = 700;
+const ANIM_MS = 250;
 
 export interface QuizConfig {
   subject: string;
@@ -26,21 +37,54 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
   // create two duplicate QuizSession rows for a single tap.
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // RN's <Modal> unmounts its content the instant `visible` goes false, which
+  // would cut the fade/slide-out animation short. Keeping it mounted a beat
+  // longer (until the exit animation actually finishes) lets it play out.
+  const [isMounted, setIsMounted] = useState(visible);
+  const backdropOpacity = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(SHEET_OFFSCREEN_Y);
+
   useEffect(() => {
     if (!timerCustomized) {
       setTimer(questions);
     }
   }, [questions, timerCustomized]);
 
+  const resetForm = () => {
+    setSubject("Mathematics");
+    setQuestions(10);
+    setTimer(10);
+    setTimerCustomized(false);
+    setIsSubmitting(false);
+  };
+
+  // Backdrop fades in/out; the sheet keeps its original slide-up-from-bottom
+  // motion — they're animated independently since RN's built-in
+  // `animationType` can only apply one transition to the whole subtree.
   useEffect(() => {
-    if (!visible) {
-      setSubject("Mathematics");
-      setQuestions(10);
-      setTimer(10);
-      setTimerCustomized(false);
-      setIsSubmitting(false);
+    if (visible) {
+      setIsMounted(true);
+      backdropOpacity.value = withTiming(1, { duration: ANIM_MS, easing: Easing.out(Easing.ease) });
+      sheetTranslateY.value = withTiming(0, { duration: ANIM_MS, easing: Easing.out(Easing.cubic) });
+    } else {
+      backdropOpacity.value = withTiming(0, { duration: ANIM_MS, easing: Easing.in(Easing.ease) });
+      sheetTranslateY.value = withTiming(
+        SHEET_OFFSCREEN_Y,
+        { duration: ANIM_MS, easing: Easing.in(Easing.cubic) },
+        (finished) => {
+          if (finished) {
+            runOnJS(setIsMounted)(false);
+            runOnJS(resetForm)();
+          }
+        }
+      );
     }
   }, [visible]);
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.value }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
+  }));
 
   const adjustQuestions = (delta: number) => {
     setQuestions((prev) => Math.max(10, Math.min(30, prev + delta)));
@@ -52,9 +96,9 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/40">
-        <View className="bg-white rounded-t-[32px] px-6 pt-6 pb-10">
+    <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[{ flex: 1, justifyContent: "flex-end" }, backdropStyle]} className="bg-black/40">
+        <Animated.View style={sheetStyle} className="bg-white rounded-t-[32px] px-6 pt-6 pb-10">
           <View className="flex-row items-center justify-between mb-6">
             <Text className="text-lg font-black text-slate-800">Create Quiz</Text>
             <TouchableOpacity
@@ -160,8 +204,8 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
             <Sparkles size={18} color="#fff" strokeWidth={2} />
             <Text className="text-white font-black text-base">Generate Quiz</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </Animated.View>
+      </Animated.View>
     </Modal>
   );
 }
