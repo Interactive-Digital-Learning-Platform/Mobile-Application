@@ -55,7 +55,7 @@ import AnswerReviewCard    from "@/components/quiz-componets/AnswerReviewCard";
 import ConfettiView        from "@/components/quiz-componets/ConfettiView";
 import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 import CircularProgressRing from "@/components/quiz-componets/CircularProgressRing";
-import type { QuestionOut, SubmitQuizResponse } from "@/src/modules/quiz/types";
+import type { QuestionOut, SubmitQuizResponse } from "@/types/quizModuleTypes";
 
 /* ─────────────────────────────────────────────── helpers ── */
 

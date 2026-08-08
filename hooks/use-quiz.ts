@@ -1,5 +1,5 @@
 /**
- * quizHooks.ts
+ * use-quiz.ts
  * ────────────
  * React Query hooks for the Personalized Quiz Service.
  *
@@ -33,9 +33,11 @@ import {
 } from "@/api/quizAPI";
 import type {
   GenerateQuizRequest,
+  QuizSessionSummary,
   SaveProgressRequest,
   SubmitQuizRequest,
-} from "./types";
+  UserAnalyticsResponse,
+} from "@/types/quizModuleTypes";
 
 // ── Query Keys ────────────────────────────────────────────────────────────────
 
@@ -150,13 +152,54 @@ export function useSaveQuizProgressMutation() {
  * Mutation: DELETE /api/v1/quiz/sessions/:id
  * Deletes the session + its records. The per-subject Analytics aggregate
  * (accuracy/weak_topic) is preserved, but `total_sessions` is a live count
- * that changes — invalidate analytics too so StatisticButton stays in sync.
+ * that changes — StatisticButton reads it via useAnalyticsMeQuery.
+ *
+ * Updates both caches optimistically in `onMutate` instead of only
+ * invalidating in `onSuccess`: GET /analytics/me is a slow endpoint (15s+
+ * even warm — see AnalyticsOrchestrationService), so relying purely on
+ * invalidation left the "Sessions" count in the header visibly out of sync
+ * with the practice list for many seconds after a delete, even though the
+ * list itself (backed by the much faster /quiz/sessions) had already updated.
+ * `onError` rolls both caches back if the delete actually fails server-side;
+ * `onSettled` still reconciles with the server either way.
  */
 export function useDeleteQuizSessionMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: number) => deleteQuizSession(sessionId),
-    onSuccess: () => {
+    onMutate: async (sessionId: number) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: quizKeys.sessions }),
+        queryClient.cancelQueries({ queryKey: quizKeys.analyticsMe }),
+      ]);
+
+      const previousSessions = queryClient.getQueryData<QuizSessionSummary[]>(quizKeys.sessions);
+      const previousAnalytics = queryClient.getQueryData<UserAnalyticsResponse>(quizKeys.analyticsMe);
+
+      if (previousSessions) {
+        queryClient.setQueryData<QuizSessionSummary[]>(
+          quizKeys.sessions,
+          previousSessions.filter((s) => s.session_id !== sessionId)
+        );
+      }
+      if (previousAnalytics) {
+        queryClient.setQueryData<UserAnalyticsResponse>(quizKeys.analyticsMe, {
+          ...previousAnalytics,
+          total_sessions: Math.max(0, previousAnalytics.total_sessions - 1),
+        });
+      }
+
+      return { previousSessions, previousAnalytics };
+    },
+    onError: (_err, _sessionId, context) => {
+      if (context?.previousSessions) {
+        queryClient.setQueryData(quizKeys.sessions, context.previousSessions);
+      }
+      if (context?.previousAnalytics) {
+        queryClient.setQueryData(quizKeys.analyticsMe, context.previousAnalytics);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
     },

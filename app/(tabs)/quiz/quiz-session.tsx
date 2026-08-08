@@ -54,10 +54,10 @@ import {
   useSubmitQuizMutation,
   useSubmitQuizTimeoutMutation,
   quizKeys,
-} from "@/src/modules/quiz/quizHooks";
+} from "@/hooks/use-quiz";
 import { useQueryClient } from "@tanstack/react-query";
 import { buildDraftAnswers, buildAnswerPayload } from "@/api/quizAPI";
-import type { QuestionOut } from "@/src/modules/quiz/types";
+import type { QuestionOut } from "@/types/quizModuleTypes";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import QuizErrorScreen      from "@/components/loading/QuizErrorScreen";
 

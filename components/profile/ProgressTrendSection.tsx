@@ -9,7 +9,7 @@
 import { View, Text } from "react-native";
 import { LineChart, TrendingUp, TrendingDown, Minus } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
-import type { PerformanceTrend } from "@/src/modules/quiz/types";
+import type { PerformanceTrend } from "@/types/quizModuleTypes";
 import { C, profileStyles as styles } from "./profileTheme";
 import SectionHeader from "./SectionHeader";
 import EmptyState from "./EmptyState";

@@ -10,7 +10,7 @@
  */
 import { View, Text } from "react-native";
 import { Lightbulb, ArrowRight } from "lucide-react-native";
-import type { Recommendation } from "@/src/modules/quiz/types";
+import type { Recommendation } from "@/types/quizModuleTypes";
 import { filterTestSubjects } from "@/constants/quizHelpers";
 import { C, profileStyles as styles } from "./profileTheme";
 import SectionHeader from "./SectionHeader";

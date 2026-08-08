@@ -4,7 +4,7 @@ import { HelpCircle, Trash2, type LucideIcon } from "lucide-react-native";
 import { SUBJECT_ICONS, type Difficulty } from "@/constants/quizStyles";
 import QuizDetailSheet from "@/components/quiz-componets/QuizDetailSheet";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
-import { useDeleteQuizSessionMutation } from "@/src/modules/quiz/quizHooks";
+import { useDeleteQuizSessionMutation } from "@/hooks/use-quiz";
 
 export type { Difficulty };
 

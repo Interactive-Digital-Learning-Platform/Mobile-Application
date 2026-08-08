@@ -10,7 +10,7 @@
 import { View, Text } from "react-native";
 import { ListTree, AlertTriangle, TrendingUp, CheckCircle2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
-import type { SubjectAnalytics } from "@/src/modules/quiz/types";
+import type { SubjectAnalytics } from "@/types/quizModuleTypes";
 import { profileStyles as styles } from "./profileTheme";
 import SectionHeader from "./SectionHeader";
 import EmptyState from "./EmptyState";

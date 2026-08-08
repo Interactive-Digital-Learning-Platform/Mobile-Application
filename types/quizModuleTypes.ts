@@ -1,6 +1,6 @@
 /**
- * types.ts
- * ─────────
+ * quizModuleTypes.ts
+ * ───────────────────
  * TypeScript interfaces that mirror the Pydantic v2 schemas in the backend.
  * Keep these in sync with:
  *   - app/schemas/quiz.py

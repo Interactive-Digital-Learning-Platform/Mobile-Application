@@ -22,7 +22,7 @@ import {
   SubmitQuizResponse,
   UserAnalyticsResponse,
   UserOut,
-} from "@/src/modules/quiz/types";
+} from "@/types/quizModuleTypes";
 
 // ── User ──────────────────────────────────────────────────────────────────────
 

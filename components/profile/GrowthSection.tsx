@@ -9,7 +9,7 @@
  */
 import { View, Text } from "react-native";
 import { Sprout, Flame, CalendarCheck2, Award } from "lucide-react-native";
-import type { GrowthAnalytics } from "@/src/modules/quiz/types";
+import type { GrowthAnalytics } from "@/types/quizModuleTypes";
 import { C, profileStyles as styles } from "./profileTheme";
 import SectionHeader from "./SectionHeader";
 import StatTile from "./StatTile";

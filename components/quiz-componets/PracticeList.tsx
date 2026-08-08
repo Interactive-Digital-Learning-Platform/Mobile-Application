@@ -1,16 +1,50 @@
 import { View, Text, TouchableOpacity, FlatList } from "react-native";
 import { useState, useCallback } from "react";
-import { Plus, ChevronDown, Check, Brain } from "lucide-react-native";
+import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, type LucideIcon } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import CreateQuizModal, { QuizConfig } from "@/components/quiz-componets/CreateQuizModal";
 import { DIFF_DOT, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
 import { capitalize } from "@/constants/quizHelpers";
 import QuizPracticeCard, { type Difficulty, type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 import Skeleton from "@/components/Skeleton";
-import { useQuizSessionsQuery } from "@/src/modules/quiz/quizHooks";
+import { useQuizSessionsQuery } from "@/hooks/use-quiz";
 
 const DIFFICULTIES: ("All" | Difficulty)[] = ["All", "Easy", "Medium", "Hard"];
 const SUBJECTS = ["All", ...ALL_SUBJECTS];
+
+// Both axios's own network-layer failure (device offline, request never
+// reached the server — message "Network Error") and a request that was sent
+// but never got a response within the axios timeout (message "timeout
+// exceeded") surface here as plain Error messages — the axios instance's
+// response interceptor (providers/axios.tsx) re-wraps every rejection into a
+// plain Error, so the message string is the only signal left to check by the
+// time it reaches this component.
+type LoadErrorKind = "network" | "timeout" | "other";
+
+function classifyLoadError(error: unknown): LoadErrorKind {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/timeout/i.test(message)) return "timeout";
+  if (/network/i.test(message)) return "network";
+  return "other";
+}
+
+const LOAD_ERROR_COPY: Record<LoadErrorKind, { icon: LucideIcon; title: string; message: string }> = {
+  network: {
+    icon: WifiOff,
+    title: "No internet connection",
+    message: "Check your connection and try again.",
+  },
+  timeout: {
+    icon: Clock,
+    title: "Connection timed out",
+    message: "The request took too long — check your connection and try again.",
+  },
+  other: {
+    icon: AlertCircle,
+    title: "Couldn't load quizzes",
+    message: "Something went wrong loading your quizzes.",
+  },
+};
 
 type ActiveDropdown = "difficulty" | "subject" | null;
 
@@ -125,7 +159,7 @@ export default function PracticeList() {
   // skeleton on `isLoading` keeps the existing list on screen during those
   // instead of wiping it back to a full skeleton every time the tab regains
   // focus, which looked like the app was reloading on every tab switch.
-  const { data: sessions, isLoading, isFetching, refetch } = useQuizSessionsQuery();
+  const { data: sessions, isLoading, isFetching, isError, error, refetch } = useQuizSessionsQuery();
 
   useFocusEffect(
     useCallback(() => { refetch(); }, [refetch])
@@ -230,6 +264,35 @@ export default function PracticeList() {
       {/* Content */}
       {isLoading ? (
         <PracticeListSkeleton />
+      ) : isError && items.length === 0 ? (
+        // Only takes over the empty state — a failed background refresh while
+        // an already-loaded list is on screen leaves that list showing as-is
+        // instead of replacing it with this (same reasoning as gating the
+        // skeleton on `isLoading` instead of `isFetching` above).
+        (() => {
+          const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[classifyLoadError(error)];
+          return (
+            <View className="flex-1 justify-center items-center px-8 pb-16">
+              <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
+                <ErrorIcon size={28} color="#EF4444" strokeWidth={1.8} />
+              </View>
+              <Text className="text-slate-800 font-black text-base text-center mb-1">
+                {title}
+              </Text>
+              <Text className="text-slate-400 text-sm text-center leading-5 mb-5">
+                {message}
+              </Text>
+              <TouchableOpacity
+                className="bg-primary flex-row items-center gap-2 px-6 py-3 rounded-2xl"
+                activeOpacity={0.85}
+                onPress={() => refetch()}
+              >
+                <RefreshCw size={16} color="#fff" strokeWidth={2.5} />
+                <Text className="text-white font-black text-sm">Try Again</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()
       ) : filtered.length === 0 ? (
         <View className="flex-1 justify-center items-center px-8 pb-16">
           <View className="w-16 h-16 rounded-full bg-orange-100 justify-center items-center mb-4">

@@ -42,7 +42,7 @@ import {
   useAnalyticsMeQuery,
   useAnalyticsFeedbackQuery,
   quizKeys,
-} from "@/src/modules/quiz/quizHooks";
+} from "@/hooks/use-quiz";
 import { useQueryClient } from "@tanstack/react-query";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import Skeleton from "@/components/Skeleton";

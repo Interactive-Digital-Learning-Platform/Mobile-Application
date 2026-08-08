@@ -10,7 +10,7 @@
  */
 import { View, Text } from "react-native";
 import { Layers } from "lucide-react-native";
-import type { SubjectAnalytics } from "@/src/modules/quiz/types";
+import type { SubjectAnalytics } from "@/types/quizModuleTypes";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import { C, profileStyles as styles } from "./profileTheme";
 import SectionHeader from "./SectionHeader";
