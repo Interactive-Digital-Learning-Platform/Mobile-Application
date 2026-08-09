@@ -1,4 +1,3 @@
-import "expo/fetch";
 import QueryClientProviderCom from "@/providers/QueryClientProviderCom";
 import { SplashScreen, Stack } from "expo-router";
 import "react-native-reanimated";
@@ -6,7 +5,7 @@ import "../global.css";
 import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import "nativewind";
-import ClerkProviderCom from "@/providers/ClerkProviderCom";
+// import ClerkProviderCom from "@/providers/ClerkProviderCom";
 import Toast from "react-native-toast-message";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 
@@ -40,14 +39,14 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <QueryClientProviderCom>
-        <ClerkProviderCom>
+        {/* <ClerkProviderCom> */}
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="index" options={{ headerShown: false }} />
           </Stack>
           <Toast />
-        </ClerkProviderCom>
+        {/* </ClerkProviderCom> */}
       </QueryClientProviderCom>
     </KeyboardProvider>
   );
