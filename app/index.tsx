@@ -1,17 +1,17 @@
+import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Index() {
-  const isSignedIn = true;
-  const isLoaded = true;
+  const { isSignedIn, isLoaded } = useAuth();
 
   useEffect(() => {
     if (!isLoaded) return;
 
     if (isLoaded && isSignedIn) {
-      router.replace("/(tabs)/quiz");
+      router.replace("/(tabs)/ai");
     } else {
       router.replace("/(auth)/sign-in");
     }
