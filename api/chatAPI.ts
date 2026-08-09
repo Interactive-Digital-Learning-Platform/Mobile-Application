@@ -5,7 +5,11 @@ import {
   SSEEvent,
   sseEventSchema,
 } from "@/schemas/chatSchemas";
-import { StreamCallbacks } from "@/types/chatModuleTypes";
+import {
+  ChatConversation,
+  StreamCallbacks,
+  UserChatsRequest,
+} from "@/types/chatModuleTypes";
 import EventSource from "react-native-sse";
 
 export async function createConversation(userID: string): Promise<string> {
@@ -15,6 +19,25 @@ export async function createConversation(userID: string): Promise<string> {
 
   const conversation = conversationResponseSchema.parse(response.data);
   return conversation.conversation_id;
+}
+
+export async function fetchUserChats({
+  userID,
+  limit = 20,
+  offset = 0,
+}: UserChatsRequest): Promise<ChatConversation[]> {
+  const response = await assistantClient.get<ChatConversation[]>(
+    "/conversations",
+    {
+      params: {
+        user_id: userID,
+        limit,
+        offset,
+      },
+    },
+  );
+
+  return response.data;
 }
 
 export const fetchMessageHistory = async (conversationID: string) => {
