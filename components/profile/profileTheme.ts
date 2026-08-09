@@ -1,12 +1,3 @@
-/**
- * profileTheme.ts
- * ─────────────────────────────────────────────────────────
- * Shared palette + card/label styles for the Profile analytics screen and
- * every components/profile/* section. Extracted from app/(tabs)/profile/
- * index.tsx so new sections stay visually consistent with the existing
- * accuracy ring / subject chart / strong-weak pills / AI feedback card
- * without re-declaring the same tokens in every file.
- */
 import { StyleSheet } from "react-native";
 
 export const C = {

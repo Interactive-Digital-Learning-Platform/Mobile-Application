@@ -12,13 +12,9 @@ import { useQuizSessionsQuery } from "@/hooks/use-quiz";
 const DIFFICULTIES: ("All" | Difficulty)[] = ["All", "Easy", "Medium", "Hard"];
 const SUBJECTS = ["All", ...ALL_SUBJECTS];
 
-// Both axios's own network-layer failure (device offline, request never
-// reached the server — message "Network Error") and a request that was sent
-// but never got a response within the axios timeout (message "timeout
-// exceeded") surface here as plain Error messages — the axios instance's
-// response interceptor (providers/axios.tsx) re-wraps every rejection into a
-// plain Error, so the message string is the only signal left to check by the
-// time it reaches this component.
+// quizClient's response interceptor re-wraps every rejection into a plain
+// Error, so by the time it gets here the message string is the only way to
+// tell "offline" apart from "timed out" apart from anything else.
 type LoadErrorKind = "network" | "timeout" | "other";
 
 function classifyLoadError(error: unknown): LoadErrorKind {
@@ -47,8 +43,6 @@ const LOAD_ERROR_COPY: Record<LoadErrorKind, { icon: LucideIcon; title: string; 
 };
 
 type ActiveDropdown = "difficulty" | "subject" | null;
-
-// ── Loading skeleton — mirrors QuizPracticeCard's layout ───────────────────────
 
 function PracticeCardSkeleton() {
   return (
@@ -153,12 +147,9 @@ export default function PracticeList() {
   const [subject, setSubject] = useState("All");
   const [modalVisible, setModalVisible] = useState(false);
 
-  // `isLoading` is only true on the very first, cache-less fetch — background
-  // refetches (tab-switch focus, post-delete invalidation, pull-to-refresh)
-  // report `isFetching` instead while `data` stays populated, so gating the
-  // skeleton on `isLoading` keeps the existing list on screen during those
-  // instead of wiping it back to a full skeleton every time the tab regains
-  // focus, which looked like the app was reloading on every tab switch.
+  // `isLoading` is only true on the very first fetch; background refetches
+  // (focus, post-delete, pull-to-refresh) use `isFetching` instead so the
+  // list doesn't flash back to a skeleton every time the tab regains focus.
   const { data: sessions, isLoading, isFetching, isError, error, refetch } = useQuizSessionsQuery();
 
   useFocusEffect(
@@ -166,10 +157,8 @@ export default function PracticeList() {
   );
 
   const handleGenerate = (config: QuizConfig) => {
-    // Collect question IDs from all existing sessions for the same subject
-    // so the backend can serve unseen questions instead of repeating the same
-    // pool. Lesson and difficulty are no longer chosen here — the backend
-    // picks both automatically (AI lesson choice + adaptive difficulty).
+    // Excludes questions already seen in this subject so the backend serves
+    // fresh ones; lesson and difficulty are picked automatically server-side.
     const seenIds = (sessions ?? [])
       .filter((s) => s.subject.toLowerCase() === config.subject.toLowerCase())
       .flatMap((s) => s.question_ids ?? []);
@@ -219,7 +208,6 @@ export default function PracticeList() {
 
   return (
     <View className="flex-1 w-full relative">
-      {/* Filters */}
       <View className="pt-3 pb-1">
         <View className="flex-row gap-2 px-4 pb-2 justify-center items-center">
           <FilterChip
@@ -261,14 +249,11 @@ export default function PracticeList() {
         )}
       </View>
 
-      {/* Content */}
       {isLoading ? (
         <PracticeListSkeleton />
       ) : isError && items.length === 0 ? (
-        // Only takes over the empty state — a failed background refresh while
-        // an already-loaded list is on screen leaves that list showing as-is
-        // instead of replacing it with this (same reasoning as gating the
-        // skeleton on `isLoading` instead of `isFetching` above).
+        // Only takes over the empty state — a failed background refresh with
+        // an already-loaded list on screen leaves that list showing as-is.
         (() => {
           const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[classifyLoadError(error)];
           return (
@@ -317,7 +302,6 @@ export default function PracticeList() {
         />
       )}
 
-      {/* FAB */}
       <TouchableOpacity
         className="absolute bottom-6 right-6 bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
         activeOpacity={0.85}

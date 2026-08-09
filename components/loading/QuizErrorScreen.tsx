@@ -1,10 +1,3 @@
-/**
- * QuizErrorScreen.tsx
- * ────────────────────
- * Error fallback screen shown when quiz generation fails or returns no questions.
- * Used exclusively by the quiz-session screen.
- */
-
 import { View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RefreshCw, Database, ChevronLeft } from "lucide-react-native";

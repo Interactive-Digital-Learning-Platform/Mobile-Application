@@ -1,11 +1,3 @@
-/**
- * ProgressTrendSection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 2 — current-period vs previous-period accuracy, improvement/
- * decline, and the trend label. Reads UserAnalyticsResponse.performance_trend
- * (optional — older backend responses won't have it, and even when present
- * `trend` can be "insufficient_data" if there isn't enough recent history).
- */
 import { View, Text } from "react-native";
 import { LineChart, TrendingUp, TrendingDown, Minus } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";

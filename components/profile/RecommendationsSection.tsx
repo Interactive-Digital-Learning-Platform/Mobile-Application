@@ -1,13 +1,3 @@
-/**
- * RecommendationsSection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 5 — top three recommendation cards (subject, topic, reason,
- * action). Reads UserAnalyticsResponse.recommendations (optional). Sorted
- * by priority ascending (1 = highest priority) and capped at three, per the
- * spec. Test-marked subjects ([CC-TEST] / [RANDOM-LESSON-TEST]) are excluded
- * unless the dev flag is on, same as everywhere else recommendations
- * reference a subject.
- */
 import { View, Text } from "react-native";
 import { Lightbulb, ArrowRight } from "lucide-react-native";
 import type { Recommendation } from "@/types/quizModuleTypes";
@@ -23,6 +13,7 @@ interface RecommendationsSectionProps {
 const MAX_RECOMMENDATIONS = 3;
 
 export default function RecommendationsSection({ recommendations }: RecommendationsSectionProps) {
+  // priority 1 = most important, so ascending sort puts the top pick first
   const visible = filterTestSubjects(recommendations ?? [])
     .slice()
     .sort((a, b) => a.priority - b.priority)

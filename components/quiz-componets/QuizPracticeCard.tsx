@@ -42,9 +42,6 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
   const hasStarted   = item.progress > 0;
   const correctCount = item.correct_count ?? 0;
 
-  // Completed: show how many were answered CORRECTLY (e.g. "7/10 correct").
-  // In progress: show how many have been answered so far (correctness isn't
-  // known until submission). Not started: neutral gray, no fraction.
   const displayCount = isComplete ? correctCount : item.answered_count;
   const displayPct = item.questions > 0
     ? Math.round((displayCount / item.questions) * 100)
@@ -85,7 +82,6 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
     <>
       <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-black/10 border border-slate-100">
 
-        {/* ── Header: icon · info · trash ── */}
         <View className="flex-row items-start gap-3">
           <View className="w-11 h-11 rounded-xl bg-slate-50 justify-center items-center mt-0.5">
             <Icon size={20} color="#64748b" strokeWidth={1.8} />
@@ -114,7 +110,6 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </TouchableOpacity>
         </View>
 
-        {/* ── Progress bar ── */}
         <View className="mt-3">
           <View className="flex-row justify-between items-center mb-1">
             <Text className="text-[10px] text-slate-400 font-medium">
@@ -136,7 +131,6 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </View>
         </View>
 
-        {/* ── Action button ── */}
         <TouchableOpacity
           className={`mt-3 py-2.5 rounded-xl items-center ${
             isComplete ? "bg-emerald-600" : hasStarted ? "bg-slate-700" : "bg-primary"

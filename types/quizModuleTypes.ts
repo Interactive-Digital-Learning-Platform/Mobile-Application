@@ -1,29 +1,13 @@
-/**
- * quizModuleTypes.ts
- * ───────────────────
- * TypeScript interfaces that mirror the Pydantic v2 schemas in the backend.
- * Keep these in sync with:
- *   - app/schemas/quiz.py
- *   - app/schemas/analytics.py
- *   - app/schemas/user.py
- */
-
-// ── Quiz Generation ────────────────────────────────────────────────────────────
-
 export interface GenerateQuizRequest {
-  grade?: number;         // defaults to 10 on backend if omitted
+  grade?: number;
   subject: string;
-  // Both omitted by default — the backend chooses them automatically:
-  // lesson via AI (groq_service.choose_lesson), difficulty via accuracy
-  // history (difficulty_service). Only set these to force a manual override.
   lesson?: string;
   difficulty?: "easy" | "medium" | "hard";
-  question_count: number; // 1–30
-  excluded_question_ids?: number[]; // IDs already seen by this user — backend excludes them for variety
-  force_cache?: boolean;            // Skip AI, serve from DB pool — user-chosen fallback after AI failure
+  question_count: number;
+  excluded_question_ids?: number[];
+  force_cache?: boolean;
 }
 
-/** A single question returned from the backend. correct_answer is included. */
 export interface QuestionOut {
   id: number;
   question: string;
@@ -38,13 +22,9 @@ export interface GenerateQuizResponse {
   session_id: number;
   questions: QuestionOut[];
   cache_hit: boolean;
-  // The difficulty/lesson the backend actually used — chosen automatically
-  // unless the request explicitly overrode them.
   difficulty: string;
   lesson: string;
 }
-
-// ── Progress save ──────────────────────────────────────────────────────────────
 
 export interface DraftAnswer {
   question_id: number;
@@ -69,8 +49,6 @@ export interface SaveProgressResponse {
   repeated_question_ids: number[];
   weak_lessons_hint: string[];
 }
-
-// ── Quiz session ───────────────────────────────────────────────────────────────
 
 export interface QuizLatestProgress {
   remaining_time: number | null;
@@ -122,12 +100,10 @@ export interface SavedQuizResponse {
   completion: QuizCompletion | null;
 }
 
-// ── Quiz Submission ────────────────────────────────────────────────────────────
-
 export interface AnswerItem {
   question_id: number;
   selected_answer: string;
-  response_time: number; // seconds
+  response_time: number;
   is_repeated: boolean;
 }
 
@@ -142,8 +118,8 @@ export interface SubmitQuizRequest {
 export interface SubmitQuizResponse {
   session_id: number;
   score: number;
-  accuracy: number;       // 0.0 – 100.0
-  total_time: number;     // seconds
+  accuracy: number;
+  total_time: number;
   avg_response_time: number;
   correct_count: number;
   total_questions: number;
@@ -156,35 +132,22 @@ export interface SubmitQuizResponse {
   repeated_lessons_wrong: string[];
 }
 
-// ── Analytics ─────────────────────────────────────────────────────────────────
-//
-// The backend's GET /analytics/me response has grown a lot of sections over
-// time (response-time stats, trend, repeated-mistakes, difficulty progress,
-// mastery score, growth, recommendations). Every field added below is
-// OPTIONAL (`?`) even where the backend always returns it today — the
-// backend ships these sections incrementally, and older/newer app builds
-// need to keep working against whichever shape the API happens to be on.
-// Never assume a field is present; the Profile screen must render sensible
-// fallbacks (see components/profile/) instead of crashing.
+// Every analytics field below is optional even where the backend always
+// returns it today — the backend ships new analytics sections
+// incrementally, so older/newer app builds need to keep working against
+// whichever API shape is live. Don't assume a field is present; render a
+// sensible fallback (see components/profile/) instead of crashing on it.
 
-/**
- * Whether a scope (overall/subject/topic) is improving, declining, or
- * stable, comparing two non-overlapping periods of completed sessions.
- * Mirrors app/schemas/analytics.py:PerformanceTrend.
- */
 export interface PerformanceTrend {
   current_period_accuracy: number;
   previous_period_accuracy: number;
   accuracy_change: number;
   current_period_sessions: number;
   previous_period_sessions: number;
-  /** "improving" | "declining" | "stable" | "insufficient_data" */
   trend: string;
-  /** "recent_sessions" | "weekly" | "insufficient_data" */
   method: string;
 }
 
-/** Mirrors app/schemas/analytics.py:RepeatedQuestionAnalytics. */
 export interface RepeatedQuestionAnalytics {
   repeated_question_count: number;
   repeated_correct_count: number;
@@ -194,7 +157,6 @@ export interface RepeatedQuestionAnalytics {
   mistake_correction_rate: number;
 }
 
-/** The 5 inputs behind mastery_score, each already 0-100. */
 export interface MasteryComponents {
   accuracy_score: number;
   recent_performance_score: number;
@@ -203,7 +165,6 @@ export interface MasteryComponents {
   consistency_score: number;
 }
 
-/** One difficulty tier's performance within a subject. */
 export interface SubjectDifficultyPerformance {
   difficulty: string;
   total_attempted: number;
@@ -213,10 +174,6 @@ export interface SubjectDifficultyPerformance {
   completed_sessions: number;
 }
 
-/**
- * Per-topic breakdown within a subject — derived from each question's own
- * lesson, not the session-level lesson (a quiz can span multiple topics).
- */
 export interface TopicAnalytics {
   topic: string;
   total_attempted: number;
@@ -225,7 +182,6 @@ export interface TopicAnalytics {
   accuracy: number;
   avg_response_time?: number;
   last_attempted_at?: string;
-  /** "insufficient_data" | "weak" | "developing" | "strong" */
   status?: string;
   median_response_time?: number;
   fastest_response_time?: number;
@@ -233,13 +189,10 @@ export interface TopicAnalytics {
   correct_answer_avg_response_time?: number;
   incorrect_answer_avg_response_time?: number;
   response_time_standard_deviation?: number;
-  /** "fast_and_accurate" | "fast_but_inaccurate" | "slow_and_accurate" | "slow_and_inaccurate" | "balanced" | "insufficient_data" */
   answering_behavior?: string;
   performance_trend?: PerformanceTrend;
   repeated_question_analytics?: RepeatedQuestionAnalytics;
-  /** null when there isn't enough data for a mastery score yet. */
   mastery_score?: number | null;
-  /** "beginner" | "developing" | "proficient" | "advanced" | "insufficient_data" */
   mastery_level?: string;
   mastery_components?: MasteryComponents | null;
 }
@@ -272,18 +225,12 @@ export interface GrowthComponents {
   improvement: ImprovementComponents;
 }
 
-/**
- * Growth-oriented analytics — deliberately NOT a raw-score ranking. All
- * scores are null together (growth_level "insufficient_data") when there's
- * too little recent activity to describe a trajectory.
- */
 export interface GrowthAnalytics {
   effort_score: number | null;
   consistency_score: number | null;
   improvement_score: number | null;
   mastery_score: number | null;
   growth_score: number | null;
-  /** "starting" | "growing" | "strong_growth" | "exceptional_growth" | "insufficient_data" */
   growth_level: string;
   components?: GrowthComponents | null;
 }
@@ -295,13 +242,9 @@ export interface RecommendationSupportingMetrics {
   repeated_mistakes: number;
 }
 
-/** One deterministic, database-driven recommendation. */
 export interface Recommendation {
-  /** 1 = most urgent; a rank, not a raw score. */
   priority: number;
-  /** "weak_topic" | "declining_subject" | "repeated_mistake" | "careless_guessing" | "slow_response" | "incomplete_quiz" | "difficulty_ready_for_promotion" | "maintain_strong_subject" */
   type: string;
-  /** null for overall-scope recommendations (e.g. incomplete_quiz). */
   subject: string | null;
   topic: string | null;
   reason: string;
@@ -315,11 +258,8 @@ export interface SubjectAnalytics {
   accuracy: number;
   avg_response_time: number;
   weak_topic: string | null;
-  // The difficulty level the student is currently on for this subject —
-  // "easy" | "medium" | "hard", auto-adjusted based on performance.
   current_difficulty: string;
 
-  // ── Added incrementally as the backend grew — always optional ──────────
   topics?: TopicAnalytics[];
   median_response_time?: number;
   fastest_response_time?: number;
@@ -352,7 +292,6 @@ export interface UserAnalyticsResponse {
   strong_subjects: string[];
   weak_subjects: string[];
 
-  // ── Added incrementally as the backend grew — always optional ──────────
   total_questions_attempted?: number;
   total_correct_answers?: number;
   total_incorrect_answers?: number;
@@ -383,14 +322,12 @@ export interface AIFeedbackResponse {
   strong_areas: string[];
   suggestions: string[];
   motivational_note: string;
-  generated_at: string; // ISO datetime
+  generated_at: string;
 }
-
-// ── User ──────────────────────────────────────────────────────────────────────
 
 export interface UserOut {
   id: number;
   clerk_id: string;
   username: string | null;
-  created_at: string; // ISO datetime
+  created_at: string;
 }

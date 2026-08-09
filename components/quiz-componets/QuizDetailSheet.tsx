@@ -15,8 +15,6 @@ import {
 import { DIFFICULTY_STYLES, SUBJECT_ICONS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 
-// How far below the screen the sheet starts/ends — generous enough to clear
-// the sheet's own height (content + safe area) on any device.
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
 
@@ -40,16 +38,14 @@ function StatTile({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 export default function QuizDetailSheet({ item, visible, onClose, onAction }: QuizDetailSheetProps) {
   const router = useRouter();
 
-  // RN's <Modal> unmounts its content the instant `visible` goes false, which
-  // would cut the fade/slide-out animation short. Keeping it mounted a beat
-  // longer (until the exit animation actually finishes) lets it play out.
+  // Keep the modal mounted until the exit animation finishes, since RN's
+  // <Modal> would otherwise unmount it instantly and cut the animation short.
   const [isMounted, setIsMounted] = useState(visible);
   const backdropOpacity = useSharedValue(0);
   const sheetTranslateY = useSharedValue(SHEET_OFFSCREEN_Y);
 
-  // Backdrop fades in/out; the sheet keeps its original slide-up-from-bottom
-  // motion — they're animated independently since RN's built-in
-  // `animationType` can only apply one transition to the whole subtree.
+  // Backdrop and sheet are animated separately since RN's `animationType`
+  // can only apply one transition to the whole subtree.
   useEffect(() => {
     if (visible) {
       setIsMounted(true);

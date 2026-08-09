@@ -1,24 +1,10 @@
-/**
- * DifficultyBadge.tsx
- * ─────────────────────────────────────────────────────────────
- * Reusable pill badge that shows a difficulty level. Accepts any casing
- * (e.g. the backend's lowercase "easy"/"medium"/"hard") and normalizes it.
- * Used in QuizPracticeCard, QuizDetailSheet, and the Profile analytics screen.
- *
- * Usage:
- *   <DifficultyBadge difficulty="Hard" />
- *   <DifficultyBadge difficulty="easy" size="lg" />
- *   <DifficultyBadge difficulty={subject.current_difficulty} size="xs" showDot={false} />
- */
 import { View, Text } from "react-native";
 import { getDifficultyStyle } from "@/constants/quizStyles";
 import { capitalize } from "@/constants/quizHelpers";
 
 interface DifficultyBadgeProps {
   difficulty: string;
-  /** "sm" (default) = text-[11px], "lg" = text-xs, "xs" = text-[9px] */
   size?: "sm" | "lg" | "xs";
-  /** Show the coloured dot indicator (default true) */
   showDot?: boolean;
 }
 

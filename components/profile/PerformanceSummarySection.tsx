@@ -1,11 +1,3 @@
-/**
- * PerformanceSummarySection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 1 — attempted questions, correct answers, completion rate,
- * average response time. All fields are optional on UserAnalyticsResponse
- * (older backend responses may not have them yet) — every value falls back
- * to "—" instead of crashing or hiding the whole card.
- */
 import { View } from "react-native";
 import { ClipboardList, ListChecks, CheckCircle2, Percent, Clock } from "lucide-react-native";
 import { C, profileStyles as styles } from "./profileTheme";

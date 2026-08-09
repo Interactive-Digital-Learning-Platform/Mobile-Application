@@ -24,7 +24,6 @@ export default function ExitQuizModal({
   onCancel,
   onConfirm,
 }: ExitQuizModalProps) {
-  // Subtle pulse on the warning icon while modal is open
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -51,7 +50,6 @@ export default function ExitQuizModal({
       <View className="flex-1 justify-center items-center bg-black/60 px-8">
         <View className="bg-white rounded-3xl w-full overflow-hidden shadow-2xl">
 
-          {/* ── Top accent band ── */}
           <View className="bg-primary pt-8 pb-6 items-center px-6">
             <Animated.View
               style={iconStyle}
@@ -65,7 +63,6 @@ export default function ExitQuizModal({
             </Text>
           </View>
 
-          {/* ── Body ── */}
           <View className="px-6 pt-5 pb-6">
             <Text className="text-slate-600 text-sm text-center leading-5 mb-1">
               You've answered{" "}
@@ -78,7 +75,6 @@ export default function ExitQuizModal({
               Your progress will be saved automatically.
             </Text>
 
-            {/* Confirm — End Quiz */}
             <TouchableOpacity
               className="w-full bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl mb-3"
               activeOpacity={0.85}
@@ -88,7 +84,6 @@ export default function ExitQuizModal({
               <Text className="text-white font-black text-base">Yes, End Quiz</Text>
             </TouchableOpacity>
 
-            {/* Cancel — Keep Going */}
             <TouchableOpacity
               className="w-full bg-slate-100 flex-row justify-center items-center gap-2 py-4 rounded-2xl"
               activeOpacity={0.85}

@@ -1,21 +1,3 @@
-/**
- * quiz-results.tsx
- * ─────────────────
- * Quiz results screen.
- *
- * Data flow:
- *  1. Receives navigation params from quiz-session:
- *       sessionId, answersJson, questionTimesJson, questionsJson,
- *       isTimeout, remainingTime
- *  2. On mount, calls the correct submit endpoint:
- *     - isTimeout=false → POST /api/v1/quiz/submit (ended_by = "submitted")
- *     - isTimeout=true  → POST /api/v1/quiz/submit-timeout (ended_by = "timeout")
- *  3. Shows server-computed accuracy, correct count, avg response time,
- *     lesson breakdowns, and repeated-question metrics.
- *  4. Falls back to local computation if the backend call fails.
- *  5. Handles 409 (already completed) gracefully.
- */
-
 import { useState, useEffect } from "react";
 import {
   View,
@@ -56,8 +38,6 @@ import ConfettiView        from "@/components/quiz-componets/ConfettiView";
 import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 import CircularProgressRing from "@/components/quiz-componets/CircularProgressRing";
 import type { QuestionOut, SubmitQuizResponse } from "@/types/quizModuleTypes";
-
-/* ─────────────────────────────────────────────── helpers ── */
 
 interface ScoreTheme {
   heroFrom: string;
@@ -129,8 +109,6 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
   };
 }
 
-/* ─────────────────────────────────────────────── screen ── */
-
 export default function QuizResultsScreen() {
   const router = useRouter();
   const {
@@ -158,7 +136,6 @@ export default function QuizResultsScreen() {
   const totalQ   = parseInt(questionCount ?? "10");
   const timedOut = isTimeout === "true";
 
-  // ── Deserialise params ──────────────────────────────────────────────────────
   const answers: Record<number, number> =
     answersJson ? JSON.parse(answersJson) : {};
   const questions: QuestionOut[] =
@@ -166,8 +143,9 @@ export default function QuizResultsScreen() {
   const submitData: SubmitQuizResponse | null =
     submitDataJson ? JSON.parse(submitDataJson) : null;
 
-  // ── Derive display metrics ──────────────────────────────────────────────────
-  // Local correctness now works because backend sends correct_answer
+  // Falls back to computing correctness locally if the backend submit call
+  // never came back (submitData null) — still possible since the backend
+  // sends correct_answer along with each question.
   const localCorrect = questions.filter((q, i) => {
     const chosen = answers[i];
     if (chosen === undefined || !q.options || !q.correct_answer) return false;
@@ -184,16 +162,13 @@ export default function QuizResultsScreen() {
   const pct           = Math.round(accuracy);
   const theme         = getTheme(pct, timedOut);
 
-  // Repeated question metrics
   const repeatedCorrect = submitData?.repeated_correct_count ?? 0;
   const repeatedWrong   = submitData?.repeated_wrong_count   ?? 0;
   const hasRepeats      = repeatedCorrect + repeatedWrong > 0;
 
-  // ── UI state ────────────────────────────────────────────────────────────────
   const [showReview,  setShowReview]  = useState(false);
   const [showRestart, setShowRestart] = useState(false);
 
-  // ── Entrance animations ─────────────────────────────────────────────────────
   const heroY   = useSharedValue(-80);
   const heroOp  = useSharedValue(0);
   const statsY  = useSharedValue(60);
@@ -235,7 +210,6 @@ export default function QuizResultsScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* ── Hero card ── */}
         <Animated.View
           style={heroStyle}
           className={`mx-4 mt-5 rounded-3xl overflow-hidden shadow-lg ${theme.heroBg}`}
@@ -266,7 +240,6 @@ export default function QuizResultsScreen() {
               textColor="#ffffff"
             />
 
-            {/* Stat tiles */}
             <View className="flex-row gap-2 mt-6 w-full items-center">
               <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
                 <Trophy size={20} color="#fff" strokeWidth={2} />
@@ -323,7 +296,6 @@ export default function QuizResultsScreen() {
           </View>
         </Animated.View>
 
-        {/* ── Repeated-question metrics ── */}
         {hasRepeats && (
           <Animated.View style={statsStyle} className="mx-4 mt-3">
             <View className="bg-violet-50 rounded-2xl px-5 py-4">
@@ -344,7 +316,6 @@ export default function QuizResultsScreen() {
           </Animated.View>
         )}
 
-        {/* ── Answer review toggle ── */}
         {questions.length > 0 && (
           <Animated.View style={statsStyle} className="mx-4 mt-4">
             <TouchableOpacity
@@ -379,7 +350,6 @@ export default function QuizResultsScreen() {
           </Animated.View>
         )}
 
-        {/* ── Action buttons ── */}
         <Animated.View style={statsStyle} className="mx-4 mt-5 gap-3">
           <TouchableOpacity
             className="w-full bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl"

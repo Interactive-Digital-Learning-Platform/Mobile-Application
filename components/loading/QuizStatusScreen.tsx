@@ -1,27 +1,10 @@
-/**
- * QuizStatusScreen.tsx
- * ─────────────────────────
- * Animated loading screen shown while a quiz is being generated or an
- * existing session is being retrieved. Parameterized by `title` and `steps`
- * so both cases share one implementation instead of two near-identical copies.
- *
- * No back button here on purpose — this screen is a transient in-flight
- * state, not a dead end. If generation/retrieval fails, the flow lands on
- * QuizErrorScreen instead, which is where the way out belongs.
- *
- * The ring is tied to the REAL request state via `isComplete`, not a fixed
- * timer — there's no server-side progress percentage to report (generation
- * is one opaque network call), so while `isComplete` is false the ring
- * climbs toward (but never reaches) 92% with a decelerating curve, the
- * standard "still working" pattern for an operation of unknown duration.
- * The instant `isComplete` flips true it snaps the rest of the way to 100%,
- * and `onComplete` — fired only once that snap animation actually
- * finishes — is the caller's cue to swap away to the real quiz UI. This
- * keeps the ring and the screen transition in sync instead of the ring
- * being cut off mid-fill at a random point, which is what happened when it
- * ran on its own fixed-duration loop independent of the real request.
- */
-
+// Shared "generating / retrieving quiz" screen — same UI, different title
+// and steps depending on the caller. The progress ring is driven by real
+// request state (`isComplete`), not a fixed timer: since there's no real
+// progress percentage to report, it creeps toward 92% while waiting and
+// only snaps to 100% once the request actually finishes, then calls
+// `onComplete` so the caller can swap to the real quiz UI in sync with the
+// ring instead of cutting the animation off mid-fill.
 import { useState, useEffect } from "react";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,8 +28,6 @@ import { LinearGradient } from "expo-linear-gradient";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export interface QuizStatusStep {
   icon: LucideIcon;
   text: string;
@@ -57,27 +38,18 @@ interface QuizStatusScreenProps {
   steps: QuizStatusStep[];
   subject: string;
   difficulty: string;
-  /** True once the real generation/retrieval call has actually succeeded. */
   isComplete: boolean;
-  /** Fires once the ring's fill-to-100% animation visually finishes — this
-   *  is when the caller should swap away to the real quiz UI. */
   onComplete: () => void;
 }
-
-// ── Ring geometry ─────────────────────────────────────────────────────────────
 
 const RING_SIZE = 180;
 const RING_STROKE = 8;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-// How far the ring climbs on its own while still waiting for a real result —
-// deliberately short of 100% so it never falsely claims to be done.
 const PENDING_CAP = 0.92;
 const PENDING_CLIMB_MS = 20000;
 const COMPLETE_SNAP_MS = 350;
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function QuizStatusScreen({
   title,
@@ -92,8 +64,7 @@ export default function QuizStatusScreen({
   const fill  = useSharedValue(0);
   const pulse = useSharedValue(1);
 
-  // Step icon/text rotation — purely cosmetic reassurance, not tied to any
-  // real backend milestone (the generation call has no sub-step reporting).
+  // Just cosmetic — steps rotate on a timer, not tied to any real backend milestone.
   useEffect(() => {
     const stepTimer = setInterval(() => {
       setStepIndex((prev) => (prev + 1) % steps.length);
@@ -113,8 +84,6 @@ export default function QuizStatusScreen({
     return () => cancelAnimation(pulse);
   }, []);
 
-  // The ring itself — climbs toward PENDING_CAP while waiting, snaps to 100%
-  // and reports back only once the real result has actually arrived.
   useEffect(() => {
     cancelAnimation(fill);
     if (isComplete) {
@@ -134,8 +103,7 @@ export default function QuizStatusScreen({
     return () => cancelAnimation(fill);
   }, [isComplete]);
 
-  // Mirrors the ring's actual animated value into a JS-rendered percentage,
-  // so the number on screen can never drift from what the ring is showing.
+  // Mirrors the ring's animated value into JS state so the % text can't drift from it.
   useAnimatedReaction(
     () => Math.round(fill.value * 100),
     (current, previous) => {
@@ -158,7 +126,6 @@ export default function QuizStatusScreen({
         colors={["#FC6E20", "#FF8F30"]}
         style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 32, paddingHorizontal: 32 }}
       >
-        {/* Ring + icon: fixed box so the absolutely-positioned SVG ring has real bounds */}
         <View style={{ width: RING_SIZE, height: RING_SIZE, justifyContent: "center", alignItems: "center" }}>
           <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute" }}>
             <Circle
@@ -175,7 +142,6 @@ export default function QuizStatusScreen({
             />
           </Svg>
 
-          {/* Pulsing centre content: step icon + fill percentage */}
           <Animated.View
             style={pulseStyle}
             className="w-[100px] h-[100px] rounded-full bg-white/20 justify-center items-center border-2 border-white/40"
@@ -185,7 +151,6 @@ export default function QuizStatusScreen({
           </Animated.View>
         </View>
 
-        {/* Title + subject/difficulty */}
         <View style={{ alignItems: "center" }}>
           <Text className="text-white text-2xl font-black text-center">
             {title}
@@ -195,7 +160,6 @@ export default function QuizStatusScreen({
           </Text>
         </View>
 
-        {/* Animated step pill */}
         <Animated.View
           key={stepIndex}
           entering={FadeIn.duration(300)}
@@ -207,7 +171,6 @@ export default function QuizStatusScreen({
           </Text>
         </Animated.View>
 
-        {/* Dot indicator */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           {steps.map((_, i) => (
             <View

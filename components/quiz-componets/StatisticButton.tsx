@@ -41,10 +41,9 @@ function StatCellSkeleton({ bordered }: { bordered?: "left" | "right" }) {
 export default function StatisticButton() {
   const { data: analytics, isLoading, refetch } = useAnalyticsMeQuery();
 
-  // Belt-and-suspenders: the generate/submit/delete mutations already
-  // invalidate this query, but refetching on focus too (same pattern as
-  // PracticeList) keeps this in sync even if a screen is reached some other
-  // way, without requiring an app restart.
+  // Mutations already invalidate this query, but refetching on focus too
+  // (same as PracticeList) keeps it in sync even if this screen is reached
+  // some other way.
   useFocusEffect(
     useCallback(() => {
       refetch();

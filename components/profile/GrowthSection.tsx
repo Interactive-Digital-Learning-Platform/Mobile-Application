@@ -1,12 +1,3 @@
-/**
- * GrowthSection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 4 — effort score, consistency score, growth score, mastery score.
- * Reads UserAnalyticsResponse.growth (optional — older backend responses
- * won't have it). All four scores are independently nullable on the backend
- * (e.g. mastery_score can be null before enough attempts exist), so each
- * tile falls back to "—" rather than hiding the whole card.
- */
 import { View, Text } from "react-native";
 import { Sprout, Flame, CalendarCheck2, Award } from "lucide-react-native";
 import type { GrowthAnalytics } from "@/types/quizModuleTypes";

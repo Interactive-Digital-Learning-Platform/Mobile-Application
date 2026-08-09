@@ -1,13 +1,3 @@
-/**
- * DifficultyProgressSection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 6 — per-subject current difficulty, promotion progress, and next
- * difficulty. current_difficulty is required on SubjectAnalytics, but
- * promotion_progress_percentage/next_difficulty/difficulty_status_message
- * are optional (older backend responses won't have the promotion pipeline
- * yet), so each subject falls back to a plain status message when the
- * progress bar can't be computed.
- */
 import { View, Text } from "react-native";
 import { Layers } from "lucide-react-native";
 import type { SubjectAnalytics } from "@/types/quizModuleTypes";

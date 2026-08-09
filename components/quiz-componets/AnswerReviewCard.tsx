@@ -46,7 +46,6 @@ export default function AnswerReviewCard({
 
   return (
     <View className="rounded-2xl bg-slate-100 overflow-hidden mb-3">
-      {/* ── Header ── */}
       <View className={`${headerBg} flex-row items-center justify-between px-4 py-3`}>
         <Text className="text-slate-500 text-xs font-bold">Q{index + 1}</Text>
         <View className="flex-row items-center gap-1.5">
@@ -67,14 +66,12 @@ export default function AnswerReviewCard({
         </View>
       </View>
 
-      {/* ── Question ── */}
       <View className="px-4 pt-3 pb-2">
         <Text className="text-slate-800 text-sm font-bold leading-5">
           {question.question}
         </Text>
       </View>
 
-      {/* ── Options ── */}
       <View className="px-4 pb-4 gap-1.5">
         {(question.options ?? []).map((opt, i) => {
           const isCorrectOpt = hasCorrect && opt === correctAnswer;

@@ -1,16 +1,3 @@
-/**
- * Profile tab — analytics dashboard + AI feedback.
- *
- * Sections:
- *   1. Header with user info (useUserMeQuery)
- *   2. Overview: accuracy donut ring + sessions/speed tiles
- *   3. Horizontal bar chart — subject accuracy
- *   4. Strong / weak subject pills
- *   5. Performance summary / progress trend / topic performance / growth /
- *      recommendations / difficulty progress (components/profile/*)
- *   6. AI feedback section with refresh (useAnalyticsFeedbackQuery)
- */
-
 import { useState } from "react";
 import {
   View,
@@ -56,8 +43,6 @@ import GrowthSection from "@/components/profile/GrowthSection";
 import RecommendationsSection from "@/components/profile/RecommendationsSection";
 import DifficultyProgressSection from "@/components/profile/DifficultyProgressSection";
 
-// ── Accuracy donut ring ───────────────────────────────────────────────────────
-
 function AccuracyRing({ accuracy }: { accuracy: number }) {
   const SIZE = 114;
   const SW = 11;
@@ -94,8 +79,6 @@ function AccuracyRing({ accuracy }: { accuracy: number }) {
     </View>
   );
 }
-
-// ── Horizontal bar chart ──────────────────────────────────────────────────────
 
 function SubjectBarChart({
   subjects,
@@ -150,8 +133,6 @@ function SubjectBarChart({
   );
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────────
-
 function StatsSkeleton() {
   return (
     <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
@@ -162,7 +143,6 @@ function StatsSkeleton() {
           <Skeleton width="100%" height="100%" borderRadius={18} color={C.p50} style={{ flex: 1 }} />
         </View>
       </View>
-      {/* Subject accuracy/difficulty rows */}
       <View style={{ backgroundColor: "white", borderRadius: 18, padding: 14, gap: 12 }}>
         <Skeleton width={140} height={14} />
         {[0, 1, 2].map((i) => (
@@ -175,9 +155,7 @@ function StatsSkeleton() {
           </View>
         ))}
       </View>
-      {/* Strong/weak pills */}
       <Skeleton width="100%" height={72} borderRadius={18} color={C.p50} />
-      {/* Performance summary / progress trend / topic performance / growth / recommendations / difficulty progress */}
       <Skeleton width="100%" height={160} borderRadius={18} color={C.p50} />
       <Skeleton width="100%" height={130} borderRadius={18} color={C.p50} />
       <Skeleton width="100%" height={180} borderRadius={18} color={C.p50} />
@@ -187,8 +165,6 @@ function StatsSkeleton() {
     </View>
   );
 }
-
-// ── Error state ───────────────────────────────────────────────────────────────
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
@@ -211,18 +187,14 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-// ── AI feedback loading skeleton ───────────────────────────────────────────────
-
 function FeedbackSkeleton() {
   return (
     <View style={{ gap: 10 }}>
-      {/* Motivational note card */}
       <View style={{ backgroundColor: C.p100, borderRadius: 18, padding: 16, gap: 10 }}>
         <Skeleton width={90} height={11} color={C.p200} />
         <Skeleton width="100%" height={13} color={C.p200} />
         <Skeleton width="70%" height={13} color={C.p200} />
       </View>
-      {/* Suggestions card */}
       <View style={[styles.card, { gap: 10 }]}>
         <Skeleton width={100} height={12} />
         {[0, 1, 2].map((i) => (
@@ -232,8 +204,6 @@ function FeedbackSkeleton() {
     </View>
   );
 }
-
-// ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function Profile() {
   const queryClient = useQueryClient();
@@ -283,7 +253,6 @@ export default function Profile() {
       >
         <View className="bg-white">
 
-        {/* ── Header ── */}
         <View style={{
           backgroundColor: C.p500,
           paddingHorizontal: 20,
@@ -334,7 +303,6 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* ── Body ── */}
         <View style={{ marginTop: -22 }}>
 
           {analyticsLoading ? (
@@ -347,7 +315,6 @@ export default function Profile() {
           ) : analytics ? (
             <Animated.View entering={FadeIn.duration(300)} style={{ paddingHorizontal: 16 }}>
 
-              {/* Accuracy ring + quick tiles */}
               <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
                 <View style={[styles.card, { flex: 1.15, alignItems: "center", justifyContent: "center", paddingVertical: 18 }]}>
                   <AccuracyRing accuracy={analytics.overall_accuracy} />
@@ -370,12 +337,10 @@ export default function Profile() {
                 </View>
               </View>
 
-              {/* Bar chart */}
               {visibleSubjects.length > 0 && (
                 <SubjectBarChart subjects={visibleSubjects} />
               )}
 
-              {/* Strong / weak pills */}
               {(visibleStrongSubjects.length > 0 || visibleWeakSubjects.length > 0) && (
                 <View style={[styles.card, { marginBottom: 12 }]}>
                   {visibleStrongSubjects.length > 0 && (
@@ -411,7 +376,6 @@ export default function Profile() {
                 </View>
               )}
 
-              {/* 1. Performance summary */}
               <PerformanceSummarySection
                 totalQuestionsAttempted={analytics.total_questions_attempted}
                 totalCorrectAnswers={analytics.total_correct_answers}
@@ -419,19 +383,14 @@ export default function Profile() {
                 avgResponseTime={analytics.overall_avg_response_time}
               />
 
-              {/* 2. Progress trend */}
               <ProgressTrendSection trend={analytics.performance_trend} />
 
-              {/* 3. Topic performance */}
               <TopicPerformanceSection subjects={visibleSubjects} />
 
-              {/* 4. Growth */}
               <GrowthSection growth={analytics.growth} />
 
-              {/* 5. Recommendations */}
               <RecommendationsSection recommendations={analytics.recommendations} />
 
-              {/* 6. Difficulty progress */}
               <DifficultyProgressSection subjects={visibleSubjects} />
 
               {analytics.total_sessions === 0 && (
@@ -448,7 +407,6 @@ export default function Profile() {
             </Animated.View>
           ) : null}
 
-          {/* ── AI Feedback ── */}
           <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingLeft: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -484,7 +442,6 @@ export default function Profile() {
               </View>
             ) : feedback ? (
               <Animated.View entering={FadeIn.duration(300)} style={{ gap: 10 }}>
-                {/* Motivational note */}
                 <View style={{ backgroundColor: C.p500, borderRadius: 18, padding: 16, overflow: "hidden" }}>
                   <View style={{
                     position: "absolute", top: -16, right: -16,
@@ -509,9 +466,6 @@ export default function Profile() {
                   )}
                 </View>
 
-                
-
-                {/* Suggestions */}
                 {feedback.suggestions.length > 0 && (
                   <View style={[styles.card, { borderColor: "#FEF3C7" }]} className="mb-5">
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>

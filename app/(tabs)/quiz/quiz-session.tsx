@@ -1,16 +1,3 @@
-/**
- * quiz-session.tsx
- * ─────────────────
- * Active quiz session screen. Handles three modes:
- *
- *  NEW QUIZ      — no resumeSessionId → calls POST /generate on mount.
- *  RESUME        — resumeSessionId present → loads existing session, restores progress.
- *  RESTART       — resumeSessionId + restartSession="true" → loads same questions,
- *                  ignores completion record, starts from scratch.
- *
- * Questions are frozen into local state once loaded so restart never re-generates.
- */
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -75,8 +62,12 @@ const RETRIEVING_STEPS: QuizStatusStep[] = [
   { icon: Sparkles,  text: "Almost ready!"            },
 ];
 
-// ── Main component ────────────────────────────────────────────────────────────
-
+// Handles three modes: new quiz (no resumeSessionId, calls POST /generate on
+// mount), resume (resumeSessionId present, loads the existing session and
+// restores progress), and restart (resumeSessionId + restartSession="true",
+// same questions but ignores the completion record and starts over).
+// Questions are frozen into local state once loaded so a restart never
+// re-generates them.
 export default function QuizSession() {
   const router = useRouter();
   const {
@@ -91,9 +82,6 @@ export default function QuizSession() {
     excludedQuestionIds:  excludedQuestionIdsStr,
   } = useLocalSearchParams<{
     subject:               string;
-    // lesson/difficulty are optional — normally omitted so the backend picks
-    // them automatically (AI lesson choice + adaptive difficulty). Only
-    // present if some future flow explicitly wants to override them.
     lesson?:               string;
     difficulty?:           string;
     questionCount:         string;
@@ -114,14 +102,12 @@ export default function QuizSession() {
   const resumeId     = isResuming ? parseInt(resumeSessionIdStr!) : null;
   const isRestartMode = restartSessionStr === "true";
 
-  // ── Resume mode: load existing session ─────────────────────────────────────
   const {
     data:      savedSession,
     isLoading: isLoadingSession,
     error:     sessionError,
   } = useQuizSessionQuery(resumeId);
 
-  // ── Generate quiz mutation (new quiz mode only) ─────────────────────────────
   const {
     mutate:    generateQuiz,
     isPending: isGenerating,
@@ -133,8 +119,9 @@ export default function QuizSession() {
   const queryClient = useQueryClient();
   const { mutate: saveProgress } = useSaveQuizProgressMutation();
 
-  // Bust the individual session cache on unmount so the next resume always fetches
-  // fresh data from DB (handles swipe-back, modal exit, and submit paths alike).
+  // Clear the individual session cache on unmount so the next resume always
+  // refetches fresh data instead of reusing whatever was here before (covers
+  // swipe-back, modal exit, and submit alike).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => () => {
     if (resumeId) queryClient.removeQueries({ queryKey: quizKeys.session(resumeId) });
@@ -155,22 +142,15 @@ export default function QuizSession() {
   const isSubmitting = isSubmittingNormal || isSubmittingTimeout;
   const submitData   = submitNormalData ?? submitTimeoutData;
 
-  // The difficulty actually used — chosen automatically by the backend
-  // (adaptive difficulty) unless a route param explicitly overrides it. Only
-  // known once generation/resume completes. Lesson is shown per-question
-  // instead (each question is independently assigned a random lesson).
   const displayDifficulty = quizData?.difficulty ?? savedSession?.difficulty ?? difficulty ?? "";
   const diff = getDifficultyStyle(displayDifficulty || "medium");
 
-  // Stable flag set at construction: true = new quiz (generate), false = resume (load from DB)
   const [shouldGenerate] = useState(() => !resumeSessionIdStr);
 
   const triggerGenerate = useCallback((forceCache = false) => {
     generateQuiz({
       grade:                 parseInt(grade ?? "10"),
       subject:               subject ?? "Mathematics",
-      // Omitted when not explicitly set — backend auto-picks lesson (AI) and
-      // difficulty (accuracy history) instead of trusting a client value.
       lesson:                lesson || undefined,
       difficulty:            difficulty ? (difficulty.toLowerCase() as "easy" | "medium" | "hard") : undefined,
       question_count:        totalQ,
@@ -187,19 +167,16 @@ export default function QuizSession() {
     setReadyToShowQuiz(false);
   }, [resetGenerate]);
 
-  // Retry AI generation
   const handleRetry = useCallback(() => {
     resetForRetry();
     triggerGenerate(false);
   }, [resetForRetry, triggerGenerate]);
 
-  // Fallback: user chose to load from the DB question pool after AI failed
   const handleUseCache = useCallback(() => {
     resetForRetry();
     triggerGenerate(true);
   }, [resetForRetry, triggerGenerate]);
 
-  // Fire exactly once on mount in new-quiz mode
   const generateTriggeredRef = useRef(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -208,23 +185,20 @@ export default function QuizSession() {
     triggerGenerate();
   }, []);
 
-  // ── Frozen quiz state — set once, never cleared, so restart works ──────────
   const [frozenQuestions,  setFrozenQuestions]  = useState<QuestionOut[]>([]);
   const [frozenSessionId,  setFrozenSessionId]  = useState<number | null>(null);
 
-  // True only once QuizStatusScreen's ring has visually finished filling to
-  // 100% — the actual quiz UI doesn't render until this flips, so the ring
-  // never gets cut off mid-fill by data simply having arrived in the background.
+  // Only flips once QuizStatusScreen's ring has visually finished filling to
+  // 100% — the quiz UI doesn't render before that, so the ring never gets
+  // cut off mid-fill just because the data happened to arrive in the background.
   const [readyToShowQuiz, setReadyToShowQuiz] = useState(false);
 
-  // Freeze from newly generated quiz
   useEffect(() => {
     if (isResuming || !quizData || frozenQuestions.length > 0) return;
     setFrozenQuestions(quizData.questions ?? []);
     setFrozenSessionId(quizData.session_id ?? null);
   }, [quizData, isResuming]);
 
-  // ── Quiz state ──────────────────────────────────────────────────────────────
   const questions = frozenQuestions;
   const sessionId = frozenSessionId;
 
@@ -236,17 +210,14 @@ export default function QuizSession() {
   const [showTimesUpModal,  setShowTimesUpModal]  = useState(false);
   const [showExit,          setShowExit]          = useState(false);
 
-  // Show the modal as soon as the timer expires; keep timeUp=true so the timer never restarts
   useEffect(() => { if (timeUp) setShowTimesUpModal(true); }, [timeUp]);
 
-  // ── Completion redirect: skipped in restart mode ────────────────────────────
   useEffect(() => {
     if (isResuming && !isRestartMode && savedSession?.completion) {
       router.replace("/(tabs)/quiz");
     }
   }, [isResuming, isRestartMode, savedSession]);
 
-  // ── Resume/restart: freeze questions + restore state atomically ─────────────
   const [stateRestored, setStateRestored] = useState(false);
   useEffect(() => {
     if (!isResuming || !savedSession || stateRestored) return;
@@ -255,7 +226,6 @@ export default function QuizSession() {
     setFrozenSessionId(resumeId);
 
     if (!isRestartMode) {
-      // Restore answers from saved draft
       const drafts = savedSession.latest_progress?.draft_answers ?? [];
       const restored: Record<number, number> = {};
       for (const draft of drafts) {
@@ -268,7 +238,6 @@ export default function QuizSession() {
       setAnswers(restored);
       const rem = savedSession.latest_progress?.remaining_time;
       if (rem != null) setTimeLeft(Math.round(rem));
-      // Resume at first unanswered question instead of always starting at Q1
       const firstUnanswered = savedSession.questions.findIndex((_, i) => restored[i] === undefined);
       if (firstUnanswered > 0) setCurrent(firstUnanswered);
     }
@@ -276,19 +245,14 @@ export default function QuizSession() {
     setStateRestored(true);
   }, [isResuming, savedSession, stateRestored, resumeId, isRestartMode]);
 
-  // Ready = questions loaded AND (if resuming) state fully restored
   const isReady = questions.length > 0 && (!isResuming || stateRestored);
 
-  // Per-question time tracking
   const questionStartRef = useRef<number>(Date.now());
   const [questionTimes, setQuestionTimes] = useState<Record<number, number>>({});
 
-  // Debounce ref for autosave
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Guard: fire the submit API only once per session
   const submissionTriggeredRef = useRef(false);
 
-  // Reanimated
   const shakeX   = useSharedValue(0);
   const timerPct = useSharedValue(1);
   const [barWidth, setBarWidth] = useState(0);
@@ -296,7 +260,6 @@ export default function QuizSession() {
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
   const barStyle   = useAnimatedStyle(() => ({ width: timerPct.value * barWidth }));
 
-  // ── Autosave helper ─────────────────────────────────────────────────────────
   const doSaveProgress = useCallback(
     (currentAnswers: Record<number, number>, currentTimes: Record<number, number>, currentTimeLeft: number) => {
       if (!sessionId || questions.length === 0) return;
@@ -312,7 +275,6 @@ export default function QuizSession() {
     [sessionId, questions, saveProgress]
   );
 
-  // ── Debounced autosave on answer change (both modes) ───────────────────────
   useEffect(() => {
     if (!sessionId || questions.length === 0) return;
     clearTimeout(autosaveTimerRef.current);
@@ -322,7 +284,6 @@ export default function QuizSession() {
     return () => clearTimeout(autosaveTimerRef.current);
   }, [answers]);
 
-  // ── AppState: save on background ────────────────────────────────────────────
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === "background" || nextState === "inactive") {
@@ -334,7 +295,6 @@ export default function QuizSession() {
     return () => subscription.remove();
   }, [doSaveProgress, answers, questionTimes, timeLeft]);
 
-  // ── Countdown timer — starts only when ready ────────────────────────────────
   useEffect(() => {
     if (!isReady || timeUp) return;
     const id = setInterval(() => {
@@ -360,7 +320,6 @@ export default function QuizSession() {
     );
   }, [timeUp]);
 
-  // Trigger submission as soon as time runs out so the spinner is ready in TimesUpModal
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!timeUp || submissionTriggeredRef.current || !sessionId || questions.length === 0) return;
@@ -377,7 +336,6 @@ export default function QuizSession() {
     });
   }, [timeUp]);
 
-  // ── Track time per question ─────────────────────────────────────────────────
   const recordQuestionTime = (fromIndex: number) => {
     const elapsed = (Date.now() - questionStartRef.current) / 1000;
     setQuestionTimes((prev) => ({
@@ -392,7 +350,6 @@ export default function QuizSession() {
     setCurrent(next);
   };
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
   const q           = questions[current];
   const isFlagged   = flagged.has(current);
   const isLow       = timeLeft < 60;
@@ -406,7 +363,6 @@ export default function QuizSession() {
       return n;
     });
 
-  // Restart reuses frozen questions — no regeneration
   const restart = () => {
     setAnswers({});
     setFlagged(new Set());
@@ -418,7 +374,6 @@ export default function QuizSession() {
     questionStartRef.current = Date.now();
   };
 
-  // Shared navigation helper — called once submission has settled (or errored)
   const navigateToResults = (timedOut: boolean, data?: unknown) => {
     router.push({
       pathname: "/(tabs)/quiz/quiz-results",
@@ -438,7 +393,6 @@ export default function QuizSession() {
     } as any);
   };
 
-  // Manual submit: save progress, call API, navigate after it settles
   const goToResults = () => {
     if (submissionTriggeredRef.current) return;
     submissionTriggeredRef.current = true;
@@ -461,7 +415,6 @@ export default function QuizSession() {
     );
   };
 
-  // ── Exit: save progress then navigate ──────────────────────────────────────
   const handleExitConfirm = () => {
     setShowExit(false);
     clearTimeout(autosaveTimerRef.current);
@@ -469,24 +422,15 @@ export default function QuizSession() {
     router.replace("/(tabs)/quiz");
   };
 
-  // ── Loading / Error states ─────────────────────────────────────────────────
   const isLoading = isResuming
     ? (isLoadingSession || !isReady)
     : (isGenerating || (!frozenQuestions.length && !generateError));
   const activeError = isResuming ? sessionError : generateError;
-  // Data has genuinely arrived — but the screen doesn't swap away until the
-  // ring has actually visually finished filling to 100% (see readyToShowQuiz).
   const isSuccess = !isLoading && !activeError && questions.length > 0;
 
-  // A generation/retrieval failure (AI + cache both failing) can leave the
-  // user stuck mid-flow with no other way out, so only the error state gets
-  // an explicit way back to the main quiz list — the loading state is a
-  // transient in-flight step, not a dead end.
   const goBackToQuizList = () => router.replace("/(tabs)/quiz");
 
   if (isLoading || (isSuccess && !readyToShowQuiz)) {
-    // Difficulty/lesson aren't known yet while generating — the AI picks both
-    // as part of this same call. "Adaptive" reflects that instead of a guess.
     return shouldGenerate
       ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />
       : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />;
@@ -503,16 +447,13 @@ export default function QuizSession() {
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-white">
 
-      {/* Block all interaction while the submit API call is in flight */}
       {isSubmitting && (
         <View className="absolute inset-0 z-50" pointerEvents="box-only" />
       )}
 
-      {/* ── Header ── */}
       <View className="flex-row items-center justify-between px-4 py-3 bg-white">
         <TouchableOpacity
           className="w-9 h-9 rounded-full bg-slate-100 justify-center items-center"
@@ -524,7 +465,6 @@ export default function QuizSession() {
 
         <View className="items-center justify-center">
           <Text className="text-md font-black text-slate-800">{subject}</Text>
-          {/* Lesson varies per question (random by default), so it's shown per-question below, not here */}
           <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
             <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
           </View>
@@ -546,7 +486,6 @@ export default function QuizSession() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Timer bar ── */}
       <View className="mt-4 mx-4 flex-row justify-between items-center">
         <View
           className={`h-2 rounded-full w-[80%] overflow-hidden ${isLow ? "bg-rose-200" : "bg-slate-200"}`}
@@ -566,7 +505,6 @@ export default function QuizSession() {
         </View>
       </View>
 
-      {/* ── Progress dots ── */}
       <View className="flex-row px-4 mt-4 gap-1 flex-wrap">
         {questions.map((_, i) => {
           const isAns  = answers[i] !== undefined;
@@ -587,7 +525,6 @@ export default function QuizSession() {
         })}
       </View>
 
-      {/* ── Counter ── */}
       <View className="flex-row justify-between px-5 mt-3">
         <Text className="text-xs text-slate-400 font-medium">
           Question {current + 1} / {totalQ}
@@ -598,7 +535,6 @@ export default function QuizSession() {
         </Text>
       </View>
 
-      {/* ── Question card ── */}
       <View className="bg-white rounded-2xl py-[40px] px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">
         {isFlagged && (
           <View className="flex-row items-center gap-1 absolute ps-5 pt-5">
@@ -606,8 +542,6 @@ export default function QuizSession() {
             <Text className="text-[11px] text-[#7C3AED] font-semibold">Flagged for review</Text>
           </View>
         )}
-        {/* Each question is independently assigned a random lesson within the
-            subject, so it's shown per-question here rather than once in the header. */}
         {!!q?.lesson && (
           <View className="self-start flex-row items-center gap-1 px-2 py-1 rounded-full bg-orange-50 mb-3">
             <BookOpen size={11} color="#FC6E20" strokeWidth={2.5} />
@@ -619,7 +553,6 @@ export default function QuizSession() {
         <Text className="font-bold text-slate-800 leading-6 text-xl">{q?.question}</Text>
       </View>
 
-      {/* ── Options ── */}
       <View className="w-full flex-1 py-2 px-4">
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
           <View className="gap-2.5">
@@ -654,7 +587,6 @@ export default function QuizSession() {
         </ScrollView>
       </View>
 
-      {/* ── Nav buttons ── */}
       <View className="flex-row justify-between items-center absolute bottom-8 px-4 py-5 w-full bg-white/90">
         <TouchableOpacity
           className={`w-[49%] flex-row justify-center items-center gap-2 py-3.5 rounded-2xl ${
@@ -694,7 +626,6 @@ export default function QuizSession() {
         )}
       </View>
 
-      {/* ── Exit modal ── */}
       <ExitQuizModal
         visible={showExit}
         answered={answered}
@@ -703,7 +634,6 @@ export default function QuizSession() {
         onConfirm={handleExitConfirm}
       />
 
-      {/* ── Time's up modal ── */}
       <TimesUpModel
         timeUp={showTimesUpModal}
         answered={answered}

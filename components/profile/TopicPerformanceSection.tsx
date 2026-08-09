@@ -1,12 +1,3 @@
-/**
- * TopicPerformanceSection.tsx
- * ─────────────────────────────────────────────────────────
- * Section 3 — weak / developing / strong topics, flattened across every
- * subject (subjects[].topics is optional and per-subject; this section
- * doesn't exist at all until a subject actually returns topics). Topics
- * with status "insufficient_data" (or no status at all, for older backend
- * responses) are silently excluded — there's nothing reliable to show yet.
- */
 import { View, Text } from "react-native";
 import { ListTree, AlertTriangle, TrendingUp, CheckCircle2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";

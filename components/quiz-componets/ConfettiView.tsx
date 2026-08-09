@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated as RNAnimated, StyleSheet, View } from "react-native";
 
-/** Single confetti piece */
 function Piece({ delay, x }: { delay: number; x: number }) {
   const opacity = useRef(new RNAnimated.Value(0)).current;
   const translateY = useRef(new RNAnimated.Value(0)).current;
@@ -46,7 +45,6 @@ function Piece({ delay, x }: { delay: number; x: number }) {
 }
 
 interface ConfettiViewProps {
-  /** How many pieces to render */
   count?: number;
 }
 

@@ -1,12 +1,4 @@
-/**
- * quizAPI.ts
- * ──────────
- * Typed Axios functions for every quiz-service endpoint.
- *
- * Base URL is read from EXPO_PUBLIC_BACKEND_URL via the shared axiosInstance.
- */
-
-import axiosInstance from "@/providers/axios";
+import { quizClient } from "@/api/apiClients";
 import {
   AIFeedbackResponse,
   AnswerItem,
@@ -24,115 +16,88 @@ import {
   UserOut,
 } from "@/types/quizModuleTypes";
 
-// ── User ──────────────────────────────────────────────────────────────────────
-
-/** GET /api/v1/user/me — lazy-provisions the user in DB on first call */
 export async function fetchMe(): Promise<UserOut> {
-  const { data } = await axiosInstance.get<UserOut>("/api/v1/user/me");
+  const { data } = await quizClient.get<UserOut>("/user/me");
   return data;
 }
 
-/** POST /api/v1/user/sync — idempotent sync after Clerk login */
 export async function syncUser(): Promise<UserOut> {
-  const { data } = await axiosInstance.post<UserOut>("/api/v1/user/sync");
+  const { data } = await quizClient.post<UserOut>("/user/sync");
   return data;
 }
 
-// ── Quiz ──────────────────────────────────────────────────────────────────────
-
-/** POST /api/v1/quiz/generate */
 export async function generateQuiz(
   payload: GenerateQuizRequest
 ): Promise<GenerateQuizResponse> {
-  const { data } = await axiosInstance.post<GenerateQuizResponse>(
-    "/api/v1/quiz/generate",
+  const { data } = await quizClient.post<GenerateQuizResponse>(
+    "/quiz/generate",
     payload
   );
   return data;
 }
 
-/** GET /api/v1/quiz/sessions — all sessions for the current user */
 export async function fetchQuizSessions(): Promise<QuizSessionSummary[]> {
-  const { data } = await axiosInstance.get<QuizSessionSummary[]>("/api/v1/quiz/sessions");
+  const { data } = await quizClient.get<QuizSessionSummary[]>("/quiz/sessions");
   return data;
 }
 
-/** GET /api/v1/quiz/sessions/:sessionId */
 export async function fetchQuizSession(
   sessionId: number
 ): Promise<SavedQuizResponse> {
-  const { data } = await axiosInstance.get<SavedQuizResponse>(
-    `/api/v1/quiz/sessions/${sessionId}`
+  const { data } = await quizClient.get<SavedQuizResponse>(
+    `/quiz/sessions/${sessionId}`
   );
   return data;
 }
 
-/** POST /api/v1/quiz/progress/save — debounced autosave during a session */
 export async function saveQuizProgress(
   payload: SaveProgressRequest
 ): Promise<SaveProgressResponse> {
-  const { data } = await axiosInstance.post<SaveProgressResponse>(
-    "/api/v1/quiz/progress/save",
+  const { data } = await quizClient.post<SaveProgressResponse>(
+    "/quiz/progress/save",
     payload
   );
   return data;
 }
 
-/** DELETE /api/v1/quiz/sessions/:sessionId — removes session, keeps Analytics */
 export async function deleteQuizSession(sessionId: number): Promise<void> {
-  await axiosInstance.delete(`/api/v1/quiz/sessions/${sessionId}`);
+  await quizClient.delete(`/quiz/sessions/${sessionId}`);
 }
 
-/** POST /api/v1/quiz/submit — final submission with ended_by = submitted */
 export async function submitQuiz(
   payload: SubmitQuizRequest
 ): Promise<SubmitQuizResponse> {
-  const { data } = await axiosInstance.post<SubmitQuizResponse>(
-    "/api/v1/quiz/submit",
+  const { data } = await quizClient.post<SubmitQuizResponse>(
+    "/quiz/submit",
     payload
   );
   return data;
 }
 
-/** POST /api/v1/quiz/submit-timeout — finalizes session when timer hits zero */
 export async function submitQuizTimeout(
   payload: SubmitQuizRequest
 ): Promise<SubmitQuizResponse> {
-  const { data } = await axiosInstance.post<SubmitQuizResponse>(
-    "/api/v1/quiz/submit-timeout",
+  const { data } = await quizClient.post<SubmitQuizResponse>(
+    "/quiz/submit-timeout",
     payload
   );
   return data;
 }
 
-// ── Analytics ─────────────────────────────────────────────────────────────────
-
-/** GET /api/v1/analytics/me */
 export async function fetchAnalytics(): Promise<UserAnalyticsResponse> {
-  const { data } = await axiosInstance.get<UserAnalyticsResponse>(
-    "/api/v1/analytics/me"
+  const { data } = await quizClient.get<UserAnalyticsResponse>(
+    "/analytics/me"
   );
   return data;
 }
 
-/** GET /api/v1/analytics/feedback */
 export async function fetchAIFeedback(): Promise<AIFeedbackResponse> {
-  const { data } = await axiosInstance.get<AIFeedbackResponse>(
-    "/api/v1/analytics/feedback"
+  const { data } = await quizClient.get<AIFeedbackResponse>(
+    "/analytics/feedback"
   );
   return data;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Converts the frontend answers map into AnswerItem[] for the backend.
- *
- * @param questions       Array of QuestionOut from GenerateQuizResponse
- * @param answers         Record<questionIndex, optionIndex> from session state
- * @param questionTimes   Per-question elapsed times in seconds
- * @param repeatedIndices Set of question indices that were repeated
- */
 export function buildAnswerPayload(
   questions: QuestionOut[],
   answers: Record<number, number>,
@@ -154,9 +119,6 @@ export function buildAnswerPayload(
   });
 }
 
-/**
- * Builds draft answers for progress save from the current session state.
- */
 export function buildDraftAnswers(
   questions: QuestionOut[],
   answers: Record<number, number>,

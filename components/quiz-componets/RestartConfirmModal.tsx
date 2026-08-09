@@ -17,7 +17,6 @@ export default function RestartConfirmModal({
       <View className="flex-1 justify-center items-center bg-black/60 px-10">
         <View className="bg-white rounded-3xl w-full overflow-hidden shadow-2xl">
 
-          {/* ── Accent band ── */}
           <View className="bg-primary pt-7 pb-5 items-center px-6">
             <View className="w-14 h-14 rounded-full bg-white/20 justify-center items-center mb-2">
               <RotateCcw size={28} color="#fff" strokeWidth={2.2} />
@@ -28,7 +27,6 @@ export default function RestartConfirmModal({
             </Text>
           </View>
 
-          {/* ── Buttons ── */}
           <View className="px-6 pt-5 pb-6 gap-3">
             <TouchableOpacity
               className="w-full bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl"

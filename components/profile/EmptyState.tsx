@@ -1,16 +1,3 @@
-/**
- * EmptyState.tsx
- * ─────────────────────────────────────────────────────────
- * Small inline "not enough data yet" placeholder for a single Profile
- * analytics section — distinct from the full-screen ErrorState in
- * app/(tabs)/profile/index.tsx, which is for the whole analytics request
- * failing. This is for when the request succeeds but a specific section
- * (trend, growth, topics, recommendations...) has too little data to show
- * anything meaningful yet (e.g. performance_trend.trend === "insufficient_data").
- *
- * Usage:
- *   <EmptyState icon={TrendingUp} message="Complete a few more quizzes to see your trend." />
- */
 import { View, Text } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { C } from "./profileTheme";
