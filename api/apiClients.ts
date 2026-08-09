@@ -1,9 +1,8 @@
 import { create } from "axios";
 
-const DEFAULT_API_GATEWAY_URL = "http://10.0.2.2:8080";
 
 export const API_GATEWAY_URL = (
-  process.env.EXPO_PUBLIC_API_GATEWAY_URL || DEFAULT_API_GATEWAY_URL
+  process.env.EXPO_PUBLIC_API_GATEWAY_URL || ""
 ).replace(/\/$/, "");
 
 export const SERVICE_URLS = {

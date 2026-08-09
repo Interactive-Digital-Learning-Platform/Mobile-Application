@@ -19,6 +19,7 @@ export function useChat(): UseChatReturn {
   const tokenBufferRef = useRef<string>("");
   const activeAssistantIDRef = useRef<string | null>(null);
   const isSendingRef = useRef(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<MessageType[]>([]);
 
@@ -32,6 +33,10 @@ export function useChat(): UseChatReturn {
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -64,15 +69,14 @@ export function useChat(): UseChatReturn {
     setMessages(mapped);
   }, [messageHistory]);
 
-  useEffect(() => {
-    if (messages.length === 0) return;
+  const scrollToLatestMessage = useCallback(() => {
+    if (scrollTimeoutRef.current) return;
 
-    const timeout = setTimeout(() => {
-      chatRef.current?.scrollToEnd({ animated: true });
-    }, 50);
-
-    return () => clearTimeout(timeout);
-  }, [messages.length]);
+    scrollTimeoutRef.current = setTimeout(() => {
+      chatRef.current?.scrollToEnd({ animated: false });
+      scrollTimeoutRef.current = null;
+    }, 100)
+  }, [])
 
   const updateMessage = useCallback(
     (localID: string, updater: (message: MessageType) => MessageType) => {
@@ -121,7 +125,8 @@ export function useChat(): UseChatReturn {
           isLoading: true,
         },
       ]);
-
+      
+      setTimeout(scrollToLatestMessage, 0)
       setIsStreaming(true);
 
       try {
@@ -132,7 +137,7 @@ export function useChat(): UseChatReturn {
 
         if (!activeConversationID) {
           activeConversationID = await createConversation(user?.id);
-          setConversationID(activeConversationID);
+          setConversationIDSync(activeConversationID);
         }
 
         await streamMessage({
@@ -142,32 +147,20 @@ export function useChat(): UseChatReturn {
           signal: abortControllerRef.current?.signal,
           callbacks: {
             onToken: (token) => {
-              console.log("Token ", token);
               tokenBufferRef.current += token;
               const buffered = tokenBufferRef.current;
 
-              setMessages((prev) => {
-                return prev.map((msg) =>
-                  msg.localID === assistantLocalID
-                    ? { ...msg, content: buffered }
-                    : msg,
-                );
-              });
+              setMessages(
+                (prevMessages) => prevMessages.map((msg) =>
+                  msg.localID === assistantLocalID ?
+                    {
+                      ...msg,
+                      content: buffered
+                    } : msg,
+                )
+              );
 
-              setMessages((prev) => {
-                const next = prev.map((msg) =>
-                  msg.localID === assistantLocalID
-                    ? { ...msg, content: buffered }
-                    : msg,
-                );
-
-                console.log(
-                  "Updated assistant:",
-                  next.find((m) => m.localID === assistantLocalID)?.content,
-                );
-
-                return next;
-              });
+              scrollToLatestMessage();
             },
             onDone: (serverMessageID) => {
               updateMessage(assistantLocalID, (msg) => ({
@@ -206,13 +199,37 @@ export function useChat(): UseChatReturn {
         tokenBufferRef.current = "";
       }
     },
-    [user?.id, updateMessage, setConversationIDSync],
+    [user?.id, updateMessage, setConversationIDSync, scrollToLatestMessage],
   );
 
   const loadMoreHistory = useCallback(() => {
     if (!messageHistory?.has_more || !messageHistory?.next_cursor) return;
     setBeforeCursor(messageHistory?.next_cursor);
   }, [messageHistory]);
+
+  const startNewConversation = useCallback(() => {
+    abortControllerRef.current?.abort();
+    hasPendingMessagesRef.current = false;
+    isSendingRef.current = false;
+    conversationIDRef.current = null;
+    setConversationID(null);
+    setMessages([]);
+    setBeforeCursor(undefined);
+  }, []);
+
+  const openConversation = useCallback(
+    (nextConversationID: string) => {
+      if (nextConversationID === conversationIDRef.current) return;
+
+      abortControllerRef.current?.abort();
+      hasPendingMessagesRef.current = false;
+      isSendingRef.current = false;
+      setMessages([]);
+      setBeforeCursor(undefined);
+      setConversationIDSync(nextConversationID);
+    },
+    [setConversationIDSync],
+  );
 
   return {
     messages,
@@ -224,5 +241,7 @@ export function useChat(): UseChatReturn {
     chatRef,
     sendMessage,
     loadMoreHistory,
+    startNewConversation,
+    openConversation,
   };
 }

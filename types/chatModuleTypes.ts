@@ -73,6 +73,48 @@ export type StreamCallbacks = {
   onError: (error: string) => void;
 }
 
+export type ChatConversation = {
+  conversation_id: string;
+  user_id: string;
+  title: string | null;
+  filename?: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+};
+
+export type UserChatsRequest = {
+  userID: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ChatHistorySectionName = "Today" | "Last Week" | "Older";
+
+export type ChatHistoryListItem =
+  | {
+      type: "section";
+      id: string;
+      title: ChatHistorySectionName;
+    }
+  | {
+      type: "conversation";
+      id: string;
+      conversation: ChatConversation;
+    };
+
+export type ChatHistoryItemProps = {
+  conversation: ChatConversation;
+  isSelected?: boolean;
+  onPress?: (conversation: ChatConversation) => void;
+};
+
+export type AIChatSidebarProps = {
+  selectedConversationID?: string;
+  onConversationPress?: (conversation: ChatConversation) => void;
+  onNewChatPress?: () => void;
+};
+
 export type UseChatReturn = {
   messages: MessageType[];
   conversationID: string | null;
@@ -83,4 +125,6 @@ export type UseChatReturn = {
   chatRef: RefObject<FlashListRef<MessageType> | null>;
   sendMessage: (values: ChatInputValues) => Promise<void>;
   loadMoreHistory: () => void;
+  startNewConversation: () => void;
+  openConversation: (conversationID: string) => void;
 }
