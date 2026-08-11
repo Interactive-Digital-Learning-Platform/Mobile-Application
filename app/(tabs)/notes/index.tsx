@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Plus, FileText, ChevronRight, Trash2, TrendingUp, AlertTriangle, CheckCircle } from "lucide-react-native";
 import { useAuth } from "@clerk/expo";
-import { notesApi } from "@/services/api";
+import { notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import Toast from "react-native-toast-message";
 

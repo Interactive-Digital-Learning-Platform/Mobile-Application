@@ -1,15 +1,19 @@
-import aiAssistantBackendAPI from "@/providers/axios";
+import { assistantClient, SERVICE_URLS } from "@/api/apiClients";
 import {
   conversationResponseSchema,
   messageHistoryResponseSchema,
   SSEEvent,
   sseEventSchema,
 } from "@/schemas/chatSchemas";
-import { StreamCallbacks } from "@/types/chatModuleTypes";
+import {
+  ChatConversation,
+  StreamCallbacks,
+  UserChatsRequest,
+} from "@/types/chatModuleTypes";
 import EventSource from "react-native-sse";
 
 export async function createConversation(userID: string): Promise<string> {
-  const response = await aiAssistantBackendAPI.post("/conversations/", {
+  const response = await assistantClient.post("/conversations/", {
     user_id: userID,
   });
 
@@ -17,8 +21,27 @@ export async function createConversation(userID: string): Promise<string> {
   return conversation.conversation_id;
 }
 
+export async function fetchUserChats({
+  userID,
+  limit = 20,
+  offset = 0,
+}: UserChatsRequest): Promise<ChatConversation[]> {
+  const response = await assistantClient.get<ChatConversation[]>(
+    "/conversations",
+    {
+      params: {
+        user_id: userID,
+        limit,
+        offset,
+      },
+    },
+  );
+
+  return response.data;
+}
+
 export const fetchMessageHistory = async (conversationID: string) => {
-  const response = await aiAssistantBackendAPI.get(
+  const response = await assistantClient.get(
     `/conversations/${conversationID}/messages`,
   );
 
@@ -44,7 +67,7 @@ export const streamMessage = async (params: {
 
   return new Promise((resolve, reject) => {
     const es = new EventSource(
-      `${process.env.EXPO_PUBLIC_AI_ASSISTANT_SERVICE_API}/conversations/${conversationID}/messages/stream`,
+      `${SERVICE_URLS.assistant}/conversations/${conversationID}/messages/stream`,
       {
         method: "POST",
         headers: {

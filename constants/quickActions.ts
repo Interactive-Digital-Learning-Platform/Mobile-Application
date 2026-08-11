@@ -1,20 +1,30 @@
 import { QuickActionType } from "@/types/chatModuleTypes";
-import { Atom, MessageCircleQuestionMark, Route } from "lucide-react-native";
+import { Atom, Route, LibraryBig, Lightbulb, FlaskConical } from "lucide-react-native";
 
 export const quickActions: QuickActionType[] = [
   {
-    icon: Atom,
-    title: "Science concept",
-    prompt: "Help me understand this science concept",
-  },
-  {
     icon: Route,
-    title: "Step-by-step solution",
+    title: "Study Guidance",
     prompt: "Provide step-by-step solution",
   },
   {
-    icon: MessageCircleQuestionMark,
-    title: "Help me understand",
+    icon: Atom,
+    title: "Science Concepts",
+    prompt: "Help me understand this science concept",
+  },
+  {
+    icon: Lightbulb,
+    title: "Solve a Problem",
     prompt: "Help me understand something",
+  },
+  {
+    icon: LibraryBig,
+    title: "Subject Materials",
+    prompt: "Help me understand this science concept",
+  },
+  {
+    icon: FlaskConical,
+    title: "Explore Experiments",
+    prompt: "Explain this experiment and how it works",
   },
 ];

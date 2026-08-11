@@ -15,17 +15,22 @@ import {
   ChevronLeft,
   Play,
   Pause,
+  BookOpen,
   Volume2,
   Info,
+  Lightbulb,
   RotateCcw,
   CheckCircle2,
 } from "lucide-react-native";
 
-import { materialsApi } from "@/services/api";
+import {
+  getNotesResourceUrl,
+  notesAssetsClient,
+} from "@/api/apiClients";
+import { materialsApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import axios from "axios";
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://10.0.2.2:3001";
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -390,10 +395,10 @@ export default function MaterialViewer() {
         const response = await materialsApi.getMaterialByType(id, type);
         if (response.success) {
           setMaterial(response.data);
+          // If it's an audio script fallback, fetch the text
           const audioUrl: string = response.data?.audioUrl ?? "";
-          const isScriptFallback = audioUrl.endsWith(".txt");
-          if (type === "audio" && isScriptFallback) {
-            const scriptRes = await axios.get(`${API_URL}${audioUrl}`);
+          if (type === "audio" && audioUrl.endsWith(".txt")) {
+            const scriptRes = await notesAssetsClient.get(audioUrl);
             setFallbackScript(scriptRes.data);
           }
         }

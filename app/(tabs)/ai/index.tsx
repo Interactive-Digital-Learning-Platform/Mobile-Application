@@ -1,5 +1,12 @@
 import { colors } from "@/constants/colors";
-import { Paperclip, Send, TextAlignStart } from "lucide-react-native";
+import {
+  EllipsisVertical,
+  Mic,
+  Plus,
+  Send,
+  SlidersHorizontal,
+  TextAlignStart,
+} from "lucide-react-native";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -7,9 +14,20 @@ import {
   Text,
   TextInput,
   View,
+  StatusBar,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import Svg, {
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Path,
+  Stop,
+} from "react-native-svg";
 import { useUser } from "@clerk/expo";
 import { quickActions } from "@/constants/quickActions";
 import { QuickActionType } from "@/types/chatModuleTypes";
@@ -21,11 +39,30 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { useChat } from "@/hooks/use-chat";
+import { Drawer } from "react-native-drawer-layout";
+import { useState } from "react";
+import ChatHistorySidebar from "@/components/chat/ChatHistorySidebar";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-  const { messages, sendMessage, isSending, chatRef } = useChat();
+  const {
+    messages,
+    conversationID,
+    sendMessage,
+    isSending,
+    chatRef,
+    startNewConversation,
+    openConversation,
+  } = useChat();
+
+  const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [cardSize, setCardSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
 
   const { control, handleSubmit, reset, watch } = useForm<ChatInputValues>({
     resolver: zodResolver(chatInputSchema),
@@ -51,10 +88,6 @@ export default function AIChat() {
     }
 
     try {
-      console.log(
-        "AI API URL:",
-        process.env.EXPO_PUBLIC_AI_ASSISTANT_SERVICE_API
-      );
       await sendMessage(values);
     } catch (error) {
       Toast.show({
@@ -68,95 +101,234 @@ export default function AIChat() {
   const inputValue = watch("message");
   const isSendDisabled = !inputValue?.trim() || isSending;
 
-  console.log(
-    "AIChat render:",
-    messages[messages.length - 1]?.content
-  );
+  const CARD_RADIUS = 28;
+  const BORDER_WIDTH = 2.5;
+  const inset = BORDER_WIDTH / 2;
+  const cornerBorderPath = cardSize
+    ? `M ${cardSize.width / 2} ${inset} L ${CARD_RADIUS + inset} ${inset} A ${CARD_RADIUS} ${CARD_RADIUS} 0 0 0 ${inset} ${CARD_RADIUS + inset} L ${inset} ${cardSize.height / 2}`
+    : null;
 
   return (
-    <LinearGradient
-      colors={["#d8e4fa", "#ffffff"]}
-      style={{ flex: 1 }}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+    <Drawer
+      open={isDrawerOpen}
+      onOpen={() => setDrawerOpen(true)}
+      onClose={() => setDrawerOpen(false)}
+      drawerStyle={{
+        width: Math.min(width * 0.86, 320),
+        backgroundColor: "transparent",
+      }}
+      overlayStyle={{ backgroundColor: "rgba(0, 0, 0, 0.4)" }}
+      renderDrawerContent={() => (
+        <ChatHistorySidebar
+          selectedConversationID={conversationID ?? undefined}
+          onNewChatPress={() => {
+            startNewConversation();
+            setDrawerOpen(false);
+          }}
+          onConversationPress={(conversation) => {
+            openConversation(conversation.conversation_id);
+            setDrawerOpen(false);
+          }}
+        />
+      )}
     >
-      <SafeAreaView className="w-full flex-1 px-4 pt-4">
-        <KeyboardAvoidingView
-          className="w-full flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+      <>
+        <StatusBar
+          backgroundColor="transparent"
+          translucent
+          barStyle="dark-content"
+        />
+        <LinearGradient
+          colors={["#7CC7FF", "#A8DAFF", "#ffffff", "#FFFFFF"]}
+          locations={[0, 0.35, 0.7, 1]}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{ flex: 1 }}
         >
-          <View className="w-full h-auto justify-center items-start">
-            <TextAlignStart size={28} color="#323232" />
-          </View>
-
-          <FlashList
-            ref={chatRef}
-            data={messages}
-            keyExtractor={(item) => item.localID}
-            renderItem={({ item }) => <Message key={item.id} message={item} />}
-            className="w-full flex-1"
-            contentContainerClassName="w-full h-auto flex-col justify-start"
-            ListHeaderComponent={
-              messages.length === 0 ? (
-                <View className="w-full h-auto mb-12">
-                  <View className="w-full h-auto mt-5 justify-center items-center">
-                    <Text className="w-3/4 text-4xl font-amedium text-center text-[#323232]">
-                      Hello{" "}
-                      {isLoaded && user?.username
-                        ? user?.username?.charAt(0).toUpperCase() +
-                          user?.username?.slice(1)
-                        : "..."}
-                      , How can I help you...
-                    </Text>
-                  </View>
-                  <View className="w-full mt-8 flex-col justify-start items-center gap-4">
-                    {quickActions.map((action: QuickActionType, index) => (
-                      <QuickAction
-                        key={index}
-                        icon={action.icon}
-                        title={action.title}
-                        prompt={action.prompt}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ) : null
-            }
-            ListHeaderComponentStyle={{ width: "100%" }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          />
-          <View className="w-full h-16 flex-row justify-center items-center gap-4 mb-4">
-            <View className="flex-1 h-full px-4 rounded-full flex-row justify-center items-center gap-4 bg-white border border-[#E3E1E1]">
-              <Paperclip color={"#979797"} />
-              <Controller
-                control={control}
-                name="message"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    className="text-lg font-amedium w-full flex-1 h-10"
-                    placeholder="Ask anything..."
-                    placeholderTextColor="#979797"
-                    style={{ paddingVertical: 0 }}
-                    textAlignVertical="center"
-                    multiline
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    value={value}
-                  />
-                )}
-              />
-            </View>
-            <Pressable
-              onPress={onSubmit}
-              disabled={isSendDisabled}
-              className="w-[10%] h-auto justify-center items-center"
+          <SafeAreaView edges={["left", "right"]} className="w-full flex-1 px-4">
+            <KeyboardAvoidingView
+              className="w-full flex-1"
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
-              <Send size={25} color={colors.primaryBlack} />
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </LinearGradient>
+              <View
+                className="w-full h-auto flex-row justify-between items-center mb-4"
+                style={{ paddingTop: insets.top + 12 }}
+              >
+                <TextAlignStart
+                  size={28}
+                  color="#ffffff"
+                  onPress={() => setDrawerOpen((prev) => !prev)}
+                />
+                <Text className="text-white font-amedium text-2xl">Kit AI</Text>
+                <View className="h-auto flex-row items-right rounded-full -mr-2">
+                  <EllipsisVertical color="#ffffff" size={28} />
+                </View>
+              </View>
+
+              <FlashList
+                ref={chatRef}
+                data={messages}
+                keyExtractor={(item) => item.localID}
+                renderItem={({ item }) => (
+                  <Message key={item.id} message={item} />
+                )}
+                className="w-full flex-1"
+                contentContainerClassName="w-full h-auto flex-col justify-start"
+                ListHeaderComponent={
+                  messages.length === 0 ? (
+                    <View className="w-full h-auto mb-12 mt-8">
+                      <View className="w-full h-auto justify-center items-center">
+                        <Text className="w-3/4 text-4xl font-amedium text-center text-[#ffffff]">
+                          Hi,{" "}
+                          {isLoaded && user?.username
+                            ? user?.username?.charAt(0).toUpperCase() +
+                              user?.username?.slice(1)
+                            : "..."}
+                          ! ✦
+                        </Text>
+                        <Text className="w-full text-4xl font-amedium text-center text-[#ffffff]">
+                          How can I assist you?
+                        </Text>
+                        <Text className="text-xl font-aregular text-[#ffffff] mt-1">
+                          Your smart learning assistant is ready
+                        </Text>
+                      </View>
+                      <View className="w-full mt-8 flex-row flex-wrap justify-center gap-x-2 items-center gap-y-4">
+                        {quickActions.map((action: QuickActionType, index) => (
+                          <QuickAction
+                            key={index}
+                            icon={action.icon}
+                            title={action.title}
+                            prompt={action.prompt}
+                          />
+                        ))}
+                      </View>
+                    </View>
+                  ) : null
+                }
+                ListHeaderComponentStyle={{ width: "100%" }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              />
+              <View style={{ paddingBottom: insets.bottom + 12 }}>
+                <View
+                  onLayout={(e) =>
+                    setCardSize({
+                      width: e.nativeEvent.layout.width,
+                      height: e.nativeEvent.layout.height,
+                    })
+                  }
+                  style={{
+                    borderRadius: CARD_RADIUS,
+                    backgroundColor: "#F2F2F2",
+                    borderWidth: 1.5,
+                    borderColor: "#FFFFFF",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 14,
+                    elevation: 6,
+                  }}
+                >
+                  <View
+                    className="w-full overflow-hidden"
+                    style={{ borderRadius: CARD_RADIUS }}
+                  >
+                    <Controller
+                      control={control}
+                      name="message"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          className="text-lg font-amedium w-full px-4 pt-4 pb-2"
+                          placeholder="Ask anything..."
+                          placeholderTextColor="#979797"
+                          textAlignVertical="center"
+                          multiline
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      )}
+                    />
+                    <View className="w-full flex-row justify-between items-center px-3 pb-4 pt-4">
+                      <View className="flex-row items-center gap-3">
+                        <Pressable className="w-9 h-9 rounded-full bg-white justify-center items-center">
+                          <Plus size={20} color="#6B7280" />
+                        </Pressable>
+                        <Pressable className="w-9 h-9 rounded-full bg-white justify-center items-center">
+                          <SlidersHorizontal size={18} color="#6B7280" />
+                        </Pressable>
+                      </View>
+                      <View className="flex-row items-center gap-3">
+                        <Pressable className="w-9 h-9 justify-center items-center">
+                          <Mic size={20} color="#6B7280" />
+                        </Pressable>
+                        <Pressable
+                          onPress={onSubmit}
+                          disabled={isSendDisabled}
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 20,
+                            backgroundColor: colors.primary,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Send size={18} color="#ffffff" />
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                  {cornerBorderPath && (
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: cardSize!.width,
+                        height: cardSize!.height,
+                      }}
+                    >
+                      <Svg width={cardSize!.width} height={cardSize!.height}>
+                        <Defs>
+                          <SvgLinearGradient
+                            id="inputCornerBorder"
+                            gradientUnits="userSpaceOnUse"
+                            x1={0}
+                            y1={0}
+                            x2={90}
+                            y2={90}
+                          >
+                            <Stop
+                              offset="0"
+                              stopColor={colors.primary}
+                              stopOpacity={1}
+                            />
+                            <Stop
+                              offset="1"
+                              stopColor={colors.primary}
+                              stopOpacity={0}
+                            />
+                          </SvgLinearGradient>
+                        </Defs>
+                        <Path
+                          d={cornerBorderPath}
+                          stroke="url(#inputCornerBorder)"
+                          strokeWidth={BORDER_WIDTH}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </SafeAreaView>
+        </LinearGradient>
+      </>
+    </Drawer>
   );
 }

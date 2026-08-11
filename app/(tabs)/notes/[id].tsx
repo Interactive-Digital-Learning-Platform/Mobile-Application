@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   Brain,
   BookOpen,
+  Clock,
   FileText,
   Layers,
   AlertCircle,
@@ -28,7 +29,7 @@ import {
   CheckCircle2,
   Sparkles,
 } from "lucide-react-native";
-import { notesApi, materialsApi } from "@/services/api";
+import { materialsApi, notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 

@@ -1,4 +1,3 @@
-import "expo/fetch";
 import QueryClientProviderCom from "@/providers/QueryClientProviderCom";
 import { SplashScreen, Stack } from "expo-router";
 import "react-native-reanimated";
@@ -40,14 +39,14 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <QueryClientProviderCom>
-        <ClerkProviderCom>
+         <ClerkProviderCom> 
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="index" options={{ headerShown: false }} />
           </Stack>
           <Toast />
-        </ClerkProviderCom>
+         </ClerkProviderCom> 
       </QueryClientProviderCom>
     </KeyboardProvider>
   );
