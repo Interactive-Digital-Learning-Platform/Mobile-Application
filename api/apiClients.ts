@@ -30,23 +30,11 @@ export const notesAssetsClient = create({
   timeout: 10000,
 });
 
-// The gateway doesn't proxy the quiz service yet, so quizClient talks to it
-// directly via EXPO_PUBLIC_BACKEND_URL whenever that's set — checking
-// EXPO_PUBLIC_API_GATEWAY_URL instead would be wrong even though it's
-// usually also set (for the other clients above), since on Android
-// "127.0.0.1" in that gateway URL means the emulator itself, where nothing
-// is listening, causing every quiz request to fail silently. Once the
-// gateway actually proxies quiz traffic, drop EXPO_PUBLIC_BACKEND_URL from
-// .env and this will switch over on its own.
-const DEFAULT_QUIZ_SERVICE_URL = "http://localhost:8000";
-const QUIZ_DIRECT_URL = (
-  process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_QUIZ_SERVICE_URL
-).replace(/\/$/, "");
-
+// Proxied through the gateway at /api/quiz, same as the other services —
+// nginx strips that prefix and forwards the rest to the backend's own
+// /api/v1/* routes (see Deployment-Infrastructure/nginx.conf).
 export const quizClient = create({
-  baseURL: process.env.EXPO_PUBLIC_BACKEND_URL
-    ? `${QUIZ_DIRECT_URL}/api/v1`
-    : `${SERVICE_URLS.quiz}/api/v1`,
+  baseURL: `${SERVICE_URLS.quiz}/api/v1`,
   headers: {
     "Content-Type": "application/json",
   },
