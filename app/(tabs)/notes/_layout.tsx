@@ -6,6 +6,7 @@ export default function NotesLayout() {
       <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="[id]" options={{ headerShown: false }} />
       <Stack.Screen name="upload" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="material/[type]" options={{ headerShown: false }} />
     </Stack>
   );
 }
