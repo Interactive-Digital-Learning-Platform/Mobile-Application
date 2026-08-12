@@ -243,47 +243,27 @@ export default function Profile() {
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
-      <View className="bg-white">
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />
-        }
-        className="bg-primary"
-      >
-        <View className="bg-white">
-
-        <View className="bg-primary-500 px-5 pt-5 pb-11 rounded-b-[30px] overflow-hidden">
-
-          <View className="flex-row items-center gap-3.5">
-            <View className="w-16 h-16 rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
-              <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-white text-2xl font-bold">
-                Hi {displayName}
-              </Text>
-              {joinDate && (
-                <Text className="text-white/65 text-[11px] mt-0.5">
-                  Member since {joinDate}
-                </Text>
-              )}
-            </View>
-            {analytics && (
-              <View className="bg-white/[0.18] rounded-2xl px-3.5 py-2.5 items-center border border-white/25">
-                <Text className="text-white font-black text-lg leading-[22px]">
-                  {analytics.total_sessions}
-                </Text>
-                <Text className="text-white/65 text-[9px] font-bold uppercase tracking-wider">
-                  Sessions
-                </Text>
-              </View>
-            )}
-          </View>
+      <View className="mt-5 px-[30px] bg-primary flex flex-row z-20 h-[160px] rounded-b-[40px] w-[100%] items-center justify-between absolute">
+        <View >
+          <Text className="text-white text-2xl  font-bold">
+            Hi {displayName}
+          </Text>
+          {joinDate && (
+            <Text className="text-white font-normal">
+              Member since {joinDate}
+            </Text>
+          )}
         </View>
+        <View className=" h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
+          <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+        </View>
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />} className="bg-white">
+      
+        <View className="bg-white mt-[120px] ">
 
-        <View className="-mt-[22px]">
-
+        <View >
           {analyticsLoading ? (
             <StatsSkeleton />
           ) : analyticsError ? (
@@ -292,7 +272,9 @@ export default function Profile() {
               onRetry={refetchAnalytics}
             />
           ) : analytics ? (
-            <Animated.View entering={FadeIn.duration(300)} className="px-4">
+              <Animated.View entering={FadeIn.duration(300)} className="px-4">
+                      
+              
 
               <View className="flex-row gap-2.5 mb-3">
                 <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 items-center justify-center py-4.5" style={{ flex: 1.15 }}>
@@ -460,7 +442,7 @@ export default function Profile() {
         </View>
         </View>
       </ScrollView>
-    </View>
+    
     </SafeAreaView>
   );
 }

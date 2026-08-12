@@ -30,21 +30,23 @@ export const notesAssetsClient = create({
   timeout: 10000,
 });
 
-// The gateway doesn't proxy the quiz service yet, so until
-// EXPO_PUBLIC_API_GATEWAY_URL is actually set, quizClient talks to it
-// directly via EXPO_PUBLIC_BACKEND_URL instead (the gateway default above
-// only resolves on Android emulators, and nothing's listening on it
-// anyway). Once the gateway is live, just set that env var — no code
-// change needed here.
+// The gateway doesn't proxy the quiz service yet, so quizClient talks to it
+// directly via EXPO_PUBLIC_BACKEND_URL whenever that's set — checking
+// EXPO_PUBLIC_API_GATEWAY_URL instead would be wrong even though it's
+// usually also set (for the other clients above), since on Android
+// "127.0.0.1" in that gateway URL means the emulator itself, where nothing
+// is listening, causing every quiz request to fail silently. Once the
+// gateway actually proxies quiz traffic, drop EXPO_PUBLIC_BACKEND_URL from
+// .env and this will switch over on its own.
 const DEFAULT_QUIZ_SERVICE_URL = "http://localhost:8000";
 const QUIZ_DIRECT_URL = (
   process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_QUIZ_SERVICE_URL
 ).replace(/\/$/, "");
 
 export const quizClient = create({
-  baseURL: process.env.EXPO_PUBLIC_API_GATEWAY_URL
-    ? `${SERVICE_URLS.quiz}/api/v1`
-    : `${QUIZ_DIRECT_URL}/api/v1`,
+  baseURL: process.env.EXPO_PUBLIC_BACKEND_URL
+    ? `${QUIZ_DIRECT_URL}/api/v1`
+    : `${SERVICE_URLS.quiz}/api/v1`,
   headers: {
     "Content-Type": "application/json",
   },
@@ -71,7 +73,30 @@ export function setClerkTokenGetter(fn: () => Promise<string | null>) {
   _getClerkToken = fn;
 }
 
+// Resolved once Clerk finishes its initial auth-state check (`isLoaded`).
+// Without this, a query that fires the instant a screen mounts can race
+// ahead of Clerk restoring the session — harmless on iOS Simulator where
+// that check is near-instant, but Android's slower cold start let the very
+// first request go out with no token at all, getting a real 401 back.
+//
+// Capped at 3s rather than awaited unconditionally: if `isLoaded` never
+// fires for some reason, every request should still go out (worst case,
+// same as before this existed) instead of hanging forever.
+let _resolveClerkReady: (() => void) | null = null;
+const _clerkReady = new Promise<void>((resolve) => {
+  _resolveClerkReady = resolve;
+});
+const _clerkReadyOrTimeout = Promise.race([
+  _clerkReady,
+  new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+]);
+
+export function markClerkReady() {
+  _resolveClerkReady?.();
+}
+
 quizClient.interceptors.request.use(async (config) => {
+  await _clerkReadyOrTimeout;
   if (_getClerkToken) {
     try {
       const token = await _getClerkToken();

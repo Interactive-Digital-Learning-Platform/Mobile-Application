@@ -376,7 +376,7 @@ export default function QuizSession() {
 
   const navigateToResults = (timedOut: boolean, data?: unknown) => {
     router.push({
-      pathname: "/(tabs)/quiz/quiz-results",
+      pathname: "/(main)/quiz/quiz-results",
       params: {
         subject,
         difficulty: displayDifficulty,

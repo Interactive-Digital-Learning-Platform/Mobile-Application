@@ -194,7 +194,7 @@ export default function QuizResultsScreen() {
   const handleRestart = () => {
     setShowRestart(false);
     router.replace({
-      pathname: "/(tabs)/quiz/quiz-session",
+      pathname: "/(main)/quiz/quiz-session",
       params: {
         subject, difficulty, questionCount, timer: timerMinutes,
         resumeSessionId: sessionId,

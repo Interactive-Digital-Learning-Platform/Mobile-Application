@@ -166,7 +166,7 @@ export default function PracticeList() {
     const uniqueExcluded = [...new Set(seenIds)];
 
     router.push({
-      pathname: "/(tabs)/quiz/quiz-session",
+      pathname: "/(main)/quiz/quiz-session",
       params: {
         subject:       config.subject,
         questionCount: String(config.questions),

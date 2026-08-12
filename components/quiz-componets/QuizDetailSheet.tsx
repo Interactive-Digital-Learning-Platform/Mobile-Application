@@ -168,7 +168,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
               onClose();
               onAction();
               router.push({
-                pathname: "/(tabs)/quiz/quiz-session",
+                pathname: "/(main)/quiz/quiz-session",
                 params: {
                   subject:          item.subject,
                   difficulty:       item.difficulty.toLowerCase(),
