@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { useState } from "react";
 import { HelpCircle, Trash2, type LucideIcon } from "lucide-react-native";
-import { SUBJECT_ICONS, type Difficulty } from "@/constants/quizStyles";
+import { ICON_COLORS, SUBJECT_ICONS, type Difficulty } from "@/constants/quizStyles";
 import QuizDetailSheet from "@/components/quiz-componets/QuizDetailSheet";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import { useDeleteQuizSessionMutation } from "@/hooks/use-quiz";
@@ -84,7 +84,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
         <View className="flex-row items-start gap-3">
           <View className="w-11 h-11 rounded-xl bg-slate-50 justify-center items-center mt-0.5">
-            <Icon size={20} color="#64748b" strokeWidth={1.8} />
+            <Icon size={20} color={ICON_COLORS.slate500} strokeWidth={1.8} />
           </View>
 
           <View className="flex-1">
@@ -105,8 +105,8 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
             onPress={handleDelete}
           >
             {isDeleting
-              ? <ActivityIndicator size="small" color="#ef4444" />
-              : <Trash2 size={15} color="#ef4444" strokeWidth={2} />}
+              ? <ActivityIndicator size="small" color={ICON_COLORS.rose500} />
+              : <Trash2 size={15} color={ICON_COLORS.rose500} strokeWidth={2} />}
           </TouchableOpacity>
         </View>
 

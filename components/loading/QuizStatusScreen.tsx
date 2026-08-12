@@ -25,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 import type { LucideIcon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -121,12 +122,12 @@ export default function QuizStatusScreen({
   const { icon: StepIcon, text } = steps[stepIndex];
 
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1 }} className="bg-primary">
+    <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
       <LinearGradient
-        colors={["#FC6E20", "#FF8F30"]}
+        colors={[ICON_COLORS.primary500, "#FF8F30"]}
         style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 32, paddingHorizontal: 32 }}
       >
-        <View style={{ width: RING_SIZE, height: RING_SIZE, justifyContent: "center", alignItems: "center" }}>
+        <View className="items-center justify-center" style={{ width: RING_SIZE, height: RING_SIZE }}>
           <Svg width={RING_SIZE} height={RING_SIZE} style={{ position: "absolute" }}>
             <Circle
               cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
@@ -134,7 +135,7 @@ export default function QuizStatusScreen({
             />
             <AnimatedCircle
               cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
-              stroke="#ffffff" strokeWidth={RING_STROKE} fill="transparent"
+              stroke={ICON_COLORS.white} strokeWidth={RING_STROKE} fill="transparent"
               strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
               strokeLinecap="round"
               animatedProps={ringProps}
@@ -146,12 +147,12 @@ export default function QuizStatusScreen({
             style={pulseStyle}
             className="w-[100px] h-[100px] rounded-full bg-white/20 justify-center items-center border-2 border-white/40"
           >
-            <StepIcon size={30} color="#fff" strokeWidth={1.8} />
+            <StepIcon size={30} color={ICON_COLORS.white} strokeWidth={1.8} />
             <Text className="text-white text-base font-black mt-1">{percent}%</Text>
           </Animated.View>
         </View>
 
-        <View style={{ alignItems: "center" }}>
+        <View className="items-center">
           <Text className="text-white text-2xl font-black text-center">
             {title}
           </Text>
@@ -171,16 +172,11 @@ export default function QuizStatusScreen({
           </Text>
         </Animated.View>
 
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View className="flex-row gap-2">
           {steps.map((_, i) => (
             <View
               key={i}
-              style={{
-                width: i === stepIndex ? 24 : 8,
-                height: 8,
-                borderRadius: 99,
-                backgroundColor: i === stepIndex ? "#fff" : "rgba(255,255,255,0.4)",
-              }}
+              className={`h-2 rounded-full ${i === stepIndex ? "w-6 bg-white" : "w-2 bg-white/40"}`}
             />
           ))}
         </View>

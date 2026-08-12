@@ -1,5 +1,6 @@
 import { Modal, View, Text, TouchableOpacity } from "react-native";
 import { RotateCcw, X } from "lucide-react-native";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface RestartConfirmModalProps {
   visible: boolean;
@@ -19,7 +20,7 @@ export default function RestartConfirmModal({
 
           <View className="bg-primary pt-7 pb-5 items-center px-6">
             <View className="w-14 h-14 rounded-full bg-white/20 justify-center items-center mb-2">
-              <RotateCcw size={28} color="#fff" strokeWidth={2.2} />
+              <RotateCcw size={28} color={ICON_COLORS.white} strokeWidth={2.2} />
             </View>
             <Text className="text-white text-lg font-black">Restart Quiz?</Text>
             <Text className="text-amber-100 text-xs text-center mt-1">
@@ -33,7 +34,7 @@ export default function RestartConfirmModal({
               activeOpacity={0.85}
               onPress={onConfirm}
             >
-              <RotateCcw size={18} color="#fff" strokeWidth={2} />
+              <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2} />
               <Text className="text-white font-black text-base">Yes, Restart</Text>
             </TouchableOpacity>
 
@@ -42,7 +43,7 @@ export default function RestartConfirmModal({
               activeOpacity={0.85}
               onPress={onCancel}
             >
-              <X size={18} color="#64748b" strokeWidth={2} />
+              <X size={18} color={ICON_COLORS.slate500} strokeWidth={2} />
               <Text className="text-slate-600 font-black text-base">Cancel</Text>
             </TouchableOpacity>
           </View>

@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import { Sprout, Flame, CalendarCheck2, Award } from "lucide-react-native";
 import type { GrowthAnalytics } from "@/types/quizModuleTypes";
-import { C, profileStyles as styles } from "./profileTheme";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import SectionHeader from "./SectionHeader";
 import StatTile from "./StatTile";
 import EmptyState from "./EmptyState";
@@ -10,13 +10,13 @@ interface GrowthSectionProps {
   growth?: GrowthAnalytics;
 }
 
-const GROWTH_LEVEL_META: Record<string, { color: string; bg: string; label: string }> = {
-  excellent: { color: "#16A34A", bg: "#DCFCE7", label: "Excellent Growth" },
-  strong: { color: "#16A34A", bg: "#DCFCE7", label: "Strong Growth" },
-  steady: { color: C.p600, bg: C.p100, label: "Steady Growth" },
-  moderate: { color: C.p600, bg: C.p100, label: "Moderate Growth" },
-  slow: { color: "#D97706", bg: "#FEF3C7", label: "Slow Growth" },
-  stalled: { color: "#DC2626", bg: "#FFE4E6", label: "Stalled Growth" },
+const GROWTH_LEVEL_META: Record<string, { textClass: string; bgClass: string; label: string }> = {
+  excellent: { textClass: "text-emerald-600", bgClass: "bg-emerald-100", label: "Excellent Growth" },
+  strong:    { textClass: "text-emerald-600", bgClass: "bg-emerald-100", label: "Strong Growth" },
+  steady:    { textClass: "text-primary-600", bgClass: "bg-primary-100", label: "Steady Growth" },
+  moderate:  { textClass: "text-primary-600", bgClass: "bg-primary-100", label: "Moderate Growth" },
+  slow:      { textClass: "text-amber-600",   bgClass: "bg-amber-100",   label: "Slow Growth" },
+  stalled:   { textClass: "text-rose-600",    bgClass: "bg-rose-100",    label: "Stalled Growth" },
 };
 
 function isPresent(value: number | null | undefined): value is number {
@@ -38,51 +38,46 @@ export default function GrowthSection({ growth }: GrowthSectionProps) {
   const levelMeta = growth ? GROWTH_LEVEL_META[growth.growth_level] : undefined;
 
   return (
-    <View style={[styles.card, { marginBottom: 12 }]}>
+    <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
       <SectionHeader icon={Sprout} label="Growth" />
 
       {hasAnyData ? (
-        <View style={{ gap: 10 }}>
+        <View className="gap-2.5">
           {levelMeta && (
-            <View
-              style={{
-                alignSelf: "flex-start", backgroundColor: levelMeta.bg,
-                borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 2,
-              }}
-            >
-              <Text style={{ color: levelMeta.color, fontWeight: "800", fontSize: 12 }}>
+            <View className={`self-start rounded-full px-3 py-1.5 mb-0.5 ${levelMeta.bgClass}`}>
+              <Text className={`font-extrabold text-xs ${levelMeta.textClass}`}>
                 {levelMeta.label}
               </Text>
             </View>
           )}
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View className="flex-row gap-2.5">
             <StatTile
               icon={Flame}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Effort"
               value={formatScore(growth?.effort_score)}
             />
             <StatTile
               icon={CalendarCheck2}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Consistency"
               value={formatScore(growth?.consistency_score)}
             />
           </View>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View className="flex-row gap-2.5">
             <StatTile
               icon={Sprout}
-              iconColor="#16A34A"
-              iconBg="#DCFCE7"
+              iconColor={ICON_COLORS.emerald600}
+              iconBgClass="bg-emerald-100"
               label="Growth"
               value={formatScore(growth?.growth_score)}
             />
             <StatTile
               icon={Award}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Mastery"
               value={formatScore(growth?.mastery_score)}
             />

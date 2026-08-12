@@ -1,6 +1,7 @@
 import { Modal, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import Animated, { AnimatedStyle } from "react-native-reanimated";
 import { Clock, BarChart2, RotateCcw } from "lucide-react-native";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import { ViewStyle } from "react-native";
 
 interface TimesUpModalProps {
@@ -30,7 +31,7 @@ export default function TimesUpModel({
           className="bg-white rounded-3xl p-8 w-full items-center shadow-2xl"
         >
           <View className="w-16 h-16 rounded-full bg-slate-100 justify-center items-center mb-4">
-            <Clock size={30} color="#FC6E20" strokeWidth={2} />
+            <Clock size={30} color={ICON_COLORS.primary500} strokeWidth={2} />
           </View>
           <Text className="text-2xl font-black text-slate-800 mb-1">Time's Up!</Text>
           <Text className="text-sm text-slate-500 text-center mb-6">
@@ -44,8 +45,8 @@ export default function TimesUpModel({
             onPress={onShowResults}
           >
             {isSubmitting
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <BarChart2 size={18} color="#fff" strokeWidth={2} />}
+              ? <ActivityIndicator size="small" color={ICON_COLORS.white} />
+              : <BarChart2 size={18} color={ICON_COLORS.white} strokeWidth={2} />}
             <Text className="text-white font-black text-base">
               {isSubmitting ? "Saving…" : "Show Results"}
             </Text>
@@ -57,7 +58,7 @@ export default function TimesUpModel({
             disabled={isSubmitting}
             onPress={restart}
           >
-            <RotateCcw size={18} color="#64748b" strokeWidth={2} />
+            <RotateCcw size={18} color={ICON_COLORS.slate500} strokeWidth={2} />
             <Text className="text-slate-600 font-black text-base">Restart Quiz</Text>
           </TouchableOpacity>
         </Animated.View>

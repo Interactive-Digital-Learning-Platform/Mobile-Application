@@ -80,7 +80,7 @@ function MatchCard({ item }: { item: MatchRecord }) {
         <TouchableOpacity
           className="bg-slate-800 px-4 py-2 rounded-xl"
           activeOpacity={0.8}
-          onPress={() => router.push(`/(tabs)/quiz/${item.id}` as any)}
+          onPress={() => router.push(`/(main)/quiz/${item.id}` as any)}
         >
           <Text className="text-white text-xs font-bold">Details</Text>
         </TouchableOpacity>

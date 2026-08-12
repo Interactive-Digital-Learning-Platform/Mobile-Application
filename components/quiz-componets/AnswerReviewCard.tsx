@@ -1,6 +1,7 @@
 import { View, Text } from "react-native";
 import { CheckCircle2, XCircle } from "lucide-react-native";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface QuestionLike {
   question: string;
@@ -42,7 +43,7 @@ export default function AnswerReviewCard({
   const StatusIcon = isSkipped || !hasCorrect
     ? null
     : isCorrect ? CheckCircle2 : XCircle;
-  const iconColor = isCorrect ? "#10B981" : "#EF4444";
+  const iconColor = isCorrect ? ICON_COLORS.emerald500 : ICON_COLORS.rose500;
 
   return (
     <View className="rounded-2xl bg-slate-100 overflow-hidden mb-3">
@@ -118,10 +119,10 @@ export default function AnswerReviewCard({
                 {opt}
               </Text>
               {isCorrectOpt && (
-                <CheckCircle2 size={14} color="#10B981" strokeWidth={2.5} />
+                <CheckCircle2 size={14} color={ICON_COLORS.emerald500} strokeWidth={2.5} />
               )}
               {isWrongPick && (
-                <XCircle size={14} color="#EF4444" strokeWidth={2.5} />
+                <XCircle size={14} color={ICON_COLORS.rose500} strokeWidth={2.5} />
               )}
             </View>
           );

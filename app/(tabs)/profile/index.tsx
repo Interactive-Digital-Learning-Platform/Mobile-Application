@@ -24,6 +24,7 @@ import {
   Heart,
 } from "lucide-react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useUser } from "@clerk/expo";
 import {
   useUserMeQuery,
   useAnalyticsMeQuery,
@@ -34,14 +35,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import Skeleton from "@/components/Skeleton";
 import { filterTestSubjects, filterTestSubjectNames } from "@/constants/quizHelpers";
-import { C, profileStyles as styles } from "@/components/profile/profileTheme";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import StatTile from "@/components/profile/StatTile";
+import SectionHeader from "@/components/profile/SectionHeader";
 import PerformanceSummarySection from "@/components/profile/PerformanceSummarySection";
 import ProgressTrendSection from "@/components/profile/ProgressTrendSection";
 import TopicPerformanceSection from "@/components/profile/TopicPerformanceSection";
 import GrowthSection from "@/components/profile/GrowthSection";
 import RecommendationsSection from "@/components/profile/RecommendationsSection";
 import DifficultyProgressSection from "@/components/profile/DifficultyProgressSection";
+
+const CARD_CLASS = "bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3";
 
 function AccuracyRing({ accuracy }: { accuracy: number }) {
   const SIZE = 114;
@@ -54,25 +58,25 @@ function AccuracyRing({ accuracy }: { accuracy: number }) {
   const cy = SIZE / 2;
 
   return (
-    <View style={{ alignItems: "center", justifyContent: "center" }}>
+    <View className="items-center justify-center">
       <Svg width={SIZE} height={SIZE} style={{ position: "absolute" }}>
         <Circle
           cx={cx} cy={cy} r={R}
-          stroke={C.p100} strokeWidth={SW} fill="transparent"
+          stroke={ICON_COLORS.primary100} strokeWidth={SW} fill="transparent"
         />
         <Circle
           cx={cx} cy={cy} r={R}
-          stroke={C.p500} strokeWidth={SW} fill="transparent"
+          stroke={ICON_COLORS.primary500} strokeWidth={SW} fill="transparent"
           strokeDasharray={`${filled} ${CIRC - filled}`}
           strokeLinecap="round"
           transform={`rotate(-90, ${cx}, ${cy})`}
         />
       </Svg>
-      <View style={{ width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ color: C.p700, fontSize: 22, fontWeight: "900", lineHeight: 26 }}>
+      <View className="items-center justify-center" style={{ width: SIZE, height: SIZE }}>
+        <Text className="text-primary-700 text-[22px] font-black leading-[26px]">
           {Math.round(pct)}%
         </Text>
-        <Text style={{ color: C.p400, fontSize: 8, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8 }}>
+        <Text className="text-primary-400 text-[8px] font-bold uppercase tracking-widest">
           Accuracy
         </Text>
       </View>
@@ -88,40 +92,35 @@ function SubjectBarChart({
   if (!subjects.length) return null;
 
   return (
-    <View style={[styles.card, { marginBottom: 12 }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 14 }}>
-        <View style={[styles.iconBadge, { backgroundColor: C.p100 }]}>
-          <BarChart2 size={14} color={C.p500} strokeWidth={2} />
-        </View>
-        <Text style={styles.sectionLabel}>Subject Accuracy & Difficulty</Text>
-      </View>
+    <View className={CARD_CLASS}>
+      <SectionHeader icon={BarChart2} label="Subject Accuracy & Difficulty" />
 
-      <View style={{ gap: 12 }}>
+      <View className="gap-3">
         {subjects.map((s) => {
           const pct = Math.min(Math.max(s.accuracy, 0), 100);
           const isStrong = pct >= 70;
 
           return (
-            <View key={s.subject} style={{ gap: 4 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View key={s.subject} className="gap-1">
+              <View className="flex-row items-center justify-between">
                 <Text
-                  style={{ flex: 1, fontSize: 11, fontWeight: "600", color: "#64748b" }}
+                  className="flex-1 text-[11px] font-semibold text-slate-500"
                   numberOfLines={1}
                 >
                   {s.subject}
                 </Text>
                 <DifficultyBadge difficulty={s.current_difficulty} size="xs" showDot={false} />
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ flex: 1, height: 14, backgroundColor: C.p50, borderRadius: 7, overflow: "hidden" }}>
-                  <View style={{
-                    width: `${pct}%`,
-                    height: "100%",
-                    backgroundColor: isStrong ? C.p500 : C.p300,
-                    borderRadius: 7,
-                  }} />
+              <View className="flex-row items-center gap-2">
+                <View className="flex-1 h-3.5 bg-primary-50 rounded-[7px] overflow-hidden">
+                  <View
+                    className={`h-full rounded-[7px] ${isStrong ? "bg-primary-500" : "bg-primary-300"}`}
+                    style={{ width: `${pct}%` }}
+                  />
                 </View>
-                <Text style={{ width: 36, fontSize: 11, fontWeight: "800", textAlign: "right", color: isStrong ? C.p600 : C.p400 }}>
+                <Text
+                  className={`w-9 text-[11px] font-extrabold text-right ${isStrong ? "text-primary-600" : "text-primary-400"}`}
+                >
                   {Math.round(pct)}%
                 </Text>
               </View>
@@ -135,19 +134,19 @@ function SubjectBarChart({
 
 function StatsSkeleton() {
   return (
-    <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 12 }}>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Skeleton width="100%" height={140} borderRadius={18} color={C.p50} style={{ flex: 1.2 }} />
-        <View style={{ flex: 1, gap: 10 }}>
-          <Skeleton width="100%" height="100%" borderRadius={18} color={C.p50} style={{ flex: 1 }} />
-          <Skeleton width="100%" height="100%" borderRadius={18} color={C.p50} style={{ flex: 1 }} />
+    <View className="px-4 mt-4 gap-3">
+      <View className="flex-row gap-2.5">
+        <Skeleton width="100%" height={140} borderRadius={18} color={ICON_COLORS.primary50} style={{ flex: 1.2 }} />
+        <View className="flex-1 gap-2.5">
+          <Skeleton width="100%" height="100%" borderRadius={18} color={ICON_COLORS.primary50} style={{ flex: 1 }} />
+          <Skeleton width="100%" height="100%" borderRadius={18} color={ICON_COLORS.primary50} style={{ flex: 1 }} />
         </View>
       </View>
-      <View style={{ backgroundColor: "white", borderRadius: 18, padding: 14, gap: 12 }}>
+      <View className="bg-white rounded-[18px] p-3.5 gap-3">
         <Skeleton width={140} height={14} />
         {[0, 1, 2].map((i) => (
-          <View key={i} style={{ gap: 4 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <View key={i} className="gap-1">
+            <View className="flex-row justify-between">
               <Skeleton width={90} height={11} />
               <Skeleton width={40} height={16} borderRadius={999} />
             </View>
@@ -155,33 +154,33 @@ function StatsSkeleton() {
           </View>
         ))}
       </View>
-      <Skeleton width="100%" height={72} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={160} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={130} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={180} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={160} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={180} borderRadius={18} color={C.p50} />
-      <Skeleton width="100%" height={130} borderRadius={18} color={C.p50} />
+      <Skeleton width="100%" height={72} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={160} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={130} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={180} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={160} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={180} borderRadius={18} color={ICON_COLORS.primary50} />
+      <Skeleton width="100%" height={130} borderRadius={18} color={ICON_COLORS.primary50} />
     </View>
   );
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, paddingVertical: 48 }}>
-      <View style={[styles.iconBadge, { backgroundColor: "#FEE2E2", width: 56, height: 56, borderRadius: 28, marginBottom: 16 }]}>
-        <AlertCircle size={24} color="#EF4444" strokeWidth={2} />
+    <View className="flex-1 items-center justify-center px-8 py-12">
+      <View className="bg-rose-100 w-14 h-14 rounded-full items-center justify-center mb-4">
+        <AlertCircle size={24} color={ICON_COLORS.rose500} strokeWidth={2} />
       </View>
-      <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 16, textAlign: "center", marginBottom: 4 }}>
+      <Text className="text-slate-800 font-black text-base text-center mb-1">
         Could not load analytics
       </Text>
-      <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", marginBottom: 20 }}>{message}</Text>
+      <Text className="text-slate-400 text-[13px] text-center mb-5">{message}</Text>
       <TouchableOpacity
-        style={{ backgroundColor: C.p500, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 16 }}
+        className="bg-primary-500 px-6 py-3 rounded-2xl"
         activeOpacity={0.85}
         onPress={onRetry}
       >
-        <Text style={{ color: "white", fontWeight: "900", fontSize: 13 }}>Try Again</Text>
+        <Text className="text-white font-black text-[13px]">Try Again</Text>
       </TouchableOpacity>
     </View>
   );
@@ -189,16 +188,16 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 function FeedbackSkeleton() {
   return (
-    <View style={{ gap: 10 }}>
-      <View style={{ backgroundColor: C.p100, borderRadius: 18, padding: 16, gap: 10 }}>
-        <Skeleton width={90} height={11} color={C.p200} />
-        <Skeleton width="100%" height={13} color={C.p200} />
-        <Skeleton width="70%" height={13} color={C.p200} />
+    <View className="gap-2.5">
+      <View className="bg-primary-100 rounded-[18px] p-4 gap-2.5">
+        <Skeleton width={90} height={11} color={ICON_COLORS.primary200} />
+        <Skeleton width="100%" height={13} color={ICON_COLORS.primary200} />
+        <Skeleton width="70%" height={13} color={ICON_COLORS.primary200} />
       </View>
-      <View style={[styles.card, { gap: 10 }]}>
+      <View className={CARD_CLASS.replace("mb-3", "")}>
         <Skeleton width={100} height={12} />
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} width="100%" height={38} borderRadius={12} color={C.p50} />
+          <Skeleton key={i} width="100%" height={38} borderRadius={12} color={ICON_COLORS.primary50} style={{ marginTop: 10 }} />
         ))}
       </View>
     </View>
@@ -210,6 +209,7 @@ export default function Profile() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: user } = useUserMeQuery();
+  const { user: clerkUser } = useUser();
   const {
     data: analytics,
     isLoading: analyticsLoading,
@@ -236,75 +236,34 @@ export default function Profile() {
   const visibleStrongSubjects = analytics ? filterTestSubjectNames(analytics.strong_subjects) : [];
   const visibleWeakSubjects = analytics ? filterTestSubjectNames(analytics.weak_subjects) : [];
 
-  const displayName = user?.username ?? "Student";
+  const displayName = clerkUser?.username ?? user?.username ?? "...";
   const joinDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : null;
 
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1 }} className="bg-primary">
-      <View className="bg-white">
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.p500} />
-        }
-        className="bg-primary"
-      >
-        <View className="bg-white">
-
-        <View style={{
-          backgroundColor: C.p500,
-          paddingHorizontal: 20,
-          paddingTop: 20,
-          paddingBottom: 44,
-          borderBottomLeftRadius: 30,
-          borderBottomRightRadius: 30,
-          overflow: "hidden",
-        }}>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-            <View style={{
-              width: 64, height: 64, borderRadius: 32,
-              backgroundColor: "rgba(255,255,255,0.2)",
-              borderWidth: 2, borderColor: "rgba(255,255,255,0.4)",
-              alignItems: "center", justifyContent: "center",
-            }}>
-              <User size={26} color="#fff" strokeWidth={1.8} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "white", fontWeight: "900", fontSize: 20, lineHeight: 24 }}>
-                {displayName}
-              </Text>
-              {joinDate && (
-                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, marginTop: 3 }}>
-                  Member since {joinDate}
-                </Text>
-              )}
-            </View>
-            {analytics && (
-              <View style={{
-                backgroundColor: "rgba(255,255,255,0.18)",
-                borderRadius: 14,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                alignItems: "center",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.25)",
-              }}>
-                <Text style={{ color: "white", fontWeight: "900", fontSize: 18, lineHeight: 22 }}>
-                  {analytics.total_sessions}
-                </Text>
-                <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Sessions
-                </Text>
-              </View>
-            )}
-          </View>
+    <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
+      <View className="mt-5 px-[30px] bg-primary flex flex-row z-20 h-[160px] rounded-b-[40px] w-[100%] items-center justify-between absolute">
+        <View >
+          <Text className="text-white text-2xl  font-bold">
+            Hi {displayName}
+          </Text>
+          {joinDate && (
+            <Text className="text-white font-normal">
+              Member since {joinDate}
+            </Text>
+          )}
         </View>
+        <View className=" h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
+          <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+        </View>
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />} className="bg-white">
+      
+        <View className="bg-white mt-[120px] ">
 
-        <View style={{ marginTop: -22 }}>
-
+        <View >
           {analyticsLoading ? (
             <StatsSkeleton />
           ) : analyticsError ? (
@@ -313,24 +272,26 @@ export default function Profile() {
               onRetry={refetchAnalytics}
             />
           ) : analytics ? (
-            <Animated.View entering={FadeIn.duration(300)} style={{ paddingHorizontal: 16 }}>
+              <Animated.View entering={FadeIn.duration(300)} className="px-4">
+                      
+              
 
-              <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
-                <View style={[styles.card, { flex: 1.15, alignItems: "center", justifyContent: "center", paddingVertical: 18 }]}>
+              <View className="flex-row gap-2.5 mb-3">
+                <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 items-center justify-center py-4.5" style={{ flex: 1.15 }}>
                   <AccuracyRing accuracy={analytics.overall_accuracy} />
                 </View>
-                <View style={{ flex: 1, gap: 10 }}>
+                <View className="flex-1 gap-2.5">
                   <StatTile
                     icon={Trophy}
-                    iconColor={C.p500}
-                    iconBg={C.p100}
+                    iconColor={ICON_COLORS.primary500}
+                    iconBgClass="bg-primary-100"
                     label="Sessions"
                     value={analytics.total_sessions}
                   />
                   <StatTile
                     icon={Clock}
-                    iconColor={C.p600}
-                    iconBg={C.p100}
+                    iconColor={ICON_COLORS.primary600}
+                    iconBgClass="bg-primary-100"
                     label="Avg / Q"
                     value={`${analytics.overall_avg_response_time.toFixed(1)}s`}
                   />
@@ -342,17 +303,17 @@ export default function Profile() {
               )}
 
               {(visibleStrongSubjects.length > 0 || visibleWeakSubjects.length > 0) && (
-                <View style={[styles.card, { marginBottom: 12 }]}>
+                <View className={CARD_CLASS}>
                   {visibleStrongSubjects.length > 0 && (
-                    <View style={{ marginBottom: visibleWeakSubjects.length > 0 ? 12 : 0 }}>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                        <TrendingUp size={14} color={C.p500} strokeWidth={2} />
-                        <Text style={[styles.sectionLabel, { color: C.p600 }]}>Strong</Text>
+                    <View className={visibleWeakSubjects.length > 0 ? "mb-3" : ""}>
+                      <View className="flex-row items-center gap-1.5 mb-2">
+                        <TrendingUp size={14} color={ICON_COLORS.primary500} strokeWidth={2} />
+                        <Text className="text-primary-600 font-black text-xs uppercase tracking-wider">Strong</Text>
                       </View>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      <View className="flex-row flex-wrap gap-1.5">
                         {visibleStrongSubjects.map((s) => (
-                          <View key={s} style={styles.pillStrong}>
-                            <Text style={{ color: C.p700, fontSize: 11, fontWeight: "600" }}>{s}</Text>
+                          <View key={s} className="bg-primary-100 px-3 py-1.5 rounded-full">
+                            <Text className="text-primary-700 text-[11px] font-semibold">{s}</Text>
                           </View>
                         ))}
                       </View>
@@ -360,14 +321,14 @@ export default function Profile() {
                   )}
                   {visibleWeakSubjects.length > 0 && (
                     <View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                        <TrendingDown size={14} color="#EF4444" strokeWidth={2} />
-                        <Text style={[styles.sectionLabel, { color: "#DC2626" }]}>Needs Work</Text>
+                      <View className="flex-row items-center gap-1.5 mb-2">
+                        <TrendingDown size={14} color={ICON_COLORS.rose500} strokeWidth={2} />
+                        <Text className="text-rose-600 font-black text-xs uppercase tracking-wider">Needs Work</Text>
                       </View>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      <View className="flex-row flex-wrap gap-1.5">
                         {visibleWeakSubjects.map((s) => (
-                          <View key={s} style={styles.pillWeak}>
-                            <Text style={{ color: "#DC2626", fontSize: 11, fontWeight: "600" }}>{s}</Text>
+                          <View key={s} className="bg-rose-100 px-3 py-1.5 rounded-full">
+                            <Text className="text-rose-600 text-[11px] font-semibold">{s}</Text>
                           </View>
                         ))}
                       </View>
@@ -394,12 +355,12 @@ export default function Profile() {
               <DifficultyProgressSection subjects={visibleSubjects} />
 
               {analytics.total_sessions === 0 && (
-                <View style={[styles.card, { alignItems: "center", paddingVertical: 36 }]}>
-                  <Target size={32} color={C.p500} strokeWidth={1.8} />
-                  <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 15, marginTop: 12, marginBottom: 4 }}>
+                <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 items-center py-9">
+                  <Target size={32} color={ICON_COLORS.primary500} strokeWidth={1.8} />
+                  <Text className="text-slate-800 font-black text-[15px] mt-3 mb-1">
                     No quiz data yet
                   </Text>
-                  <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center" }}>
+                  <Text className="text-slate-400 text-[13px] text-center">
                     Complete a quiz to see your analytics here.
                   </Text>
                 </View>
@@ -407,58 +368,50 @@ export default function Profile() {
             </Animated.View>
           ) : null}
 
-          <View style={{ paddingHorizontal: 16, marginTop: 4 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10, paddingLeft: 2 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Sparkles size={16} color={C.p500} strokeWidth={2} />
-                <Text style={styles.sectionLabel}>AI Feedback</Text>
+          <View className="px-4 mt-1">
+            <View className="flex-row items-center justify-between mb-2.5 pl-0.5">
+              <View className="flex-row items-center gap-1.5">
+                <Sparkles size={16} color={ICON_COLORS.primary500} strokeWidth={2} />
+                <Text className="text-slate-800 font-black text-xs uppercase tracking-wider">AI Feedback</Text>
               </View>
               <TouchableOpacity
-                style={{
-                  flexDirection: "row", alignItems: "center", gap: 5,
-                  paddingHorizontal: 12, paddingVertical: 6,
-                  borderRadius: 12, backgroundColor: C.p100,
-                }}
+                className="flex-row items-center gap-1 px-3 py-1.5 rounded-xl bg-primary-100"
                 activeOpacity={0.8}
                 onPress={() => refetchFeedback()}
                 disabled={feedbackLoading}
               >
                 {feedbackLoading ? (
-                  <ActivityIndicator size="small" color={C.p500} />
+                  <ActivityIndicator size="small" color={ICON_COLORS.primary500} />
                 ) : (
-                  <RefreshCw size={11} color={C.p600} strokeWidth={2.5} />
+                  <RefreshCw size={11} color={ICON_COLORS.primary600} strokeWidth={2.5} />
                 )}
-                <Text style={{ color: C.p700, fontSize: 11, fontWeight: "700" }}>Refresh</Text>
+                <Text className="text-primary-700 text-[11px] font-bold">Refresh</Text>
               </TouchableOpacity>
             </View>
 
             {feedbackLoading ? (
               <FeedbackSkeleton />
             ) : feedbackError ? (
-              <View style={[styles.card, { borderColor: "#FEE2E2" }]}>
-                <Text style={{ color: "#EF4444", fontSize: 13, fontWeight: "500", textAlign: "center" }}>
+              <View className={`${CARD_CLASS} border-rose-100`}>
+                <Text className="text-rose-500 text-[13px] font-medium text-center">
                   Could not load feedback. Pull to refresh or tap Refresh.
                 </Text>
               </View>
             ) : feedback ? (
-              <Animated.View entering={FadeIn.duration(300)} style={{ gap: 10 }}>
-                <View style={{ backgroundColor: C.p500, borderRadius: 18, padding: 16, overflow: "hidden" }}>
-                  <View style={{
-                    position: "absolute", top: -16, right: -16,
-                    width: 80, height: 80, borderRadius: 40,
-                    backgroundColor: C.p600, opacity: 0.4,
-                  }} />
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                    <Heart size={13} color="#fff" strokeWidth={2} />
-                    <Text style={{ color: "rgba(255,255,255,0.85)", fontWeight: "900", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>
+              <Animated.View entering={FadeIn.duration(300)} className="gap-2.5">
+                <View className="bg-primary-500 rounded-[18px] p-4 overflow-hidden">
+                  <View className="absolute -top-4 -right-4 w-20 h-20 rounded-full bg-primary-600 opacity-40" />
+                  <View className="flex-row items-center gap-1.5 mb-2">
+                    <Heart size={13} color={ICON_COLORS.white} strokeWidth={2} />
+                    <Text className="text-white/85 font-black text-[10px] uppercase tracking-widest">
                       Motivation
                     </Text>
                   </View>
-                  <Text style={{ color: "white", fontSize: 13, lineHeight: 20, fontWeight: "500" }}>
+                  <Text className="text-white text-[13px] leading-5 font-medium">
                     {feedback.motivational_note}
                   </Text>
                   {feedback.generated_at && (
-                    <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 8 ,fontWeight: "500"}}>
+                    <Text className="text-white/70 text-[11px] mt-2 font-medium">
                       Generated {new Date(feedback.generated_at).toLocaleTimeString([], {
                         hour: "2-digit", minute: "2-digit",
                       })}
@@ -467,20 +420,16 @@ export default function Profile() {
                 </View>
 
                 {feedback.suggestions.length > 0 && (
-                  <View style={[styles.card, { borderColor: "#FEF3C7" }]} className="mb-5">
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                      <Lightbulb size={14} color="#F59E0B" strokeWidth={2} />
-                      <Text style={[styles.sectionLabel, { color: "#D97706" }]}>Suggestions</Text>
+                  <View className={`${CARD_CLASS.replace("mb-3", "mb-5")} border-amber-100`}>
+                    <View className="flex-row items-center gap-1.5 mb-2.5">
+                      <Lightbulb size={14} color={ICON_COLORS.amber500} strokeWidth={2} />
+                      <Text className="text-amber-600 font-black text-xs uppercase tracking-wider">Suggestions</Text>
                     </View>
-                    <View style={{ gap: 8 }}>
+                    <View className="gap-2">
                       {feedback.suggestions.map((tip, i) => (
-                        <View key={i} style={{
-                          flexDirection: "row", alignItems: "flex-start", gap: 10,
-                          backgroundColor: C.p50, borderRadius: 12,
-                          paddingHorizontal: 12, paddingVertical: 10,
-                        }}>
-                          <Text style={{ color: C.p500, fontWeight: "900", fontSize: 11, marginTop: 2 }}>{i + 1}</Text>
-                          <Text style={{ color: "#334155", fontSize: 13, lineHeight: 20, flex: 1 }}>{tip}</Text>
+                        <View key={i} className="flex-row items-start gap-2.5 bg-primary-50 rounded-xl px-3 py-2.5">
+                          <Text className="text-primary-500 font-black text-[11px] mt-0.5">{i + 1}</Text>
+                          <Text className="text-slate-600 text-[13px] leading-5 flex-1">{tip}</Text>
                         </View>
                       ))}
                     </View>
@@ -493,7 +442,7 @@ export default function Profile() {
         </View>
         </View>
       </ScrollView>
-    </View>
+    
     </SafeAreaView>
   );
 }

@@ -21,8 +21,11 @@ export async function fetchMe(): Promise<UserOut> {
   return data;
 }
 
-export async function syncUser(): Promise<UserOut> {
-  const { data } = await quizClient.post<UserOut>("/user/sync");
+export async function syncUser(username?: string): Promise<UserOut> {
+  const { data } = await quizClient.post<UserOut>(
+    "/user/sync",
+    username ? { username } : {}
+  );
   return data;
 }
 

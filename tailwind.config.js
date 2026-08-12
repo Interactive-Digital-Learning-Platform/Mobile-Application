@@ -24,7 +24,18 @@ module.exports = {
       colors: {
         primaryBlack: "#0F172A",
         borderColorLight: "#E3E1E1",
-        primary: "#FC6E20",
+        primary: {
+          DEFAULT: "#FC6E20",
+          50:  "#FFF3EC",
+          100: "#FFE4CF",
+          200: "#FFCCA8",
+          300: "#FFA87A",
+          400: "#FF8C50",
+          500: "#FC6E20",
+          600: "#E55B10",
+          700: "#CC4D08",
+          800: "#A33C06",
+        },
       },
       fontFamily: {
         alight: ["Author-Light", "sans-serif"],

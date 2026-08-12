@@ -30,21 +30,11 @@ export const notesAssetsClient = create({
   timeout: 10000,
 });
 
-// The gateway doesn't proxy the quiz service yet, so until
-// EXPO_PUBLIC_API_GATEWAY_URL is actually set, quizClient talks to it
-// directly via EXPO_PUBLIC_BACKEND_URL instead (the gateway default above
-// only resolves on Android emulators, and nothing's listening on it
-// anyway). Once the gateway is live, just set that env var — no code
-// change needed here.
-const DEFAULT_QUIZ_SERVICE_URL = "http://localhost:8000";
-const QUIZ_DIRECT_URL = (
-  process.env.EXPO_PUBLIC_BACKEND_URL || DEFAULT_QUIZ_SERVICE_URL
-).replace(/\/$/, "");
-
+// Proxied through the gateway at /api/quiz, same as the other services —
+// nginx strips that prefix and forwards the rest to the backend's own
+// /api/v1/* routes (see Deployment-Infrastructure/nginx.conf).
 export const quizClient = create({
-  baseURL: process.env.EXPO_PUBLIC_API_GATEWAY_URL
-    ? `${SERVICE_URLS.quiz}/api/v1`
-    : `${QUIZ_DIRECT_URL}/api/v1`,
+  baseURL: `${SERVICE_URLS.quiz}/api/v1`,
   headers: {
     "Content-Type": "application/json",
   },
@@ -71,7 +61,30 @@ export function setClerkTokenGetter(fn: () => Promise<string | null>) {
   _getClerkToken = fn;
 }
 
+// Resolved once Clerk finishes its initial auth-state check (`isLoaded`).
+// Without this, a query that fires the instant a screen mounts can race
+// ahead of Clerk restoring the session — harmless on iOS Simulator where
+// that check is near-instant, but Android's slower cold start let the very
+// first request go out with no token at all, getting a real 401 back.
+//
+// Capped at 3s rather than awaited unconditionally: if `isLoaded` never
+// fires for some reason, every request should still go out (worst case,
+// same as before this existed) instead of hanging forever.
+let _resolveClerkReady: (() => void) | null = null;
+const _clerkReady = new Promise<void>((resolve) => {
+  _resolveClerkReady = resolve;
+});
+const _clerkReadyOrTimeout = Promise.race([
+  _clerkReady,
+  new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+]);
+
+export function markClerkReady() {
+  _resolveClerkReady?.();
+}
+
 quizClient.interceptors.request.use(async (config) => {
+  await _clerkReadyOrTimeout;
   if (_getClerkToken) {
     try {
       const token = await _getClerkToken();

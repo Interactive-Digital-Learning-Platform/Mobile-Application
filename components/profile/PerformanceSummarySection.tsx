@@ -1,6 +1,6 @@
 import { View } from "react-native";
 import { ClipboardList, ListChecks, CheckCircle2, Percent, Clock } from "lucide-react-native";
-import { C, profileStyles as styles } from "./profileTheme";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import SectionHeader from "./SectionHeader";
 import StatTile from "./StatTile";
 import EmptyState from "./EmptyState";
@@ -29,39 +29,39 @@ export default function PerformanceSummarySection({
     isPresent(avgResponseTime);
 
   return (
-    <View style={[styles.card, { marginBottom: 12 }]}>
+    <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
       <SectionHeader icon={ClipboardList} label="Performance Summary" />
 
       {hasAnyData ? (
-        <View style={{ gap: 10 }}>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+        <View className="gap-2.5">
+          <View className="flex-row gap-2.5">
             <StatTile
               icon={ListChecks}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Attempted"
               value={isPresent(totalQuestionsAttempted) ? totalQuestionsAttempted : "—"}
             />
             <StatTile
               icon={CheckCircle2}
-              iconColor="#16A34A"
-              iconBg="#DCFCE7"
+              iconColor={ICON_COLORS.emerald600}
+              iconBgClass="bg-emerald-100"
               label="Correct"
               value={isPresent(totalCorrectAnswers) ? totalCorrectAnswers : "—"}
             />
           </View>
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View className="flex-row gap-2.5">
             <StatTile
               icon={Percent}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Completion"
               value={isPresent(completionRate) ? `${Math.round(completionRate)}%` : "—"}
             />
             <StatTile
               icon={Clock}
-              iconColor={C.p600}
-              iconBg={C.p100}
+              iconColor={ICON_COLORS.primary600}
+              iconBgClass="bg-primary-100"
               label="Avg / Question"
               value={isPresent(avgResponseTime) ? `${avgResponseTime.toFixed(1)}s` : "—"}
             />
