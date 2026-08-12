@@ -39,7 +39,7 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <QueryClientProviderCom>
-        <ClerkProviderCom>
+         <ClerkProviderCom> 
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(main)" options={{ headerShown: false }} />
@@ -47,7 +47,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
           </Stack>
           <Toast />
-        </ClerkProviderCom>
+         </ClerkProviderCom> 
       </QueryClientProviderCom>
     </KeyboardProvider>
   );
