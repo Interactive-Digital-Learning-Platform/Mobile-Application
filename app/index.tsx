@@ -1,3 +1,4 @@
+import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
@@ -10,7 +11,7 @@ export default function Index() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    if (isSignedIn) {
+    if (isLoaded && isSignedIn) {
       router.replace("/(tabs)/ai");
     } else {
       router.replace("/(auth)/sign-in");

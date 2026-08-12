@@ -43,6 +43,7 @@
       ],
       "@clerk/expo",
       "expo-secure-store",
+      "expo-audio",
       "expo-web-browser"
     ],
     "experiments": {

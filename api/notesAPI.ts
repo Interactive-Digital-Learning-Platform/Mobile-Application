@@ -20,30 +20,32 @@ export const notesApi = {
     return response.data;
   },
 
-  // Upload a note
-  uploadNote: async (userId: string, title: string, fileUri: string) => {
+  // Upload a note (single or multi-page)
+  uploadNote: async (userId: string, title: string, fileUris: string | string[]) => {
     try {
-      console.log("Uploading note:", {
+      const uris = Array.isArray(fileUris) ? fileUris : [fileUris];
+      console.log("Uploading note pages:", {
         userId,
         title,
-        fileUri,
+        pageCount: uris.length,
         platform: Platform.OS,
       });
 
       const formData = new FormData();
 
-      if (Platform.OS === "web") {
-        // For Web, we must fetch the blob
-        const response = await fetch(fileUri);
-        const blob = await response.blob();
-        formData.append("image", blob, "note-image.jpg");
-      } else {
-        // React Native's FormData expects this file object shape.
-        formData.append("image", {
-          uri: fileUri,
-          name: "note-image.jpg",
-          type: "image/jpeg",
-        } as any);
+      for (let i = 0; i < uris.length; i++) {
+        const uri = uris[i];
+        if (Platform.OS === "web") {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          formData.append("images", blob, `note-page-${i + 1}.jpg`);
+        } else {
+          formData.append("images", {
+            uri,
+            name: `note-page-${i + 1}.jpg`,
+            type: "image/jpeg",
+          } as any);
+        }
       }
 
       formData.append("userId", userId);
