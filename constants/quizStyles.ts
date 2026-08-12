@@ -41,6 +41,39 @@ export const DIFF_DOT: Record<string, string> = {
   Hard:   DIFFICULTY_STYLES.Hard.dot,
 };
 
+// Raw hex for the handful of spots that genuinely can't take a Tailwind
+// className — lucide-react-native icons take `color` as a literal prop, and
+// react-native-svg elements take `stroke`/`fill` as literal props, neither of
+// which NativeWind can style. Keep these in sync with the primary-* scale in
+// tailwind.config.js and Tailwind's own default palette so an icon's color
+// always matches the Tailwind classes used around it.
+export const ICON_COLORS = {
+  primary50:  "#FFF3EC",
+  primary100: "#FFE4CF",
+  primary200: "#FFCCA8",
+  primary300: "#FFA87A",
+  primary400: "#FF8C50",
+  primary500: "#FC6E20",
+  primary600: "#E55B10",
+  primary700: "#CC4D08",
+  primary800: "#A33C06",
+  white:      "#ffffff",
+  slate400:   "#94a3b8",
+  slate500:   "#64748b",
+  slate600:   "#475569",
+  slate800:   "#1e293b",
+  emerald500: "#10b981",
+  emerald600: "#059669",
+  rose500:    "#f43f5e",
+  rose600:    "#e11d48",
+  amber500:   "#f59e0b",
+  amber600:   "#d97706",
+  blue500:    "#3b82f6",
+  blue600:    "#2563eb",
+  violet100:  "#ede9fe",
+  violet600:  "#7c3aed",
+} as const;
+
 export const SUBJECT_ICONS: Record<string, LucideIcon> = {
   Mathematics: Calculator,
   Science:     FlaskConical,

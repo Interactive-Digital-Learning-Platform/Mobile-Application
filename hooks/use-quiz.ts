@@ -40,7 +40,7 @@ export function useUserMeQuery() {
 export function useUserSyncMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: syncUser,
+    mutationFn: (username?: string) => syncUser(username),
     onSuccess: (data) => {
       queryClient.setQueryData(quizKeys.me, data);
     },

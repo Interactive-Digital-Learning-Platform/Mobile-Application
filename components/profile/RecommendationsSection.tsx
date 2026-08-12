@@ -2,7 +2,7 @@ import { View, Text } from "react-native";
 import { Lightbulb, ArrowRight } from "lucide-react-native";
 import type { Recommendation } from "@/types/quizModuleTypes";
 import { filterTestSubjects } from "@/constants/quizHelpers";
-import { C, profileStyles as styles } from "./profileTheme";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import SectionHeader from "./SectionHeader";
 import EmptyState from "./EmptyState";
 
@@ -20,30 +20,30 @@ export default function RecommendationsSection({ recommendations }: Recommendati
     .slice(0, MAX_RECOMMENDATIONS);
 
   return (
-    <View style={[styles.card, { marginBottom: 12 }]}>
+    <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
       <SectionHeader icon={Lightbulb} label="Recommendations" />
 
       {visible.length > 0 ? (
-        <View style={{ gap: 10 }}>
+        <View className="gap-2.5">
           {visible.map((rec, index) => (
             <View
               key={`${rec.subject ?? "general"}-${rec.topic ?? "general"}-${index}`}
-              style={{ backgroundColor: C.p50, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.p100 }}
+              className="bg-primary-50 rounded-[14px] p-3 border border-primary-100"
             >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.p500, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ color: "white", fontSize: 11, fontWeight: "900" }}>{index + 1}</Text>
+              <View className="flex-row items-center gap-1.5 mb-1.5">
+                <View className="w-5 h-5 rounded-full bg-primary-500 items-center justify-center">
+                  <Text className="text-white text-[11px] font-black">{index + 1}</Text>
                 </View>
-                <Text style={{ fontSize: 12, fontWeight: "800", color: "#1e293b" }} numberOfLines={1}>
+                <Text className="text-xs font-extrabold text-slate-800" numberOfLines={1}>
                   {[rec.subject, rec.topic].filter(Boolean).join(" · ") || "General"}
                 </Text>
               </View>
-              <Text style={{ fontSize: 12, color: "#475569", lineHeight: 17, marginBottom: 8 }}>
+              <Text className="text-xs text-slate-600 leading-[17px] mb-2">
                 {rec.reason}
               </Text>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <ArrowRight size={13} color={C.p600} strokeWidth={2.5} />
-                <Text style={{ fontSize: 12, fontWeight: "700", color: C.p600, flexShrink: 1 }}>
+              <View className="flex-row items-center gap-1">
+                <ArrowRight size={13} color={ICON_COLORS.primary600} strokeWidth={2.5} />
+                <Text className="text-xs font-bold text-primary-600 shrink">
                   {rec.recommended_action}
                 </Text>
               </View>

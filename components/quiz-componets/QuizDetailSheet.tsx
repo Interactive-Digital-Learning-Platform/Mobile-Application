@@ -12,7 +12,7 @@ import {
   Clock, BarChart2, ListChecks, Play, RotateCcw, X, HelpCircle,
   type LucideIcon,
 } from "lucide-react-native";
-import { DIFFICULTY_STYLES, SUBJECT_ICONS } from "@/constants/quizStyles";
+import { DIFFICULTY_STYLES, ICON_COLORS, SUBJECT_ICONS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 
 const SHEET_OFFSCREEN_Y = 700;
@@ -28,7 +28,7 @@ interface QuizDetailSheetProps {
 function StatTile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <View className="flex-1 bg-slate-50 rounded-2xl p-3 items-center gap-1">
-      <Icon size={18} color="#64748b" strokeWidth={1.8} />
+      <Icon size={18} color={ICON_COLORS.slate500} strokeWidth={1.8} />
       <Text className="text-base font-black text-slate-800">{value}</Text>
       <Text className="text-[10px] text-slate-400 font-medium">{label}</Text>
     </View>
@@ -105,12 +105,12 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
             activeOpacity={0.7}
             onPress={onClose}
           >
-            <X size={16} color="#64748b" strokeWidth={2.5} />
+            <X size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
           </TouchableOpacity>
 
           <View className="flex-row items-center gap-4 mb-6">
             <View className="w-16 h-16 rounded-2xl bg-slate-50 justify-center items-center">
-              <Icon size={28} color="#64748b" strokeWidth={1.6} />
+              <Icon size={28} color={ICON_COLORS.slate500} strokeWidth={1.6} />
             </View>
             <View className="flex-1">
               <Text className="text-xl font-black text-slate-800">{item.subject}</Text>
@@ -183,9 +183,9 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
             }}
           >
             {isComplete ? (
-              <RotateCcw size={18} color="#fff" strokeWidth={2.5} />
+              <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
             ) : (
-              <Play size={18} color="#fff" strokeWidth={2.5} fill="#fff" />
+              <Play size={18} color={ICON_COLORS.white} strokeWidth={2.5} fill={ICON_COLORS.white} />
             )}
             <Text className="text-white font-black text-base">
               {isComplete ? "Retake Quiz" : hasStarted ? "Continue Quiz" : "Start Quiz"}

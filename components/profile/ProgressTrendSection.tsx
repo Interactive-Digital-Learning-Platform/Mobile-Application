@@ -2,7 +2,7 @@ import { View, Text } from "react-native";
 import { LineChart, TrendingUp, TrendingDown, Minus } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { PerformanceTrend } from "@/types/quizModuleTypes";
-import { C, profileStyles as styles } from "./profileTheme";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import SectionHeader from "./SectionHeader";
 import EmptyState from "./EmptyState";
 
@@ -10,10 +10,22 @@ interface ProgressTrendSectionProps {
   trend?: PerformanceTrend;
 }
 
-const TREND_META: Record<string, { icon: LucideIcon; color: string; bg: string; label: string }> = {
-  improving: { icon: TrendingUp, color: "#16A34A", bg: "#DCFCE7", label: "Improving" },
-  declining: { icon: TrendingDown, color: "#DC2626", bg: "#FFE4E6", label: "Declining" },
-  stable: { icon: Minus, color: C.p600, bg: C.p100, label: "Stable" },
+const TREND_META: Record<
+  string,
+  { icon: LucideIcon; iconColor: string; bgClass: string; textClass: string; label: string }
+> = {
+  improving: {
+    icon: TrendingUp, iconColor: ICON_COLORS.emerald600,
+    bgClass: "bg-emerald-100", textClass: "text-emerald-600", label: "Improving",
+  },
+  declining: {
+    icon: TrendingDown, iconColor: ICON_COLORS.rose600,
+    bgClass: "bg-rose-100", textClass: "text-rose-600", label: "Declining",
+  },
+  stable: {
+    icon: Minus, iconColor: ICON_COLORS.primary600,
+    bgClass: "bg-primary-100", textClass: "text-primary-600", label: "Stable",
+  },
 };
 
 export default function ProgressTrendSection({ trend }: ProgressTrendSectionProps) {
@@ -23,37 +35,32 @@ export default function ProgressTrendSection({ trend }: ProgressTrendSectionProp
   const change = trend?.accuracy_change ?? 0;
 
   return (
-    <View style={[styles.card, { marginBottom: 12 }]}>
+    <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
       <SectionHeader icon={LineChart} label="Progress Trend" />
 
       {isUsable ? (
         <View>
-          <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 20, fontWeight: "900", color: "#1e293b" }}>
+          <View className="flex-row gap-2.5 mb-3">
+            <View className="flex-1 items-center">
+              <Text className="text-xl font-black text-slate-800">
                 {Math.round(trend!.current_period_accuracy)}%
               </Text>
-              <Text style={{ fontSize: 9, color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <Text className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                 Current
               </Text>
             </View>
-            <View style={{ flex: 1, alignItems: "center" }}>
-              <Text style={{ fontSize: 20, fontWeight: "900", color: "#64748b" }}>
+            <View className="flex-1 items-center">
+              <Text className="text-xl font-black text-slate-500">
                 {Math.round(trend!.previous_period_accuracy)}%
               </Text>
-              <Text style={{ fontSize: 9, color: "#94a3b8", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <Text className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                 Previous
               </Text>
             </View>
           </View>
-          <View
-            style={{
-              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6,
-              backgroundColor: meta.bg, borderRadius: 12, paddingVertical: 8,
-            }}
-          >
-            <Icon size={14} color={meta.color} strokeWidth={2.5} />
-            <Text style={{ color: meta.color, fontWeight: "800", fontSize: 12 }}>
+          <View className={`flex-row items-center justify-center gap-1.5 rounded-xl py-2 ${meta.bgClass}`}>
+            <Icon size={14} color={meta.iconColor} strokeWidth={2.5} />
+            <Text className={`font-extrabold text-xs ${meta.textClass}`}>
               {meta.label} · {change > 0 ? "+" : ""}
               {change.toFixed(1)} pts
             </Text>

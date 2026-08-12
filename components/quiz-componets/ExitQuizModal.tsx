@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { AlertTriangle, LogOut, X } from "lucide-react-native";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface ExitQuizModalProps {
   visible: boolean;
@@ -55,10 +56,10 @@ export default function ExitQuizModal({
               style={iconStyle}
               className="w-16 h-16 rounded-full bg-white/20 justify-center items-center mb-3"
             >
-              <AlertTriangle size={32} color="#fff" strokeWidth={2} />
+              <AlertTriangle size={32} color={ICON_COLORS.white} strokeWidth={2} />
             </Animated.View>
             <Text className="text-white text-xl font-black">End Quiz?</Text>
-            <Text className="text-orange-100 text-sm text-center mt-1">
+            <Text className="text-primary-100 text-sm text-center mt-1">
               The timer keeps running while you decide.
             </Text>
           </View>
@@ -80,7 +81,7 @@ export default function ExitQuizModal({
               activeOpacity={0.85}
               onPress={onConfirm}
             >
-              <LogOut size={18} color="#fff" strokeWidth={2} />
+              <LogOut size={18} color={ICON_COLORS.white} strokeWidth={2} />
               <Text className="text-white font-black text-base">Yes, End Quiz</Text>
             </TouchableOpacity>
 
@@ -89,7 +90,7 @@ export default function ExitQuizModal({
               activeOpacity={0.85}
               onPress={onCancel}
             >
-              <X size={18} color="#64748b" strokeWidth={2} />
+              <X size={18} color={ICON_COLORS.slate500} strokeWidth={2} />
               <Text className="text-slate-600 font-black text-base">Keep Going</Text>
             </TouchableOpacity>
           </View>

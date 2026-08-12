@@ -3,7 +3,7 @@ import { useState, useCallback } from "react";
 import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, type LucideIcon } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import CreateQuizModal, { QuizConfig } from "@/components/quiz-componets/CreateQuizModal";
-import { DIFF_DOT, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
+import { DIFF_DOT, ICON_COLORS, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
 import { capitalize } from "@/constants/quizHelpers";
 import QuizPracticeCard, { type Difficulty, type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 import Skeleton from "@/components/Skeleton";
@@ -88,7 +88,7 @@ function FilterChip({
   return (
     <TouchableOpacity
       className={`flex-row items-center gap-1.5 px-3 py-2 rounded-xl border ${
-        isOpen ? "border-primary bg-orange-50" : "border-slate-200 bg-white"
+        isOpen ? "border-primary bg-primary-50" : "border-slate-200 bg-white"
       }`}
       activeOpacity={0.8}
       onPress={onPress}
@@ -98,7 +98,7 @@ function FilterChip({
       </Text>
       <ChevronDown
         size={12}
-        color={isOpen ? "#FC6E20" : "#94A3B8"}
+        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.slate400}
         strokeWidth={2.5}
         style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
       />
@@ -119,7 +119,7 @@ function DropdownMenu<T extends string>({
           <TouchableOpacity
             key={opt}
             className={`flex-row items-center justify-between px-4 py-3 ${
-              isSelected ? "bg-orange-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
             }`}
             activeOpacity={0.75}
             onPress={() => onSelect(opt)}
@@ -132,7 +132,7 @@ function DropdownMenu<T extends string>({
                 {opt}
               </Text>
             </View>
-            {isSelected && <Check size={14} color="#FC6E20" strokeWidth={2.5} />}
+            {isSelected && <Check size={14} color={ICON_COLORS.primary500} strokeWidth={2.5} />}
           </TouchableOpacity>
         );
       })}
@@ -259,7 +259,7 @@ export default function PracticeList() {
           return (
             <View className="flex-1 justify-center items-center px-8 pb-16">
               <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
-                <ErrorIcon size={28} color="#EF4444" strokeWidth={1.8} />
+                <ErrorIcon size={28} color={ICON_COLORS.rose500} strokeWidth={1.8} />
               </View>
               <Text className="text-slate-800 font-black text-base text-center mb-1">
                 {title}
@@ -272,7 +272,7 @@ export default function PracticeList() {
                 activeOpacity={0.85}
                 onPress={() => refetch()}
               >
-                <RefreshCw size={16} color="#fff" strokeWidth={2.5} />
+                <RefreshCw size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
                 <Text className="text-white font-black text-sm">Try Again</Text>
               </TouchableOpacity>
             </View>
@@ -280,8 +280,8 @@ export default function PracticeList() {
         })()
       ) : filtered.length === 0 ? (
         <View className="flex-1 justify-center items-center px-8 pb-16">
-          <View className="w-16 h-16 rounded-full bg-orange-100 justify-center items-center mb-4">
-            <Brain size={28} color="#FC6E20" strokeWidth={1.8} />
+          <View className="w-16 h-16 rounded-full bg-primary-100 justify-center items-center mb-4">
+            <Brain size={28} color={ICON_COLORS.primary500} strokeWidth={1.8} />
           </View>
           <Text className="text-slate-800 font-black text-base text-center mb-1">
             {items.length === 0 ? "Start your first quiz" : "No quizzes match filters"}
@@ -307,7 +307,7 @@ export default function PracticeList() {
         activeOpacity={0.85}
         onPress={() => setModalVisible(true)}
       >
-        <Plus size={26} color="#ffffff" strokeWidth={2.5} />
+        <Plus size={26} color={ICON_COLORS.white} strokeWidth={2.5} />
       </TouchableOpacity>
 
       <CreateQuizModal

@@ -38,6 +38,7 @@ import ConfettiView        from "@/components/quiz-componets/ConfettiView";
 import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 import CircularProgressRing from "@/components/quiz-componets/CircularProgressRing";
 import type { QuestionOut, SubmitQuizResponse } from "@/types/quizModuleTypes";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface ScoreTheme {
   heroFrom: string;
@@ -60,7 +61,7 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
       screenBg: "bg-white", heroBg: "bg-slate-700",
       pillBg: "bg-slate-500", pillText: "text-slate-100",
       label: "Time's Up",
-      Icon: AlarmClock, iconColor: "#fff",
+      Icon: AlarmClock, iconColor: ICON_COLORS.white,
       tagline: "You ran out of time — keep practising!",
       confetti: false,
     };
@@ -71,7 +72,7 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
       screenBg: "bg-white", heroBg: "bg-amber-500",
       pillBg: "bg-amber-400", pillText: "text-amber-900",
       label: "Outstanding!",
-      Icon: Laugh, iconColor: "#fff",
+      Icon: Laugh, iconColor: ICON_COLORS.white,
       tagline: "Perfect mastery — you nailed it!",
       confetti: true,
     };
@@ -82,7 +83,7 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
       screenBg: "bg-white", heroBg: "bg-emerald-600",
       pillBg: "bg-emerald-500", pillText: "text-emerald-50",
       label: "Great Job!",
-      Icon: Smile, iconColor: "#fff",
+      Icon: Smile, iconColor: ICON_COLORS.white,
       tagline: "Solid performance — keep it up!",
       confetti: false,
     };
@@ -93,7 +94,7 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
       screenBg: "bg-white", heroBg: "bg-blue-600",
       pillBg: "bg-blue-500", pillText: "text-blue-50",
       label: "Not Bad",
-      Icon: Annoyed, iconColor: "#fff",
+      Icon: Annoyed, iconColor: ICON_COLORS.white,
       tagline: "Halfway there — revise and try again!",
       confetti: false,
     };
@@ -103,7 +104,7 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
     screenBg: "bg-white", heroBg: "bg-rose-600",
     pillBg: "bg-rose-500", pillText: "text-rose-50",
     label: "Keep Trying",
-    Icon: Frown, iconColor: "#fff",
+    Icon: Frown, iconColor: ICON_COLORS.white,
     tagline: "Don't give up — practice makes perfect!",
     confetti: false,
   };
@@ -216,7 +217,7 @@ export default function QuizResultsScreen() {
         >
           {timedOut && (
             <View className="bg-black/20 flex-row items-center justify-center gap-2 py-2.5">
-              <Clock size={14} color="#fff" strokeWidth={2.5} />
+              <Clock size={14} color={ICON_COLORS.white} strokeWidth={2.5} />
               <Text className="text-white text-xs font-black tracking-wide uppercase">
                 Session ended by timeout
               </Text>
@@ -235,14 +236,14 @@ export default function QuizResultsScreen() {
               pct={pct}
               correct={correctCount}
               total={totalQ}
-              strokeColor="#ffffff"
+              strokeColor={ICON_COLORS.white}
               trackColor="rgba(255,255,255,0.20)"
-              textColor="#ffffff"
+              textColor={ICON_COLORS.white}
             />
 
             <View className="flex-row gap-2 mt-6 w-full items-center">
               <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
-                <Trophy size={20} color="#fff" strokeWidth={2} />
+                <Trophy size={20} color={ICON_COLORS.white} strokeWidth={2} />
                 <Text className="text-white font-black text-lg mt-1">{pct}%</Text>
                 <Text className="text-white/60 text-[8px] font-semibold uppercase tracking-wide">
                   Accuracy
@@ -250,7 +251,7 @@ export default function QuizResultsScreen() {
               </View>
 
               <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
-                <CheckCircle2 size={20} color="#fff" strokeWidth={2} />
+                <CheckCircle2 size={20} color={ICON_COLORS.white} strokeWidth={2} />
                 <Text className="text-white font-black text-lg mt-1">{correctCount}</Text>
                 <Text className="text-white/60 text-[8px] font-semibold uppercase tracking-wide">
                   Correct
@@ -258,7 +259,7 @@ export default function QuizResultsScreen() {
               </View>
 
               <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
-                <XCircle size={20} color="#fff" strokeWidth={2} />
+                <XCircle size={20} color={ICON_COLORS.white} strokeWidth={2} />
                 <Text className="text-white font-black text-lg mt-1">{wrongCount}</Text>
                 <Text className="text-white/60 text-[8px] font-semibold uppercase tracking-wide">
                   Wrong
@@ -267,7 +268,7 @@ export default function QuizResultsScreen() {
 
               {avgTime !== null ? (
                 <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
-                  <Timer size={20} color="#fff" strokeWidth={2} />
+                  <Timer size={20} color={ICON_COLORS.white} strokeWidth={2} />
                   <Text className="text-white font-black text-lg mt-1">
                     {avgTime.toFixed(1)}s
                   </Text>
@@ -277,7 +278,7 @@ export default function QuizResultsScreen() {
                 </View>
               ) : skippedCount > 0 ? (
                 <View className="flex-1 bg-white/20 rounded-2xl p-3 items-center justify-center">
-                  <Clock size={20} color="#fff" strokeWidth={2} />
+                  <Clock size={20} color={ICON_COLORS.white} strokeWidth={2} />
                   <Text className="text-white font-black text-lg mt-1">{skippedCount}</Text>
                   <Text className="text-white/60 text-[8px] font-semibold uppercase tracking-wide">
                     Skipped
@@ -324,14 +325,14 @@ export default function QuizResultsScreen() {
               className="rounded-2xl flex-row items-center justify-between px-5 py-5 bg-slate-100"
             >
               <View className="flex-row items-center gap-2">
-                <BarChart2 size={18} color="#1e293b" strokeWidth={2} />
+                <BarChart2 size={18} color={ICON_COLORS.slate800} strokeWidth={2} />
                 <Text className="text-slate-600 font-black text-sm">
                   {showReview ? "Hide" : "Show"} Answer Review
                 </Text>
               </View>
               {showReview
-                ? <ChevronUp   size={18} color="#94a3b8" strokeWidth={2.5} />
-                : <ChevronDown size={18} color="#94a3b8" strokeWidth={2.5} />
+                ? <ChevronUp   size={18} color={ICON_COLORS.slate400} strokeWidth={2.5} />
+                : <ChevronDown size={18} color={ICON_COLORS.slate400} strokeWidth={2.5} />
               }
             </TouchableOpacity>
 
@@ -356,7 +357,7 @@ export default function QuizResultsScreen() {
             activeOpacity={0.85}
             onPress={() => setShowRestart(true)}
           >
-            <RotateCcw size={18} color="#fff" strokeWidth={2.2} />
+            <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2.2} />
             <Text className="text-white font-black text-base">Restart Quiz</Text>
           </TouchableOpacity>
 
@@ -365,7 +366,7 @@ export default function QuizResultsScreen() {
             activeOpacity={0.85}
             onPress={() => router.replace("/(tabs)/quiz")}
           >
-            <Home size={18} color="#475569" strokeWidth={2.2} />
+            <Home size={18} color={ICON_COLORS.slate600} strokeWidth={2.2} />
             <Text className="text-slate-600 font-black text-base">Back to Quizzes</Text>
           </TouchableOpacity>
         </Animated.View>

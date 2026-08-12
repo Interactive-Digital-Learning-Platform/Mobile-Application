@@ -7,6 +7,7 @@ import Animated, {
   interpolate,
   interpolateColor,
 } from "react-native-reanimated";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 export type QuizMode = "practice" | "online";
 
@@ -43,20 +44,20 @@ export default function ModeSwitcher({ mode, onModeChange }: ModeSwitcherProps) 
   });
 
   const thumbColorStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], ["#FC6E20", "#FC6E20"]),
-    shadowColor: interpolateColor(progress.value, [0, 1], ["#FC6E20", "#FC6E20"]),
+    backgroundColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.primary500]),
+    shadowColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.primary500]),
   }));
 
   const practiceTextStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], ["#FFFFFF", "#94A3B8"]),
+    color: interpolateColor(progress.value, [0, 1], [ICON_COLORS.white, ICON_COLORS.slate400]),
   }));
 
   const onlineTextStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], ["#94A3B8", "#FFFFFF"]),
+    color: interpolateColor(progress.value, [0, 1], [ICON_COLORS.slate400, ICON_COLORS.white]),
   }));
 
   const badgeColorStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], ["#FC6E20", "#3B82F6"]),
+    backgroundColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.blue500]),
   }));
 
   return (

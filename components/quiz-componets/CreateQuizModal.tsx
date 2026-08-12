@@ -8,7 +8,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { X, Sparkles, Plus, Minus } from "lucide-react-native";
-import { SUBJECTS } from "@/constants/quizStyles";
+import { ICON_COLORS, SUBJECTS } from "@/constants/quizStyles";
 
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
@@ -101,7 +101,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
               activeOpacity={0.7}
               onPress={onClose}
             >
-              <X size={16} color="#64748b" strokeWidth={2.5} />
+              <X size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
 
@@ -134,7 +134,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
               activeOpacity={0.7}
               onPress={() => adjustQuestions(-1)}
             >
-              <Minus size={16} color="#64748b" strokeWidth={2.5} />
+              <Minus size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
             </TouchableOpacity>
             <View className="flex-1 items-center">
               <Text className="text-3xl font-black text-slate-800">{questions}</Text>
@@ -145,7 +145,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
               activeOpacity={0.7}
               onPress={() => adjustQuestions(1)}
             >
-              <Plus size={16} color="#64748b" strokeWidth={2.5} />
+              <Plus size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
 
@@ -164,7 +164,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
                 activeOpacity={0.7}
                 onPress={() => adjustTimer(-1)}
               >
-                <Minus size={14} color="#64748b" strokeWidth={2.5} />
+                <Minus size={14} color={ICON_COLORS.slate500} strokeWidth={2.5} />
               </TouchableOpacity>
               <Text className="text-base font-black text-slate-800 w-16 text-center">
                 {timer} min
@@ -174,7 +174,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
                 activeOpacity={0.7}
                 onPress={() => adjustTimer(1)}
               >
-                <Plus size={14} color="#64748b" strokeWidth={2.5} />
+                <Plus size={14} color={ICON_COLORS.slate500} strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
           </View>
@@ -196,7 +196,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
               onClose();
             }}
           >
-            <Sparkles size={18} color="#fff" strokeWidth={2} />
+            <Sparkles size={18} color={ICON_COLORS.white} strokeWidth={2} />
             <Text className="text-white font-black text-base">Generate Quiz</Text>
           </TouchableOpacity>
         </Animated.View>

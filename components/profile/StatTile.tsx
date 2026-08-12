@@ -1,27 +1,25 @@
 import { View, Text } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
-import { profileStyles as styles } from "./profileTheme";
 
 interface StatTileProps {
   icon: LucideIcon;
   iconColor: string;
-  iconBg: string;
+  iconBgClass: string;
   label: string;
   value: string | number;
-  flex?: number;
 }
 
 export default function StatTile({
-  icon: Icon, iconColor, iconBg, label, value, flex = 1,
+  icon: Icon, iconColor, iconBgClass, label, value,
 }: StatTileProps) {
   return (
-    <View style={[styles.card, { flex, alignItems: "center", paddingVertical: 14 }]}>
-      <View style={[styles.iconBadge, { backgroundColor: iconBg, width: 40, height: 40, borderRadius: 20 }]}>
+    <View className="flex-1 bg-white rounded-[18px] border border-slate-100 items-center py-3.5">
+      <View className={`w-10 h-10 rounded-full items-center justify-center ${iconBgClass}`}>
         <Icon size={18} color={iconColor} strokeWidth={2} />
       </View>
-      <Text style={{ color: "#1e293b", fontWeight: "900", fontSize: 16, marginTop: 6 }}>{value}</Text>
+      <Text className="text-slate-800 font-black text-base mt-1.5">{value}</Text>
       <Text
-        style={{ color: "#94a3b8", fontSize: 9, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}
+        className="text-slate-400 text-[9px] font-bold uppercase tracking-wider mt-0.5"
         numberOfLines={1}
       >
         {label}

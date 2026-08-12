@@ -30,7 +30,7 @@ import {
   RotateCcw,
 } from "lucide-react-native";
 
-import { getDifficultyStyle } from "@/constants/quizStyles";
+import { getDifficultyStyle, ICON_COLORS } from "@/constants/quizStyles";
 import { OPTION_LABELS, formatTime } from "@/constants/quizHelpers";
 import TimesUpModel from "@/components/quiz-componets/TimesUpModel";
 import ExitQuizModal from "@/components/quiz-componets/ExitQuizModal";
@@ -460,7 +460,7 @@ export default function QuizSession() {
           activeOpacity={0.7}
           onPress={() => setShowExit(true)}
         >
-          <ChevronLeft size={18} color="#64748b" strokeWidth={2.5} />
+          <ChevronLeft size={18} color={ICON_COLORS.slate500} strokeWidth={2.5} />
         </TouchableOpacity>
 
         <View className="items-center justify-center">
@@ -479,9 +479,9 @@ export default function QuizSession() {
         >
           <Flag
             size={16}
-            color={isFlagged ? "#7C3AED" : "#64748b"}
+            color={isFlagged ? ICON_COLORS.violet600 : ICON_COLORS.slate500}
             strokeWidth={2.5}
-            fill={isFlagged ? "#EDE9FE" : "transparent"}
+            fill={isFlagged ? ICON_COLORS.violet100 : "transparent"}
           />
         </TouchableOpacity>
       </View>
@@ -498,8 +498,8 @@ export default function QuizSession() {
         </View>
 
         <View className="flex-row items-center gap-1">
-          <Clock size={14} color={isLow ? "#EF4444" : "#FC6E20"} strokeWidth={3} />
-          <Text className={`text-md font-black tracking-widest ${isLow ? "text-rose-500" : "text-[#FC6E20]"}`}>
+          <Clock size={14} color={isLow ? ICON_COLORS.rose500 : ICON_COLORS.primary500} strokeWidth={3} />
+          <Text className={`text-md font-black tracking-widest ${isLow ? "text-rose-500" : "text-primary"}`}>
             {formatTime(timeLeft)}
           </Text>
         </View>
@@ -538,13 +538,13 @@ export default function QuizSession() {
       <View className="bg-white rounded-2xl py-[40px] px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">
         {isFlagged && (
           <View className="flex-row items-center gap-1 absolute ps-5 pt-5">
-            <Flag size={11} color="#7C3AED" strokeWidth={2.5} fill="#EDE9FE" />
-            <Text className="text-[11px] text-[#7C3AED] font-semibold">Flagged for review</Text>
+            <Flag size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} fill={ICON_COLORS.violet100} />
+            <Text className="text-[11px] text-violet-600 font-semibold">Flagged for review</Text>
           </View>
         )}
         {!!q?.lesson && (
-          <View className="self-start flex-row items-center gap-1 px-2 py-1 rounded-full bg-orange-50 mb-3">
-            <BookOpen size={11} color="#FC6E20" strokeWidth={2.5} />
+          <View className="self-start flex-row items-center gap-1 px-2 py-1 rounded-full bg-primary-50 mb-3">
+            <BookOpen size={11} color={ICON_COLORS.primary500} strokeWidth={2.5} />
             <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
               {q.lesson}
             </Text>
@@ -596,7 +596,7 @@ export default function QuizSession() {
           disabled={current === 0}
           onPress={() => navigateTo(current - 1)}
         >
-          <ChevronLeft size={16} color="#64748b" strokeWidth={2.5} />
+          <ChevronLeft size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
           <Text className="text-sm font-bold text-slate-600">Previous</Text>
         </TouchableOpacity>
 
@@ -607,7 +607,7 @@ export default function QuizSession() {
             onPress={() => navigateTo(current + 1)}
           >
             <Text className="text-sm font-bold text-white">Next</Text>
-            <ChevronRight size={16} color="#fff" strokeWidth={2.5} />
+            <ChevronRight size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -617,8 +617,8 @@ export default function QuizSession() {
             onPress={goToResults}
           >
             {isSubmitting
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <BarChart2 size={16} color="#fff" strokeWidth={2.5} />}
+              ? <ActivityIndicator size="small" color={ICON_COLORS.white} />
+              : <BarChart2 size={16} color={ICON_COLORS.white} strokeWidth={2.5} />}
             <Text className="text-sm font-bold text-white">
               {isSubmitting ? "Saving…" : "Submit"}
             </Text>

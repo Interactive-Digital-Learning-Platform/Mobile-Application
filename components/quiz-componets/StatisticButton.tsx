@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useFocusEffect } from "expo-router";
 import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
 import Skeleton from "@/components/Skeleton";
+import { ICON_COLORS } from "@/constants/quizStyles";
 
 function StatCell({
   value,
@@ -20,7 +21,7 @@ function StatCell({
       }${bordered === "left" ? "border-l-[1px] border-primary" : ""}`}
     >
       <Text className="text-3xl font-bold color-primary">{value}</Text>
-      <Text className="text-orange-500 text-xs">{label}</Text>
+      <Text className="text-primary-500 text-xs">{label}</Text>
     </View>
   );
 }
@@ -32,8 +33,8 @@ function StatCellSkeleton({ bordered }: { bordered?: "left" | "right" }) {
         bordered === "right" ? "border-r-[1px] border-primary" : ""
       }${bordered === "left" ? "border-l-[1px] border-primary" : ""}`}
     >
-      <Skeleton width={36} height={22} color="#FFE4CF" />
-      <Skeleton width={48} height={10} color="#FFE4CF" />
+      <Skeleton width={36} height={22} color={ICON_COLORS.primary100} />
+      <Skeleton width={48} height={10} color={ICON_COLORS.primary100} />
     </View>
   );
 }
