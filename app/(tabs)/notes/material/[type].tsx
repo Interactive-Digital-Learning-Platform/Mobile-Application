@@ -32,7 +32,7 @@ import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://10.0.2.2:3001";
+
 const { width: SCREEN_W } = Dimensions.get("window");
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -309,7 +309,7 @@ const AudioPlayerView = ({
   fallbackScript: string | null;
 }) => {
   const isScript = audioUrl.endsWith(".txt");
-  const fullUrl = `${API_URL}${audioUrl}`;
+  const fullUrl = getNotesResourceUrl(audioUrl);
 
   const player = useAudioPlayer(isScript ? undefined : { uri: fullUrl });
   const status = useAudioPlayerStatus(player);

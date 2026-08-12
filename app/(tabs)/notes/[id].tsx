@@ -30,6 +30,7 @@ import {
   Sparkles,
 } from "lucide-react-native";
 import { materialsApi, notesApi } from "@/api/notesAPI";
+import { getNotesResourceUrl } from "@/api/apiClients";
 import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 
@@ -71,7 +72,7 @@ interface MaterialsOverview {
   missingCount: number;
 }
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || "http://10.0.2.2:3001";
+
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
@@ -550,7 +551,7 @@ export default function NoteDetail() {
                           <View style={styles.noteImageWrap}>
                             <Image
                               source={{
-                                uri: `${API_URL}${allPages[selectedPageIndex] || allPages[0]}`,
+                                uri: getNotesResourceUrl(allPages[selectedPageIndex] || allPages[0]),
                               }}
                               style={styles.noteImage}
                               resizeMode="contain"
@@ -564,7 +565,7 @@ export default function NoteDetail() {
                         </>
                       ) : (
                         <Image
-                          source={{ uri: `${API_URL}${allPages[0]}` }}
+                          source={{ uri: getNotesResourceUrl(allPages[0]) }}
                           style={styles.noteImage}
                           resizeMode="contain"
                         />
