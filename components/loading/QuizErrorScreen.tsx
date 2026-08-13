@@ -19,7 +19,7 @@ export default function QuizErrorScreen({
 }: QuizErrorScreenProps) {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-white">
-      <View className="px-4 pt-3">
+      <View className=" absolute top-20 left-5">
         <TouchableOpacity
           className="w-9 h-9 rounded-full bg-slate-100 justify-center items-center"
           activeOpacity={0.7}
@@ -29,13 +29,13 @@ export default function QuizErrorScreen({
         </TouchableOpacity>
       </View>
 
-      <View className="flex-1 justify-center items-center px-8">
+      <View className="h-[100%] justify-center items-center px-8">
         <View className="w-20 h-20 rounded-full bg-rose-100 justify-center items-center mb-4">
           <TriangleAlert size={40} color={ICON_COLORS.rose500} strokeWidth={2.5} />
         </View>
 
         <Text className="text-slate-800 text-xl font-black text-center">
-          Couldn't Generate Quiz
+          Couldn &apos;t Generate Quiz
         </Text>
 
         <Text className="text-slate-500 text-sm text-center mt-2 leading-5">

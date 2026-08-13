@@ -5,7 +5,10 @@ import {
 } from "lucide-react-native";
 import { capitalize } from "@/constants/quizHelpers";
 
-export type Difficulty = "Easy" | "Medium" | "Hard";
+// "Mixed" is a real value the backend can now send for a challenge-zone quiz
+// session that spanned more than one difficulty tier (see QuizSession.difficulty
+// in the Personalized-Quiz-Service backend) — not just an "unknown" fallback case.
+export type Difficulty = "Easy" | "Medium" | "Hard" | "Mixed";
 
 export const DIFFICULTY_STYLES: Record<
   Difficulty,
@@ -31,6 +34,13 @@ export const DIFFICULTY_STYLES: Record<
     dot:    "bg-rose-500",
     bar:    "bg-rose-500",
     active: "bg-rose-500 border-rose-500",
+  },
+  Mixed: {
+    bg:     "bg-violet-100",
+    text:   "text-violet-700",
+    dot:    "bg-violet-500",
+    bar:    "bg-violet-500",
+    active: "bg-violet-500 border-violet-500",
   },
 };
 

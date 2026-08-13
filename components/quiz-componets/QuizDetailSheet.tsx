@@ -12,7 +12,7 @@ import {
   Clock, BarChart2, ListChecks, Play, RotateCcw, X, HelpCircle,
   type LucideIcon,
 } from "lucide-react-native";
-import { DIFFICULTY_STYLES, ICON_COLORS, SUBJECT_ICONS } from "@/constants/quizStyles";
+import { getDifficultyStyle, ICON_COLORS, SUBJECT_ICONS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 
 const SHEET_OFFSCREEN_Y = 700;
@@ -69,7 +69,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
   }));
 
   const Icon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
-  const diff = DIFFICULTY_STYLES[item.difficulty];
+  const diff = getDifficultyStyle(item.difficulty);
   const hasStarted = item.progress > 0;
   const isComplete = item.progress === 100;
   const correctCount = item.correct_count ?? 0;
