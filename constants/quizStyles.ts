@@ -5,9 +5,7 @@ import {
 } from "lucide-react-native";
 import { capitalize } from "@/constants/quizHelpers";
 
-// "Mixed" is a real value the backend can now send for a challenge-zone quiz
-// session that spanned more than one difficulty tier (see QuizSession.difficulty
-// in the Personalized-Quiz-Service backend) — not just an "unknown" fallback case.
+// "Mixed" = a challenge-zone session spanning more than one tier, not an unknown fallback.
 export type Difficulty = "Easy" | "Medium" | "Hard" | "Mixed";
 
 export const DIFFICULTY_STYLES: Record<
@@ -51,12 +49,8 @@ export const DIFF_DOT: Record<string, string> = {
   Hard:   DIFFICULTY_STYLES.Hard.dot,
 };
 
-// Raw hex for the handful of spots that genuinely can't take a Tailwind
-// className — lucide-react-native icons take `color` as a literal prop, and
-// react-native-svg elements take `stroke`/`fill` as literal props, neither of
-// which NativeWind can style. Keep these in sync with the primary-* scale in
-// tailwind.config.js and Tailwind's own default palette so an icon's color
-// always matches the Tailwind classes used around it.
+// Raw hex for icon `color`/`stroke`/`fill` props, which NativeWind can't style.
+// Keep in sync with the primary-* scale in tailwind.config.js.
 export const ICON_COLORS = {
   primary50:  "#FFF3EC",
   primary100: "#FFE4CF",
