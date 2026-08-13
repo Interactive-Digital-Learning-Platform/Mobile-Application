@@ -165,6 +165,24 @@ export interface MasteryComponents {
   consistency_score: number;
 }
 
+// Output of the backend's Continuous Evidence-Weighted Mastery System
+// (SubjectMastery table) — the actual driver of difficulty selection.
+// Distinct from mastery_score/mastery_level/mastery_components above, which
+// are a separate, analytics-only display metric that never affects
+// difficulty.
+export interface AdaptiveMasteryDetail {
+  mastery_score: number;
+  fluency_score: number;
+  confidence_score: number;
+  evidence_count: number;
+  recent_accuracy: number | null;
+  previous_accuracy: number | null;
+  trend_score: number | null;
+  trend_label: string;
+  retention_score: number | null;
+  last_mastery_update: string | null;
+}
+
 export interface SubjectDifficultyPerformance {
   difficulty: string;
   total_attempted: number;
@@ -277,11 +295,13 @@ export interface SubjectAnalytics {
   demotion_threshold?: number;
   quizzes_required_for_promotion?: number;
   promotion_progress_percentage?: number;
+  promotion_readiness?: number;
   next_difficulty?: string;
   difficulty_status_message?: string;
   mastery_score?: number | null;
   mastery_level?: string;
   mastery_components?: MasteryComponents | null;
+  adaptive_mastery?: AdaptiveMasteryDetail | null;
 }
 
 export interface UserAnalyticsResponse {

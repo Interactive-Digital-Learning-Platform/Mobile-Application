@@ -5,7 +5,8 @@ import {
 } from "lucide-react-native";
 import { capitalize } from "@/constants/quizHelpers";
 
-export type Difficulty = "Easy" | "Medium" | "Hard";
+// "Mixed" = a challenge-zone session spanning more than one tier, not an unknown fallback.
+export type Difficulty = "Easy" | "Medium" | "Hard" | "Mixed";
 
 export const DIFFICULTY_STYLES: Record<
   Difficulty,
@@ -32,6 +33,13 @@ export const DIFFICULTY_STYLES: Record<
     bar:    "bg-rose-500",
     active: "bg-rose-500 border-rose-500",
   },
+  Mixed: {
+    bg:     "bg-violet-100",
+    text:   "text-violet-700",
+    dot:    "bg-violet-500",
+    bar:    "bg-violet-500",
+    active: "bg-violet-500 border-violet-500",
+  },
 };
 
 export const DIFF_DOT: Record<string, string> = {
@@ -41,12 +49,8 @@ export const DIFF_DOT: Record<string, string> = {
   Hard:   DIFFICULTY_STYLES.Hard.dot,
 };
 
-// Raw hex for the handful of spots that genuinely can't take a Tailwind
-// className — lucide-react-native icons take `color` as a literal prop, and
-// react-native-svg elements take `stroke`/`fill` as literal props, neither of
-// which NativeWind can style. Keep these in sync with the primary-* scale in
-// tailwind.config.js and Tailwind's own default palette so an icon's color
-// always matches the Tailwind classes used around it.
+// Raw hex for icon `color`/`stroke`/`fill` props, which NativeWind can't style.
+// Keep in sync with the primary-* scale in tailwind.config.js.
 export const ICON_COLORS = {
   primary50:  "#FFF3EC",
   primary100: "#FFE4CF",
