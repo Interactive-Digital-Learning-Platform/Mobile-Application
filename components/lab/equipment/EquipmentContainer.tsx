@@ -3,12 +3,12 @@ import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { ChemicalType, EquipmentContentType } from "@/types";
+import { ChemicalType, EquipmentContentType } from "@/types/labModuleTypes";
 import { useDraggableBenchItem } from "@/hooks/use-draggable-bench-item";
-import { EquipmentVisualProps } from "./equipment/types";
-import BubbleEffect from "./effects/BubbleEffect";
-import SteamEffect from "./effects/SteamEffect";
-import PourAnimation from "./effects/PourAnimation";
+import { EquipmentVisualProps } from "./types";
+import BubbleEffect from "../effects/BubbleEffect";
+import SteamEffect from "../effects/SteamEffect";
+import PourAnimation from "../effects/PourAnimation";
 
 // Bench render size for every container-role instance. `BOX` is the art's footprint; the liquid
 // hitbox below scales its height by fillLevel so it roughly tracks the SVG-rendered liquid.

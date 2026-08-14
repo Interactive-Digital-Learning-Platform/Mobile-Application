@@ -8,7 +8,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { ChemicalType } from "@/types";
+import { ChemicalType } from "@/types/labModuleTypes";
 import ChemicalBottle from "./ChemicalBottle";
 
 const DRAWER_HEIGHT = 260;

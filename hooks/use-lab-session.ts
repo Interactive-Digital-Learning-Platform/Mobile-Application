@@ -9,7 +9,7 @@ import {
   completeSession,
   fetchSessionReport,
 } from "@/services/sessionService";
-import { LogStepActionRequestType } from "@/types";
+import { LogStepActionRequestType } from "@/types/labModuleTypes";
 
 export const useStartSession = () => {
   return useMutation({ mutationFn: (experimentId: string) => startSession(experimentId) });

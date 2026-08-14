@@ -3,5 +3,17 @@
     "source.fixAll": "explicit",
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
-  }
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "tailwindCSS.classAttributes": ["class", "className", "cssClass", "style"],
+  "tailwindCSS.experimental.classRegex": [
+    ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+    ["className=['\"]([^'\"]*)['\"]"]
+  ],
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "css.lint.unknownAtRules": "ignore"
 }

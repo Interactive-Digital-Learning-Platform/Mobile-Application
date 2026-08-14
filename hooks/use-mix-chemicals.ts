@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { mixChemicals } from "@/services/labService";
-import { MixRequestType } from "@/types";
+import { MixRequestType } from "@/types/labModuleTypes";
 
 export const useMixChemicals = (labRunId: string | undefined) => {
   const queryClient = useQueryClient();

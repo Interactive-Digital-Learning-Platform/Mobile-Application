@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { fetchCompoundBuildTemplate, submitCompoundBuild } from "@/services/compoundBuilderService";
-import { CompoundBuildRequestType } from "@/types";
+import { CompoundBuildRequestType } from "@/types/labModuleTypes";
 
 export const useCompoundBuildTemplate = (experimentId: string | undefined, compoundId: string | undefined) => {
   return useQuery({

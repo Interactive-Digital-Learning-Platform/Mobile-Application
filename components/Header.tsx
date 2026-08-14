@@ -1,4 +1,4 @@
-import { HeaderProps } from "@/types";
+import { HeaderProps } from "@/types/chatModuleTypes";
 import { router } from "expo-router";
 import { ArrowLeftCircle } from "lucide-react-native";
 import { Text, View, TouchableOpacity, StyleSheet } from "react-native";
@@ -11,7 +11,7 @@ export default function Header({
   return (
     <View className="w-full h-14 flex-row justify-between items-center">
       <TouchableOpacity
-        onPress={() => router.back()}
+        onPress={() => router.replace('/(tabs)/quiz')}
         className="w-6 h-full justify-center items-center"
       >
         <ArrowLeftCircle size={24} color="#282828" />

@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { ComponentType } from "react";
 import { colors } from "@/constants/colors";
-import { EquipmentVisualProps } from "./equipment/types";
+import { EquipmentVisualProps } from "./types";
 
 type Props = {
   equipmentType: string;

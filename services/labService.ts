@@ -1,5 +1,5 @@
 import axiosInstance from "@/providers/axios";
-import { LabRunType, LogLabActionRequestType, LogLabActionResponseType, MixRequestType, ReactionResultType } from "@/types";
+import { LabRunType, LogLabActionRequestType, LogLabActionResponseType, MixRequestType, ReactionResultType } from "@/types/labModuleTypes";
 
 export const startLabRun = async (sessionId?: string): Promise<LabRunType> => {
   const response = await axiosInstance.post("/api/lab/runs", sessionId ? { sessionId } : {});

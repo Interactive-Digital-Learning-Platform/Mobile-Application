@@ -1,6 +1,6 @@
 import { Alert, Modal, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
-import { ChemicalType, EquipmentInstanceType } from "@/types";
+import { ChemicalType, EquipmentInstanceType } from "@/types/labModuleTypes";
 import { LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";

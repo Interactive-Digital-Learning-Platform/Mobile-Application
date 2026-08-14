@@ -17,14 +17,14 @@ import {
 import { useStartLabRun } from "@/hooks/use-lab-run";
 import { BenchActionOutcome, useLabWorkspace } from "@/hooks/use-lab-workspace";
 import { useDropTargetRegistry } from "@/hooks/use-drop-target-registry";
-import CompoundBuilder from "@/components/lab/CompoundBuilder";
+import CompoundBuilder from "@/components/lab/chemicals/CompoundBuilder";
 import LabWorkspace from "@/components/lab/LabWorkspace";
-import ChemicalBottle from "@/components/lab/ChemicalBottle";
-import EquipmentShelfItem from "@/components/lab/EquipmentShelfItem";
-import EducationalInfoPanel from "@/components/lab/EducationalInfoPanel";
-import ChemicalInspectPanel from "@/components/lab/ChemicalInspectPanel";
-import EquipmentInspectPanel from "@/components/lab/EquipmentInspectPanel";
-import { ChemicalType, InterventionType, ReactionResultType } from "@/types";
+import ChemicalBottle from "@/components/lab/chemicals/ChemicalBottle";
+import EquipmentShelfItem from "@/components/lab/equipment/EquipmentShelfItem";
+import EducationalInfoPanel from "@/components/lab/panels/EducationalInfoPanel";
+import ChemicalInspectPanel from "@/components/lab/chemicals/ChemicalInspectPanel";
+import EquipmentInspectPanel from "@/components/lab/equipment/EquipmentInspectPanel";
+import { ChemicalType, InterventionType, ReactionResultType } from "@/types/labModuleTypes";
 import Button from "@/components/ui/Button";
 import ProgressSteps, { ProgressStepsCaption } from "@/components/ui/ProgressSteps";
 

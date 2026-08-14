@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, Image, View } from "react-native";
-import { customButtonType } from "@/types";
+import { customButtonType } from "@/types/chatModuleTypes";
 
 const CustomButton = ({
   title,

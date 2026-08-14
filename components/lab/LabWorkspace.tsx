@@ -1,9 +1,9 @@
 import { ComponentType } from "react";
 import { View } from "react-native";
-import { ChemicalType, EquipmentInstanceType, LastMeasurementType } from "@/types";
+import { ChemicalType, EquipmentInstanceType, LastMeasurementType } from "@/types/labModuleTypes";
 import { EquipmentRole, LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
-import EquipmentContainer from "./EquipmentContainer";
-import PhMeterInstrument from "./PhMeterInstrument";
+import EquipmentContainer from "./equipment/EquipmentContainer";
+import PhMeterInstrument from "./equipment/PhMeterInstrument";
 
 type Props = {
   equipment: EquipmentInstanceType[];

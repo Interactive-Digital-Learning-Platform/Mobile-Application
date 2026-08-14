@@ -1,6 +1,6 @@
 import { Modal, ScrollView, Text, View } from "react-native";
 import { colors } from "@/constants/colors";
-import { ReactionResultType } from "@/types";
+import { ReactionResultType } from "@/types/labModuleTypes";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
 

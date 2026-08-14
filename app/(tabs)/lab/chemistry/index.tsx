@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { Clock, FlaskConical } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { useExperiments } from "@/hooks/use-experiments";
-import { PracticalSummaryType } from "@/types";
+import { PracticalSummaryType } from "@/types/labModuleTypes";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";

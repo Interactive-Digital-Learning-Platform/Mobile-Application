@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
-import { ChemicalType } from "@/types";
+import { ChemicalType } from "@/types/labModuleTypes";
 
 type Props = {
   chemical: ChemicalType;

@@ -8,8 +8,8 @@ import { colors } from "@/constants/colors";
 import { useChemicals } from "@/hooks/use-chemicals";
 import { useSubmitChemicalSelection } from "@/hooks/use-lab-session";
 import { usePressScale } from "@/hooks/use-press-scale";
-import CompoundBuilder from "@/components/lab/CompoundBuilder";
-import { ChemicalType, SelectionResultType } from "@/types";
+import CompoundBuilder from "@/components/lab/chemicals/CompoundBuilder";
+import { ChemicalType, SelectionResultType } from "@/types/labModuleTypes";
 import Button from "@/components/ui/Button";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);

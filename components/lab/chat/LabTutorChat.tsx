@@ -11,7 +11,7 @@ import {
 import { FlashList, FlashListRef } from "@shopify/flash-list";
 import { Send, Sparkles, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
-import { MessageType } from "@/types";
+import { MessageType } from "@/types/labModuleTypes";
 import Message from "@/components/Message";
 import { useLabTutor } from "@/hooks/use-lab-tutor";
 

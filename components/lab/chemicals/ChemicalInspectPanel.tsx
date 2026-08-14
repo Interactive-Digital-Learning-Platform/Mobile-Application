@@ -1,5 +1,5 @@
 import { Modal, ScrollView, Text, View } from "react-native";
-import { ChemicalType } from "@/types";
+import { ChemicalType } from "@/types/labModuleTypes";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
 

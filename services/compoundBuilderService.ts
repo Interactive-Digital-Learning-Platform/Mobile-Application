@@ -1,5 +1,5 @@
 import axiosInstance from "@/providers/axios";
-import { CompoundBuildRequestType, CompoundBuildResultType, CompoundBuildTemplateType } from "@/types";
+import { CompoundBuildRequestType, CompoundBuildResultType, CompoundBuildTemplateType } from "@/types/labModuleTypes";
 
 export const fetchCompoundBuildTemplate = async (
   experimentId: string,

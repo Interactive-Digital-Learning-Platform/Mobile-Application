@@ -3,9 +3,9 @@ import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { EquipmentInstanceType, LastMeasurementType } from "@/types";
+import { EquipmentInstanceType, LastMeasurementType } from "@/types/labModuleTypes";
 import { useDraggableBenchItem } from "@/hooks/use-draggable-bench-item";
-import PhMeterArt from "./equipment/PhMeterArt";
+import PhMeterArt from "./PhMeterArt";
 
 const ART_SIZE = 84; // 1.2x PhMeterArt's own viewBox height (70) — see probeOffset in labEquipment.ts
 const MEASURE_DEBOUNCE_MS = 150; // avoids a false trigger on a quick pass-through of the liquid

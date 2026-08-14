@@ -1,5 +1,5 @@
 import axiosInstance from "@/providers/axios";
-import { PracticalDetailType, PracticalSummaryType } from "@/types";
+import { PracticalDetailType, PracticalSummaryType } from "@/types/labModuleTypes";
 
 export const fetchExperiments = async (subject: string): Promise<PracticalSummaryType[]> => {
   const response = await axiosInstance.get("/api/experiments", { params: { subject } });

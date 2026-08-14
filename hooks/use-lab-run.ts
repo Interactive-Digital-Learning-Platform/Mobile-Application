@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { startLabRun, fetchLabRun, logLabAction, completeLabRun } from "@/services/labService";
-import { LabRunType, LogLabActionRequestType, LogLabActionResponseType } from "@/types";
+import { LabRunType, LogLabActionRequestType, LogLabActionResponseType } from "@/types/labModuleTypes";
 
 export const useStartLabRun = () => {
   const queryClient = useQueryClient();

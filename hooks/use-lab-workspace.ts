@@ -1,5 +1,5 @@
 import { useLabRun, useLogLabAction } from "@/hooks/use-lab-run";
-import { EquipmentInstanceType, InterventionType, LastMeasurementType, ReactionResultType } from "@/types";
+import { EquipmentInstanceType, InterventionType, LastMeasurementType, ReactionResultType } from "@/types/labModuleTypes";
 
 export type BenchActionOutcome = { reactionResult: ReactionResultType | null; intervention: InterventionType };
 

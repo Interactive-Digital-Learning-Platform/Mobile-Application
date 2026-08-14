@@ -1,5 +1,5 @@
 import axiosInstance from "@/providers/axios";
-import { ChemicalType } from "@/types";
+import { ChemicalType } from "@/types/labModuleTypes";
 
 export type ChemicalFilters = {
   search?: string;

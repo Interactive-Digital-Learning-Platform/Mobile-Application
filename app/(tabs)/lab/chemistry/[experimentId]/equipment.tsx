@@ -9,7 +9,7 @@ import { LAB_EQUIPMENT_CATALOG, EquipmentCatalogItem } from "@/constants/labEqui
 import { useExperiment } from "@/hooks/use-experiments";
 import { useStartSession, useSubmitEquipmentSelection } from "@/hooks/use-lab-session";
 import { usePressScale } from "@/hooks/use-press-scale";
-import { SelectionResultType } from "@/types";
+import { SelectionResultType } from "@/types/labModuleTypes";
 import Button from "@/components/ui/Button";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);

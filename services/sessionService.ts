@@ -6,7 +6,7 @@ import {
   LogStepActionResponseType,
   SelectionResultType,
   SessionType,
-} from "@/types";
+} from "@/types/labModuleTypes";
 
 export const startSession = async (experimentId: string): Promise<SessionType> => {
   const response = await axiosInstance.post("/api/sessions/start", { experimentId });
