@@ -1,12 +1,56 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
+import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react-native";
 import { colors } from "@/constants/colors";
-import { LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
+import { LAB_EQUIPMENT_CATALOG, EquipmentCatalogItem } from "@/constants/labEquipment";
 import { useExperiment } from "@/hooks/use-experiments";
 import { useStartSession, useSubmitEquipmentSelection } from "@/hooks/use-lab-session";
+import { usePressScale } from "@/hooks/use-press-scale";
 import { SelectionResultType } from "@/types";
+import Button from "@/components/ui/Button";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const EquipmentChip = ({
+  item,
+  isSelected,
+  isConfirmedCorrect,
+  onPress,
+}: {
+  item: EquipmentCatalogItem;
+  isSelected: boolean;
+  isConfirmedCorrect: boolean;
+  onPress: () => void;
+}) => {
+  const { style, onPressIn, onPressOut } = usePressScale();
+  const Visual = item.Visual;
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      className="flex-row items-center gap-1.5 px-3 py-2 rounded-2xl border"
+      style={[
+        {
+          backgroundColor: isConfirmedCorrect ? "#ECFDF5" : isSelected ? `${colors.primary}0D` : "white",
+          borderColor: isConfirmedCorrect ? "#10B981" : isSelected ? colors.primary : colors.borderColorLight,
+          borderWidth: isConfirmedCorrect || isSelected ? 1.5 : 1,
+        },
+        style,
+      ]}
+    >
+      <Visual size={22} color={isConfirmedCorrect ? "#10B981" : isSelected ? colors.primary : colors.primaryBlack} />
+      <Text className="font-amedium" style={{ color: colors.primaryBlack }}>
+        {item.label}
+      </Text>
+      {isConfirmedCorrect && <CheckCircle2 size={15} color="#10B981" />}
+    </AnimatedPressable>
+  );
+};
 
 export default function EquipmentSelection() {
   const { experimentId } = useLocalSearchParams<{ experimentId: string }>();
@@ -69,15 +113,13 @@ export default function EquipmentSelection() {
   if (experimentError || sessionError || !session) {
     return (
       <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
-        <Text className="text-lg font-amedium text-center" style={{ color: colors.primaryBlack }}>
-          Couldn&apos;t reach the server
-        </Text>
-        <Text className="font-aregular text-[#979797] text-center mt-2 mb-4">
+        <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
+        <Text className="font-aregular text-muted text-center mt-2 mb-4">
           Check that the backend is running and reachable from this device.
         </Text>
-        <Pressable onPress={() => startSession(experimentId)} className="px-6 py-3 rounded-xl" style={{ backgroundColor: colors.primaryBlack }}>
-          <Text className="text-white font-amedium">Retry</Text>
-        </Pressable>
+        <View className="self-stretch">
+          <Button label="Retry" onPress={() => startSession(experimentId)} variant="secondary" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -85,72 +127,59 @@ export default function EquipmentSelection() {
   return (
     <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
       <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
-        <Text className="text-xl font-amedium" style={{ color: colors.primaryBlack }}>
-          {experiment?.title}
-        </Text>
-        <Text className="font-aregular text-[#979797] mt-1 mb-4">
+        <Text className="text-xl font-amedium text-ink">{experiment?.title}</Text>
+        <Text className="font-aregular text-muted mt-1 mb-4">
           Select the equipment you&apos;ll need for this practical before starting.
         </Text>
 
         <View className="flex-row flex-wrap gap-2">
-          {LAB_EQUIPMENT_CATALOG.map((item) => {
-            const isSelected = selected.includes(item.key);
-            const isConfirmedCorrect = result?.correct.includes(item.key);
-            return (
-              <Pressable
-                key={item.key}
-                onPress={() => toggle(item.key)}
-                className="px-4 py-2 rounded-full border"
-                style={{
-                  backgroundColor: isSelected ? colors.primary : "white",
-                  borderColor: isConfirmedCorrect ? "#4CAF50" : isSelected ? colors.primary : colors.borderColorLight,
-                  borderWidth: isConfirmedCorrect ? 2 : 1,
-                }}
-              >
-                <Text className="font-amedium" style={{ color: isSelected ? "white" : colors.primaryBlack }}>
-                  {isConfirmedCorrect ? "✓ " : ""}
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {LAB_EQUIPMENT_CATALOG.map((item) => (
+            <EquipmentChip
+              key={item.key}
+              item={item}
+              isSelected={selected.includes(item.key)}
+              isConfirmedCorrect={!!result?.correct.includes(item.key)}
+              onPress={() => toggle(item.key)}
+            />
+          ))}
         </View>
 
         {result && !result.complete && (
-          <View className="mt-5 p-4 rounded-xl bg-amber-50">
-            <Text className="font-amedium text-amber-900">
-              {result.missingCount > 0
-                ? `You're missing ${result.missingCount} item(s).`
-                : "You've selected some equipment this experiment doesn't need."}
-            </Text>
-            <Text className="font-aregular text-amber-800 mt-1">{result.hint}</Text>
+          <View className="mt-5 p-4 rounded-2xl bg-amber-50 flex-row gap-2">
+            <AlertTriangle size={18} color="#B45309" />
+            <View className="flex-1">
+              <Text className="font-amedium text-amber-900">
+                {result.missingCount > 0
+                  ? `You're missing ${result.missingCount} item(s).`
+                  : "You've selected some equipment this experiment doesn't need."}
+              </Text>
+              <Text className="font-aregular text-amber-800 mt-1">{result.hint}</Text>
+            </View>
           </View>
         )}
 
         {result?.complete && (
-          <View className="mt-5 p-4 rounded-xl bg-green-50">
-            <Text className="font-amedium text-green-900">Correct equipment selected! Moving on...</Text>
+          <View className="mt-5 p-4 rounded-2xl bg-emerald-50 flex-row items-center gap-2">
+            <CheckCircle2 size={18} color="#059669" />
+            <Text className="font-amedium text-emerald-800">Correct equipment selected! Moving on...</Text>
           </View>
         )}
 
         {submitError && (
-          <View className="mt-5 p-4 rounded-xl bg-red-50">
-            <Text className="font-amedium text-red-900">{submitError}</Text>
+          <View className="mt-5 p-4 rounded-2xl bg-red-50 flex-row gap-2">
+            <XCircle size={18} color="#B91C1C" />
+            <Text className="font-amedium text-red-900 flex-1">{submitError}</Text>
           </View>
         )}
       </ScrollView>
 
       <View className="p-4">
-        <Pressable
+        <Button
+          label={submitMutation.isPending ? "Checking..." : "Confirm Selection"}
           onPress={handleSubmit}
           disabled={selected.length === 0 || submitMutation.isPending}
-          className="py-3 rounded-xl items-center"
-          style={{ backgroundColor: colors.primaryBlack, opacity: selected.length === 0 ? 0.5 : 1 }}
-        >
-          <Text className="text-white font-amedium text-lg">
-            {submitMutation.isPending ? "Checking..." : "Confirm Selection"}
-          </Text>
-        </Pressable>
+          size="lg"
+        />
       </View>
     </SafeAreaView>
   );

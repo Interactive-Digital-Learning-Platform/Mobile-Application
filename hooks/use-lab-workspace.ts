@@ -1,50 +1,90 @@
-import { useCallback, useState } from "react";
+import { useLabRun, useLogLabAction } from "@/hooks/use-lab-run";
+import { EquipmentInstanceType, InterventionType, LastMeasurementType, ReactionResultType } from "@/types";
 
-export type EquipmentDef = { id: string; type: string; label: string };
+export type BenchActionOutcome = { reactionResult: ReactionResultType | null; intervention: InterventionType };
 
-export const EQUIPMENT_LIST: EquipmentDef[] = [
-  { id: "beaker-1", type: "beaker", label: "Beaker" },
-  { id: "test-tube-1", type: "test_tube", label: "Test Tube" },
-  { id: "burner-1", type: "burner", label: "Burner" },
-  { id: "dropper-1", type: "dropper", label: "Dropper" },
-];
+// Thin action-dispatch layer over the real LabRun backend (see labRun.controller.js) — replaces
+// the old local-only useState prototype. Every call here is a real POST to /api/lab/runs/:id/action,
+// so the bench state is authoritative on the server, not just in this component tree.
+export const useLabWorkspace = (labRunId: string | undefined) => {
+  const { data: labRun, isLoading, isError, refetch } = useLabRun(labRunId);
+  const logAction = useLogLabAction(labRunId);
 
-const INITIAL_POSITIONS: Record<string, { x: number; y: number }> = {
-  "beaker-1": { x: 20, y: 20 },
-  "test-tube-1": { x: 160, y: 20 },
-  "burner-1": { x: 20, y: 160 },
-  "dropper-1": { x: 160, y: 160 },
-};
+  const equipment = labRun?.equipment || [];
 
-export const useLabWorkspace = () => {
-  const [positions, setPositions] = useState(INITIAL_POSITIONS);
-  const [chemicalIds, setChemicalIds] = useState<Record<string, string[]>>({});
-  const [heated, setHeated] = useState<Record<string, boolean>>({});
+  const createEquipment = (equipmentType: string, position: { x: number; y: number }) => {
+    const instanceId = `${equipmentType}-${Date.now()}`;
+    logAction.mutate({ actionType: "create_equipment", instanceId, equipmentType, position });
+  };
 
-  const moveEquipment = useCallback((id: string, position: { x: number; y: number }) => {
-    setPositions((prev) => ({ ...prev, [id]: position }));
-  }, []);
+  const moveEquipment = (instanceId: string, position: { x: number; y: number }) => {
+    logAction.mutate({ actionType: "move_equipment", instanceId, position });
+  };
 
-  const addChemicalToEquipment = useCallback((id: string, chemicalId: string) => {
-    setChemicalIds((prev) => ({ ...prev, [id]: [...(prev[id] || []), chemicalId] }));
-  }, []);
+  const removeEquipment = (instanceId: string) => {
+    logAction.mutate({ actionType: "remove_equipment", instanceId });
+  };
 
-  const clearEquipment = useCallback((id: string) => {
-    setChemicalIds((prev) => ({ ...prev, [id]: [] }));
-  }, []);
+  // onOutcome, when given, is called with this action's continuous reaction check (see
+  // checkAndApplyReaction) and proactive safety check (checkSafetyIntervention) — only
+  // add_chemical/heat trigger either.
+  const addChemical = (
+    instanceId: string,
+    chemicalId: string,
+    quantity?: number,
+    unit?: string,
+    onOutcome?: (outcome: BenchActionOutcome) => void
+  ) => {
+    logAction.mutate(
+      { actionType: "add_chemical", instanceId, chemicalId, quantity, unit },
+      { onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }) }
+    );
+  };
 
-  const toggleHeat = useCallback((id: string) => {
-    setHeated((prev) => ({ ...prev, [id]: !prev[id] }));
-  }, []);
+  const toggleHeat = (instanceId: string, onOutcome?: (outcome: BenchActionOutcome) => void) => {
+    const instance = equipment.find((e) => e.instanceId === instanceId);
+    logAction.mutate(
+      { actionType: "heat", instanceId, heated: !instance?.isHeated },
+      { onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }) }
+    );
+  };
+
+  // Probe-role equipment (e.g. pH meter) — see PhMeterInstrument.tsx for the state machine that
+  // calls these once its probe tip is detected overlapping a target container's liquid region.
+  const probeMeasure = (
+    probeInstanceId: string,
+    targetInstanceId: string,
+    onOutcome?: (lastMeasurement: LastMeasurementType) => void
+  ) => {
+    logAction.mutate(
+      { actionType: "probe_measure", instanceId: probeInstanceId, targetInstanceId },
+      {
+        onSuccess: (result) => {
+          const updated = result.labRun.equipment.find(
+            (e: EquipmentInstanceType) => e.instanceId === probeInstanceId
+          );
+          onOutcome?.(updated?.lastMeasurement ?? null);
+        },
+      }
+    );
+  };
+
+  const probeDetach = (probeInstanceId: string) => {
+    logAction.mutate({ actionType: "probe_detach", instanceId: probeInstanceId });
+  };
 
   return {
-    equipmentList: EQUIPMENT_LIST,
-    positions,
-    chemicalIds,
-    heated,
+    labRun,
+    isLoading,
+    isError,
+    refetch,
+    equipment,
+    createEquipment,
     moveEquipment,
-    addChemicalToEquipment,
-    clearEquipment,
+    removeEquipment,
+    addChemical,
     toggleHeat,
+    probeMeasure,
+    probeDetach,
   };
 };

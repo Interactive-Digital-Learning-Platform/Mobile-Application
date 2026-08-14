@@ -1,13 +1,18 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import Animated from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { Check, Hammer } from "lucide-react-native";
+import { AlertTriangle, Check, CheckCircle2, Hammer, Search } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { useChemicals } from "@/hooks/use-chemicals";
 import { useSubmitChemicalSelection } from "@/hooks/use-lab-session";
+import { usePressScale } from "@/hooks/use-press-scale";
 import CompoundBuilder from "@/components/lab/CompoundBuilder";
 import { ChemicalType, SelectionResultType } from "@/types";
+import Button from "@/components/ui/Button";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Compounds flagged isBuildableFromElements are constructed via the Compound Builder rather than
 // selected directly — tapping one opens the builder instead of toggling a plain select chip.
@@ -23,34 +28,43 @@ const ChemicalChip = ({
   isConfirmedCorrect: boolean;
   isBuilt: boolean;
   onPress: () => void;
-}) => (
-  <Pressable
-    onPress={onPress}
-    className="flex-1 flex-row items-center gap-2 px-3 py-2 rounded-xl border"
-    style={{
-      backgroundColor: isBuilt ? "#E8F5E9" : isSelected ? colors.primary : "white",
-      borderColor: isConfirmedCorrect || isBuilt ? "#4CAF50" : isSelected ? colors.primary : colors.borderColorLight,
-      borderWidth: isConfirmedCorrect || isBuilt ? 2 : 1,
-    }}
-  >
-    <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: item.color, borderWidth: 1, borderColor: "#00000022" }} />
-    <Text
-      className="font-amedium flex-1"
-      style={{ color: isBuilt ? "#2E7D32" : isSelected ? "white" : colors.primaryBlack }}
-      numberOfLines={1}
+}) => {
+  const isCorrect = isConfirmedCorrect || isBuilt;
+  const { style, onPressIn, onPressOut } = usePressScale();
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      className="flex-1 flex-row items-center gap-2 px-3 py-2.5 rounded-2xl border"
+      style={[
+        {
+          backgroundColor: isCorrect ? "#ECFDF5" : isSelected ? `${colors.primary}0D` : "white",
+          borderColor: isCorrect ? "#10B981" : isSelected ? colors.primary : colors.borderColorLight,
+          borderWidth: isCorrect || isSelected ? 1.5 : 1,
+          shadowColor: isCorrect ? "#10B981" : "transparent",
+          shadowOpacity: isCorrect ? 0.15 : 0,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: 2 },
+        },
+        style,
+      ]}
     >
-      {item.name}
-    </Text>
-    {item.isBuildableFromElements && (
-      <View
-        className="w-6 h-6 rounded-full items-center justify-center"
-        style={{ backgroundColor: isBuilt ? "#4CAF5033" : isSelected ? "#FFFFFF33" : "#FC6E2022" }}
-      >
-        {isBuilt ? <Check size={13} color="#2E7D32" /> : <Hammer size={12} color={isSelected ? "white" : "#FC6E20"} />}
-      </View>
-    )}
-  </Pressable>
-);
+      <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: item.color, borderWidth: 1, borderColor: "#00000022" }} />
+      <Text className="font-amedium flex-1" style={{ color: colors.primaryBlack }} numberOfLines={1}>
+        {item.name}
+      </Text>
+      {item.isBuildableFromElements && (
+        <View
+          className="w-6 h-6 rounded-full items-center justify-center"
+          style={{ backgroundColor: isBuilt ? "#10B98133" : isSelected ? "#FC6E2022" : "#FC6E2022" }}
+        >
+          {isBuilt ? <Check size={13} color="#10B981" /> : <Hammer size={12} color={colors.primary} />}
+        </View>
+      )}
+    </AnimatedPressable>
+  );
+};
 
 const ChemicalGrid = ({
   items,
@@ -129,36 +143,34 @@ export default function ChemicalSelection() {
   return (
     <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
       <View className="px-4 pt-4">
-        <Text className="font-aregular text-[#979797] mb-3">
+        <Text className="font-aregular text-muted mb-3">
           Select the elements and compounds you&apos;ll need for this practical.
         </Text>
-        <TextInput
-          className="border rounded-full px-4 py-2 font-aregular mb-3"
-          style={{ borderColor: colors.borderColorLight }}
-          placeholder="Search chemicals..."
-          value={search}
-          onChangeText={setSearch}
-        />
+        <View className="flex-row items-center border rounded-full px-4 gap-2 mb-3" style={{ borderColor: colors.borderColorLight }}>
+          <Search size={16} color="#979797" />
+          <TextInput
+            className="flex-1 py-2 font-aregular"
+            placeholder="Search chemicals..."
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
       </View>
 
       {isLoading ? (
         <ActivityIndicator color={colors.primary} />
       ) : isError ? (
         <View className="flex-1 justify-center items-center px-8">
-          <Text className="text-lg font-amedium text-center" style={{ color: colors.primaryBlack }}>
-            Couldn&apos;t reach the server
-          </Text>
-          <Pressable onPress={() => refetch()} className="mt-4 px-6 py-3 rounded-xl" style={{ backgroundColor: colors.primaryBlack }}>
-            <Text className="text-white font-amedium">Retry</Text>
-          </Pressable>
+          <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
+          <View className="mt-4 self-stretch">
+            <Button label="Retry" onPress={() => refetch()} variant="secondary" />
+          </View>
         </View>
       ) : (
         <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
           {elements.length > 0 && (
             <View className="mb-5">
-              <Text className="font-amedium text-base mb-2" style={{ color: colors.primaryBlack }}>
-                Elements
-              </Text>
+              <Text className="font-amedium text-base mb-2 text-ink">Elements</Text>
               <ChemicalGrid
                 items={elements}
                 selected={selected}
@@ -172,13 +184,11 @@ export default function ChemicalSelection() {
 
           {compounds.length > 0 && (
             <View className="mb-5">
-              <Text className="font-amedium text-base mb-2" style={{ color: colors.primaryBlack }}>
-                Compounds
-              </Text>
+              <Text className="font-amedium text-base mb-2 text-ink">Compounds</Text>
               <View className="flex-row items-center gap-1 mb-2">
-                <Text className="font-aregular text-xs text-[#979797]">Compounds marked</Text>
+                <Text className="font-aregular text-xs text-muted">Compounds marked</Text>
                 <Hammer size={11} color="#FC6E20" />
-                <Text className="font-aregular text-xs text-[#979797]">open the Compound Builder — tap to construct them.</Text>
+                <Text className="font-aregular text-xs text-muted">open the Compound Builder — tap to construct them.</Text>
               </View>
               <ChemicalGrid
                 items={compounds}
@@ -196,42 +206,41 @@ export default function ChemicalSelection() {
       )}
 
       {result && !result.complete && (
-        <View className="mx-4 mt-3 p-4 rounded-xl bg-amber-50">
-          <Text className="font-amedium text-amber-900">
-            {result.missingCount > 0
-              ? `You're missing ${result.missingCount} chemical(s).`
-              : result.missingBuildsCount > 0
-                ? `You still need to build ${result.missingBuildsCount} more compound(s).`
-                : "You've selected some chemicals this experiment doesn't need."}
-          </Text>
-          <Text className="font-aregular text-amber-800 mt-1">{result.hint}</Text>
+        <View className="mx-4 mt-3 p-4 rounded-2xl bg-amber-50 flex-row gap-2">
+          <AlertTriangle size={18} color="#B45309" />
+          <View className="flex-1">
+            <Text className="font-amedium text-amber-900">
+              {result.missingCount > 0
+                ? `You're missing ${result.missingCount} chemical(s).`
+                : result.missingBuildsCount > 0
+                  ? `You still need to build ${result.missingBuildsCount} more compound(s).`
+                  : "You've selected some chemicals this experiment doesn't need."}
+            </Text>
+            <Text className="font-aregular text-amber-800 mt-1">{result.hint}</Text>
+          </View>
         </View>
       )}
 
       {result?.complete && (
-        <View className="mx-4 mt-3 p-4 rounded-xl bg-green-50">
-          <Text className="font-amedium text-green-900">Correct chemicals selected! Entering the workspace...</Text>
+        <View className="mx-4 mt-3 p-4 rounded-2xl bg-emerald-50 flex-row items-center gap-2">
+          <CheckCircle2 size={18} color="#059669" />
+          <Text className="font-amedium text-emerald-800">Correct chemicals selected! Entering the workspace...</Text>
         </View>
       )}
 
       <View className="p-4">
-        <Pressable
-          onPress={handleSubmit}
-          disabled={selected.length === 0 || submitMutation.isPending || blockedOnBuildsOnly}
-          className="py-3 rounded-xl items-center"
-          style={{
-            backgroundColor: colors.primaryBlack,
-            opacity: selected.length === 0 || blockedOnBuildsOnly ? 0.5 : 1,
-          }}
-        >
-          <Text className="text-white font-amedium text-lg">
-            {submitMutation.isPending
+        <Button
+          label={
+            submitMutation.isPending
               ? "Checking..."
               : blockedOnBuildsOnly
                 ? `Build ${outstandingBuilds} more compound${outstandingBuilds > 1 ? "s" : ""} to continue`
-                : "Confirm Selection"}
-          </Text>
-        </Pressable>
+                : "Confirm Selection"
+          }
+          onPress={handleSubmit}
+          disabled={selected.length === 0 || submitMutation.isPending || blockedOnBuildsOnly}
+          size="lg"
+        />
       </View>
 
       {builderTarget && (

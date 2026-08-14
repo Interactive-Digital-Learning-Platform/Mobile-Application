@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 type Props = { color: string; onFinish?: () => void };
 
@@ -11,7 +11,7 @@ export default function PourAnimation({ color, onFinish }: Props) {
   useEffect(() => {
     height.value = withTiming(60, { duration: 350 });
     opacity.value = withTiming(0, { duration: 600 }, (finished) => {
-      if (finished && onFinish) onFinish();
+      if (finished && onFinish) runOnJS(onFinish)();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

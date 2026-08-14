@@ -1,8 +1,8 @@
 import axiosInstance from "@/providers/axios";
-import { LabActionType, LabRunType, MixRequestType, ReactionResultType } from "@/types";
+import { LabRunType, LogLabActionRequestType, LogLabActionResponseType, MixRequestType, ReactionResultType } from "@/types";
 
-export const startLabRun = async (): Promise<LabRunType> => {
-  const response = await axiosInstance.post("/api/lab/runs");
+export const startLabRun = async (sessionId?: string): Promise<LabRunType> => {
+  const response = await axiosInstance.post("/api/lab/runs", sessionId ? { sessionId } : {});
   return response.data.data;
 };
 
@@ -11,9 +11,13 @@ export const fetchLabRun = async (id: string): Promise<LabRunType> => {
   return response.data.data;
 };
 
-export const logLabAction = async (id: string, action: Partial<LabActionType>): Promise<LabRunType> => {
+export const logLabAction = async (id: string, action: LogLabActionRequestType): Promise<LogLabActionResponseType> => {
   const response = await axiosInstance.post(`/api/lab/runs/${id}/action`, action);
-  return response.data.data;
+  return {
+    labRun: response.data.data,
+    reactionResult: response.data.meta?.reactionResult ?? null,
+    intervention: response.data.meta?.intervention ?? null,
+  };
 };
 
 export const mixChemicals = async (id: string, request: MixRequestType): Promise<ReactionResultType> => {

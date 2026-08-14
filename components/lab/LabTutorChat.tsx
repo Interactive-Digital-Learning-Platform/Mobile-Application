@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { FlashList, FlashListRef } from "@shopify/flash-list";
-import { Send, X } from "lucide-react-native";
+import { Send, Sparkles, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { MessageType } from "@/types";
 import Message from "@/components/Message";
@@ -36,11 +36,12 @@ export default function LabTutorChat({ labRunId, visible, onClose }: Props) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-white pt-14">
-        <View className="flex-row justify-between items-center px-4 pb-3">
-          <Text className="text-xl font-amedium" style={{ color: colors.primaryBlack }}>
-            AI Tutor
-          </Text>
-          <Pressable onPress={onClose}>
+        <View className="flex-row items-center gap-3 px-4 pb-3">
+          <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: `${colors.primary}1A` }}>
+            <Sparkles size={17} color={colors.primary} />
+          </View>
+          <Text className="text-xl font-amedium flex-1 text-ink">Lab Tutor</Text>
+          <Pressable onPress={onClose} hitSlop={8}>
             <X size={24} color={colors.primaryBlack} />
           </Pressable>
         </View>
@@ -56,15 +57,14 @@ export default function LabTutorChat({ labRunId, visible, onClose }: Props) {
             renderItem={({ item }) => <Message key={item.id} message={item} />}
             contentContainerClassName="px-4"
             ListEmptyComponent={
-              <Text className="font-aregular text-[#979797] text-center mt-10">
+              <Text className="font-aregular text-muted text-center mt-10">
                 Ask me anything about what you&apos;re seeing in the lab.
               </Text>
             }
           />
-          <View className="flex-row items-center gap-3 px-4 py-3 border-t" style={{ borderColor: colors.borderColorLight }}>
+          <View className="flex-row items-center gap-3 px-4 py-3 border-t border-border">
             <TextInput
-              className="flex-1 border rounded-full px-4 py-2 font-aregular"
-              style={{ borderColor: colors.borderColorLight }}
+              className="flex-1 border rounded-full px-4 py-2 font-aregular border-border"
               placeholder="Ask the tutor..."
               value={input}
               onChangeText={setInput}
