@@ -1,5 +1,4 @@
 import {
-  createConversation,
   fetchMessageHistory,
   streamMessage,
 } from "@/api/chatAPI";
@@ -7,11 +6,13 @@ import { ChatInputValues } from "@/schemas/chatSchemas";
 import { MessageType, UseChatReturn } from "@/types/chatModuleTypes";
 import { useUser } from "@clerk/expo";
 import { FlashListRef } from "@shopify/flash-list";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useChat(): UseChatReturn {
   const { user } = useUser();
+  const queryClient = useQueryClient();
+  
   const chatRef = useRef<FlashListRef<MessageType> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasPendingMessagesRef = useRef(false);
@@ -135,17 +136,18 @@ export function useChat(): UseChatReturn {
 
         let activeConversationID = conversationIDRef.current;
 
-        if (!activeConversationID) {
-          activeConversationID = await createConversation(user?.id);
-          setConversationIDSync(activeConversationID);
-        }
-
         await streamMessage({
-          conversationID: activeConversationID,
+          conversationID: activeConversationID ?? undefined,
           userID: user?.id,
           message: trimmed,
           signal: abortControllerRef.current?.signal,
           callbacks: {
+            onConversationCreated: (conversationID) => {
+              setConversationIDSync(conversationID);
+              queryClient.invalidateQueries({
+                queryKey: ["ai-conversations", user?.id]
+              })
+            },
             onToken: (token) => {
               tokenBufferRef.current += token;
               const buffered = tokenBufferRef.current;
@@ -195,11 +197,10 @@ export function useChat(): UseChatReturn {
       } finally {
         setIsStreaming(false);
         isSendingRef.current = false;
-        // activeAssistantIDRef.current = null;
         tokenBufferRef.current = "";
       }
     },
-    [user?.id, updateMessage, setConversationIDSync, scrollToLatestMessage],
+    [user?.id, updateMessage, setConversationIDSync, scrollToLatestMessage, queryClient],
   );
 
   const loadMoreHistory = useCallback(() => {

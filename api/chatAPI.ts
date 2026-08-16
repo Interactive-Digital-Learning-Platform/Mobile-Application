@@ -7,7 +7,7 @@ import {
 } from "@/schemas/chatSchemas";
 import {
   ChatConversation,
-  StreamCallbacks,
+  StreamMessagePropType,
   UserChatsRequest,
 } from "@/types/chatModuleTypes";
 import EventSource from "react-native-sse";
@@ -48,14 +48,13 @@ export const fetchMessageHistory = async (conversationID: string) => {
   return messageHistoryResponseSchema.parse(response.data);
 };
 
-export const streamMessage = async (params: {
-  conversationID: string;
-  userID: string;
-  message: string;
-  callbacks: StreamCallbacks;
-  signal?: AbortSignal;
-}): Promise<void> => {
-  const { conversationID, userID, message, callbacks, signal } = params;
+export const streamMessage = async ({
+  conversationID,
+  userID,
+  message,
+  callbacks,
+  signal,
+}: StreamMessagePropType): Promise<void> => {
 
   let completed = false;
 
@@ -67,14 +66,14 @@ export const streamMessage = async (params: {
 
   return new Promise((resolve, reject) => {
     const es = new EventSource(
-      `${SERVICE_URLS.assistant}/conversations/${conversationID}/messages/stream`,
+      `${SERVICE_URLS.assistant}/conversations/messages/stream`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ message, user_id: userID }),
+        body: JSON.stringify({ message, user_id: userID, conversation_id: conversationID }),
         pollingInterval: 0,
       },
     );
@@ -90,7 +89,10 @@ export const streamMessage = async (params: {
       try {
         const parsed: SSEEvent = sseEventSchema.parse(JSON.parse(event.data));
 
-        if (parsed.type === "token") {
+        if (parsed.type === "conversation_created") {
+          callbacks.onConversationCreated?.(parsed.conversation_id)
+        }
+        else if (parsed.type === "token") {
           callbacks.onToken(parsed.token);
         } else if (parsed.type === "done") {
           callbacks.onDone(parsed.message_id);

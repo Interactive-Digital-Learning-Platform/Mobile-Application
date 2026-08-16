@@ -5,8 +5,8 @@ import Animated, {
   SlideInRight,
   SlideInLeft,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import TypingIndicator from "@/components/chat/TypingIndicator";
+import { chatMarkdownItInstance, chatMarkdownStyle } from "@/constants/markdownStyles";
 
 export default function Message({ message }: { message: MessageType }) {
   const isUser = message.role === "user";
@@ -16,7 +16,7 @@ export default function Message({ message }: { message: MessageType }) {
     ? message.createdAt.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
-        hour12: false,
+        hour12: true,
       })
     : "";
 
@@ -26,45 +26,61 @@ export default function Message({ message }: { message: MessageType }) {
       className={`w-full h-auto flex-row ${isUser ? "justify-end" : "justify-start"} mb-5`}
     >
       {isUser ? (
-        <LinearGradient
-          colors={["#FFB37C", "#FC6E20"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <View
           style={{
             maxWidth: "80%",
-            borderRadius: 12,
-            paddingVertical: 6,
-            paddingHorizontal: 10,
+            backgroundColor: "#FC6E20",
+            borderTopLeftRadius: 18,
+            borderTopRightRadius: 4,
+            borderBottomLeftRadius: 18,
+            borderBottomRightRadius: 18,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
             gap: 8,
           }}
         >
-          <Text selectable className="text-md font-aregular text-white">
+          <Text selectable className="text-md font-aregular text-white text-justify">
             {message.content}
           </Text>
-          <Text className="w-full text-xs font-alight text-right text-white/80">
+          <Text
+            className="w-full text-xs font-aregular text-right text-white"
+            style={{ includeFontPadding: false, textAlignVertical: "center" }}
+          >
             {timeLabel}
           </Text>
-        </LinearGradient>
+        </View>
       ) : (
-        <View className="w-auto flex-col justify-center items-center gap-2 max-w-[80%] bg-[#F1F1F1] py-1.5 px-2.5 rounded-xl">
+          <View
+          style={{
+          maxWidth: "80%",
+          backgroundColor: "#F1F1F1",
+          borderTopLeftRadius: 4,
+          borderTopRightRadius: 18,
+          borderBottomLeftRadius: 18,
+          borderBottomRightRadius: 18,
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          gap: 8,
+        }}>
           {isTyping ? (
             <TypingIndicator />
           ) : message.isLoading ? (
-            <Text selectable className="text-md font-aregular">
+            <Text selectable className="text-md font-aregular text-justify">
               {message.content}
             </Text>
           ) : (
             <Markdown
-              style={{
-                body: { fontSize: 14, fontFamily: "Author-Regular" },
-                paragraph: { marginTop: 0, marginBottom: 0 },
-              }}
+              markdownit={chatMarkdownItInstance}
+              style={chatMarkdownStyle}
             >
               {message.content}
             </Markdown>
           )}
           {!isTyping && (
-            <Text className="w-full text-xs font-alight text-left">
+            <Text
+              className="w-full text-xs font-alight text-left"
+              style={{ includeFontPadding: false, textAlignVertical: "center" }}
+            >
               {timeLabel}
             </Text>
           )}

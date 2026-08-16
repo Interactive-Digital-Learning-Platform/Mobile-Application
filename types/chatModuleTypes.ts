@@ -68,6 +68,7 @@ export type MessageType = {
 }
 
 export type StreamCallbacks = {
+  onConversationCreated?: (conversationID: string) => void,
   onToken: (token: string) => void;
   onDone: (messageID: string) => void;
   onError: (error: string) => void;
@@ -127,4 +128,12 @@ export type UseChatReturn = {
   loadMoreHistory: () => void;
   startNewConversation: () => void;
   openConversation: (conversationID: string) => void;
+}
+
+export type StreamMessagePropType = {
+  conversationID?: string;
+  userID: string;
+  message: string;
+  callbacks: StreamCallbacks;
+  signal?: AbortSignal;
 }
