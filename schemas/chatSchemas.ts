@@ -9,6 +9,11 @@ export const chatInputSchema = z.object({
 
 export type ChatInputValues = z.infer<typeof chatInputSchema>;
 
+const conversationCreatedEventSchema = z.object({
+  type: z.literal("conversation_created"),
+  conversation_id: z.uuid()
+})
+
 const tokenEventSchema = z.object({
   type: z.literal("token"),
   token: z.string(),
@@ -35,6 +40,7 @@ const errorEventSchema = z.object({
 });
 
 export const sseEventSchema = z.discriminatedUnion("type", [
+  conversationCreatedEventSchema,
   tokenEventSchema,
   doneEventSchema,
   errorEventSchema,
