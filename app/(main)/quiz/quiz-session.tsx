@@ -185,6 +185,11 @@ export default function QuizSession() {
     triggerGenerate();
   }, []);
 
+  // Set the instant the user (or the timeout auto-submit) starts submitting
+  // — declared here (rather than down with the other submission logic) so
+  // the "already completed" redirect guard below can read it.
+  const submissionTriggeredRef = useRef(false);
+
   const [frozenQuestions,  setFrozenQuestions]  = useState<QuestionOut[]>([]);
   const [frozenSessionId,  setFrozenSessionId]  = useState<number | null>(null);
 
@@ -212,8 +217,18 @@ export default function QuizSession() {
 
   useEffect(() => { if (timeUp) setShowTimesUpModal(true); }, [timeUp]);
 
+  // Bounces the user away if they land on an ALREADY-completed session (stale
+  // link, reopening a finished quiz). Must not fire when `completion` just
+  // appeared because WE'RE the ones who submitted it a moment ago — the
+  // submit mutation's own cache invalidation refetches this same session
+  // query while this screen is still mounted underneath quiz-results, and
+  // without the submissionTriggeredRef check that refetch would re-run this
+  // effect and replace the results screen we just navigated to.
   useEffect(() => {
-    if (isResuming && !isRestartMode && savedSession?.completion) {
+    if (
+      isResuming && !isRestartMode && savedSession?.completion &&
+      !submissionTriggeredRef.current
+    ) {
       router.replace("/(tabs)/quiz");
     }
   }, [isResuming, isRestartMode, savedSession]);
@@ -251,7 +266,6 @@ export default function QuizSession() {
   const [questionTimes, setQuestionTimes] = useState<Record<number, number>>({});
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const submissionTriggeredRef = useRef(false);
 
   const shakeX   = useSharedValue(0);
   const timerPct = useSharedValue(1);
