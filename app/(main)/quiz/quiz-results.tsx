@@ -376,6 +376,7 @@ export default function QuizResultsScreen() {
         visible={showRestart}
         onCancel={() => setShowRestart(false)}
         onConfirm={handleRestart}
+        hasCurrentAnswers
       />
     </SafeAreaView>
   );

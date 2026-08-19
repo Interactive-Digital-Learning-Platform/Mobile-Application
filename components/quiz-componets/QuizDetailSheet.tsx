@@ -14,6 +14,7 @@ import {
 } from "lucide-react-native";
 import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
+import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
@@ -37,6 +38,7 @@ function StatTile({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 
 export default function QuizDetailSheet({ item, visible, onClose, onAction }: QuizDetailSheetProps) {
   const router = useRouter();
+  const [showRetakeWarning, setShowRetakeWarning] = useState(false);
 
   // Keep the modal mounted until the exit animation finishes, since RN's
   // <Modal> would otherwise unmount it instantly and cut the animation short.
@@ -95,6 +97,24 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
     : displayPct >= 70 ? "text-emerald-500"
     : displayPct >= 50 ? "text-amber-500"
     : "text-rose-500";
+
+  const startQuiz = () => {
+    onClose();
+    onAction();
+    router.push({
+      pathname: "/(main)/quiz/quiz-session",
+      params: {
+        subject:          item.subject,
+        difficulty:       item.difficulty.toLowerCase(),
+        questionCount:    String(item.questions),
+        timer:            item.timer.replace(" min", ""),
+        grade:            "10",
+        resumeSessionId: String(item.session_id),
+        // Retake: load same questions from DB but reset all answers
+        ...(isComplete ? { restartSession: "true" } : {}),
+      },
+    } as any);
+  };
 
   return (
     <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
@@ -164,23 +184,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
                 : "bg-primary shadow-primary/30"
             }`}
             activeOpacity={0.85}
-            onPress={() => {
-              onClose();
-              onAction();
-              router.push({
-                pathname: "/(main)/quiz/quiz-session",
-                params: {
-                  subject:          item.subject,
-                  difficulty:       item.difficulty.toLowerCase(),
-                  questionCount:    String(item.questions),
-                  timer:            item.timer.replace(" min", ""),
-                  grade:            "10",
-                  resumeSessionId: String(item.session_id),
-                  // Retake: load same questions from DB but reset all answers
-                  ...(isComplete ? { restartSession: "true" } : {}),
-                },
-              } as any);
-            }}
+            onPress={() => (isComplete ? setShowRetakeWarning(true) : startQuiz())}
           >
             {isComplete ? (
               <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
@@ -193,6 +197,15 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
+
+      <RestartConfirmModal
+        visible={showRetakeWarning}
+        onCancel={() => setShowRetakeWarning(false)}
+        onConfirm={() => {
+          setShowRetakeWarning(false);
+          startQuiz();
+        }}
+      />
     </Modal>
   );
 }
