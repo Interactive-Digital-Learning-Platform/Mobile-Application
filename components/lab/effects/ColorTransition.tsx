@@ -1,10 +1,9 @@
 import { useEffect } from "react";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-
-type Props = { fromColor: string; toColor: string; style?: object };
+import { ColorTransitionProps } from "@/types/lab";
 
 // Cross-fades from `fromColor` to `toColor` over 800ms whenever the colors change.
-export default function ColorTransition({ fromColor, toColor, style }: Props) {
+export default function ColorTransition({ fromColor, toColor, style }: ColorTransitionProps) {
   const progress = useSharedValue(0);
 
   useEffect(() => {

@@ -1,46 +1,16 @@
-import { ComponentType, forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { ChemicalType, EquipmentContentType } from "@/types/labModuleTypes";
-import { useDraggableBenchItem } from "@/hooks/use-draggable-bench-item";
-import { EquipmentVisualProps } from "./types";
+import { BOX, MAX_LIQUID_HEIGHT_PCT, VISUAL_SIZE } from "@/constants/lab/equipment.constants";
+import { EquipmentContainerProps } from "@/types/lab";
+import { useDraggableBenchItem } from "@/hooks/lab/use-draggable-bench-item";
 import BubbleEffect from "../effects/BubbleEffect";
 import SteamEffect from "../effects/SteamEffect";
 import PourAnimation from "../effects/PourAnimation";
 
-// Bench render size for every container-role instance. `BOX` is the art's footprint; the liquid
-// hitbox below scales its height by fillLevel so it roughly tracks the SVG-rendered liquid.
-const BOX = 88;
-const VISUAL_SIZE = 58;
-const MAX_LIQUID_HEIGHT_PCT = 60;
-
-type Props = {
-  id: string;
-  label: string;
-  Visual: ComponentType<EquipmentVisualProps>;
-  position: { x: number; y: number };
-  chemicals: ChemicalType[];
-  contents: EquipmentContentType[];
-  capacity?: number;
-  heated: boolean;
-  isHeatSource: boolean;
-  temperature?: number;
-  // True while a chemical bottle is being dragged over this specific instance — drives the
-  // dashed hover highlight. Purely a visual read of drag progress, set by the workspace screen;
-  // doesn't affect drop hit-testing itself (see useDropTargetRegistry).
-  isDropTarget?: boolean;
-  onMove: (id: string, position: { x: number; y: number }) => void;
-  onPress?: () => void;
-  onInspect?: () => void;
-  // Registers this instance's liquid sub-rect (not the whole equipment body) so probe-role
-  // equipment (e.g. the pH meter) can hit-test against poured liquid specifically — see
-  // useDropTargetRegistry / PhMeterInstrument. Only called while hasLiquid is true.
-  registerLiquidRegion?: (id: string) => (node: View | null) => void;
-};
-
-const EquipmentContainer = forwardRef<View, Props>(
+const EquipmentContainer = forwardRef<View, EquipmentContainerProps>(
   (
     {
       id,

@@ -1,6 +1,6 @@
 import Svg, { Circle, Path, Defs, ClipPath, Rect } from "react-native-svg";
 import { colors } from "@/constants/colors";
-import { EquipmentVisualProps } from "./types";
+import { EquipmentVisualProps } from "@/types/lab";
 
 const VB_W = 18;
 const VB_H = 56;

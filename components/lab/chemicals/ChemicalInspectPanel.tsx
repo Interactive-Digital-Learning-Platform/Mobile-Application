@@ -1,12 +1,7 @@
 import { Modal, ScrollView, Text, View } from "react-native";
-import { ChemicalType } from "@/types/labModuleTypes";
+import { ChemicalInspectPanelProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
-
-type Props = {
-  chemical: ChemicalType | null;
-  onClose: () => void;
-};
 
 const Row = ({ label, value }: { label: string; value: string }) => (
   <View className="flex-row justify-between py-1">
@@ -17,7 +12,7 @@ const Row = ({ label, value }: { label: string; value: string }) => (
 
 // Tap-to-inspect panel for any chemical on the shelf or inside a container — all data is already
 // in memory from the chemicals fetched for the workspace, so this needs no extra network round trip.
-export default function ChemicalInspectPanel({ chemical, onClose }: Props) {
+export default function ChemicalInspectPanel({ chemical, onClose }: ChemicalInspectPanelProps) {
   if (!chemical) return null;
 
   return (

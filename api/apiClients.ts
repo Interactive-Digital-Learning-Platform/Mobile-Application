@@ -1,4 +1,5 @@
 import { create } from "axios";
+import { getAuthToken } from "@/providers/labAuthToken";
 
 
 export const API_GATEWAY_URL = (
@@ -10,6 +11,7 @@ export const SERVICE_URLS = {
   notes: `${API_GATEWAY_URL}/api/notes`,
   quiz: `${API_GATEWAY_URL}/api/quiz`,
   pdf: `${API_GATEWAY_URL}/api/pdf`,
+  lab: `${API_GATEWAY_URL}/api/lab`,
 } as const;
 
 export const assistantClient = create({
@@ -112,6 +114,26 @@ quizClient.interceptors.response.use(
 export const pdfClient = create({
   baseURL: SERVICE_URLS.pdf,
   timeout: 30000,
+});
+
+// The lab service defines its own /api prefix behind the gateway prefix, same as notes.
+export const labClient = create({
+  baseURL: `${SERVICE_URLS.lab}/api`,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  timeout: 15000,
+});
+
+// Lab backend auth is its own JWT (exchanged once from the signed-in Clerk user via
+// /api/auth/sync and cached in providers/labAuthToken.ts, kept fresh by
+// providers/LabAuthSyncBoundary.tsx), not a Clerk token directly — unlike quizClient above.
+labClient.interceptors.request.use(async (config) => {
+  const token = await getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export function getNotesResourceUrl(path: string): string {

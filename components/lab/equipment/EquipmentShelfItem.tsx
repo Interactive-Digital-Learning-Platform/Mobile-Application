@@ -6,26 +6,13 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
-import { ComponentType } from "react";
 import { colors } from "@/constants/colors";
-import { EquipmentVisualProps } from "./types";
-
-type Props = {
-  equipmentType: string;
-  label: string;
-  Visual: ComponentType<EquipmentVisualProps>;
-  resolveBenchPosition: (x: number, y: number) => Promise<{ x: number; y: number } | null>;
-  onDroppedOnBench: (equipmentType: string, position: { x: number; y: number }) => void;
-  // Fired (throttled ~120ms) with whether the drag is currently over the bench — drives a dashed
-  // highlight on the bench container itself while dragging, matching ChemicalBottle's per-target
-  // highlight but at bench-wide granularity (any bench position is a valid drop, not one instance).
-  onHoverChange?: (isOverBench: boolean) => void;
-};
+import { EquipmentShelfItemProps } from "@/types/lab";
 
 // Draggable "spawner" for the equipment shelf — dragging one of these onto the bench creates a
 // brand new equipment instance there. Distinct from EquipmentContainer, which represents an
 // equipment instance already placed on the bench (and is itself draggable to reposition).
-export default function EquipmentShelfItem({ equipmentType, label, Visual, resolveBenchPosition, onDroppedOnBench, onHoverChange }: Props) {
+export default function EquipmentShelfItem({ equipmentType, label, Visual, resolveBenchPosition, onDroppedOnBench, onHoverChange }: EquipmentShelfItemProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -44,6 +31,11 @@ export default function EquipmentShelfItem({ equipmentType, label, Visual, resol
   };
 
   const pan = Gesture.Pan()
+    // Items sit in a horizontal ScrollView, and dropping one onto the bench below is a vertical
+    // drag — so only activate on vertical movement, and explicitly release horizontal movement to
+    // the ScrollView, otherwise every swipe-to-scroll attempt gets swallowed as a drag instead.
+    .activeOffsetY([-10, 10])
+    .failOffsetX([-10, 10])
     .onStart(() => {
       scale.value = withSpring(1.15);
     })

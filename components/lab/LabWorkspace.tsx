@@ -1,42 +1,11 @@
 import { ComponentType } from "react";
 import { View } from "react-native";
-import { ChemicalType, EquipmentInstanceType, LastMeasurementType } from "@/types/labModuleTypes";
-import { EquipmentRole, LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
+import { EquipmentRole, LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
+import { LabWorkspaceProps, ProbeInstrumentProps } from "@/types/lab";
 import EquipmentContainer from "./equipment/EquipmentContainer";
 import PhMeterInstrument from "./equipment/PhMeterInstrument";
 
-type Props = {
-  equipment: EquipmentInstanceType[];
-  chemicalMap: Record<string, ChemicalType>;
-  registerEquipmentRef: (id: string) => (node: any) => void;
-  registerLiquidRegion: (id: string) => (node: View | null) => void;
-  resolveLiquidRegion: (x: number, y: number) => Promise<string | null>;
-  onMoveEquipment: (id: string, position: { x: number; y: number }) => void;
-  onToggleHeat: (id: string) => void;
-  onInspectEquipment: (id: string) => void;
-  probeMeasure: (probeId: string, targetId: string, onOutcome?: (measurement: LastMeasurementType) => void) => void;
-  probeDetach: (probeId: string) => void;
-  // Instance currently being hovered over by a dragged chemical bottle — drives the dashed
-  // highlight on that one EquipmentContainer. See ChemicalBottle's onHoverChange.
-  hoveredEquipmentId?: string | null;
-};
-
 const catalogEntry = (equipmentType: string) => LAB_EQUIPMENT_CATALOG.find((e) => e.key === equipmentType);
-
-// Common props every probe-role instrument needs — a future probe (e.g. thermometer) implements
-// this same shape.
-type ProbeInstrumentProps = {
-  id: string;
-  label: string;
-  instance: EquipmentInstanceType;
-  equipment: EquipmentInstanceType[];
-  probeOffset: { x: number; y: number };
-  resolveLiquidRegion: (x: number, y: number) => Promise<string | null>;
-  onMove: (id: string, position: { x: number; y: number }) => void;
-  onInspect?: () => void;
-  probeMeasure: (probeId: string, targetId: string, onOutcome?: (measurement: LastMeasurementType) => void) => void;
-  probeDetach: (probeId: string) => void;
-};
 
 // Role-keyed dispatch: a probe-role instance renders its own dedicated instrument component
 // instead of the generic EquipmentContainer. Wiring a future probe (e.g. a thermometer) is just
@@ -58,7 +27,7 @@ export default function LabWorkspace({
   probeMeasure,
   probeDetach,
   hoveredEquipmentId,
-}: Props) {
+}: LabWorkspaceProps) {
   return (
     <View style={{ flex: 1, position: "relative" }}>
       {equipment.map((instance) => {

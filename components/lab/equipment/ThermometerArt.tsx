@@ -1,18 +1,15 @@
 import Svg, { Rect, Circle, Line } from "react-native-svg";
 import { colors } from "@/constants/colors";
-import { EquipmentVisualProps } from "./types";
+import { THERMOMETER_MAX_TEMP, THERMOMETER_MIN_TEMP } from "@/constants/lab/probes.constants";
+import { EquipmentVisualProps } from "@/types/lab";
 
 const VB_W = 16;
 const VB_H = 60;
 const TUBE_TOP = 6;
 const TUBE_BOTTOM = 44;
-// Backend clamps: room temp is 25°C, heating jumps to at least 80°C (labRun.controller.js) — so
-// this range comfortably spans "cold" through "actively boiling" without needing a wider scale.
-const MIN_TEMP = 20;
-const MAX_TEMP = 100;
 
 export default function ThermometerArt({ size = 40, color = colors.primaryBlack, temperature }: EquipmentVisualProps) {
-  const level = temperature != null ? Math.max(0.05, Math.min(1, (temperature - MIN_TEMP) / (MAX_TEMP - MIN_TEMP))) : 0.3;
+  const level = temperature != null ? Math.max(0.05, Math.min(1, (temperature - THERMOMETER_MIN_TEMP) / (THERMOMETER_MAX_TEMP - THERMOMETER_MIN_TEMP))) : 0.3;
   const mercuryHeight = level * (TUBE_BOTTOM - TUBE_TOP);
   const mercuryColor = temperature != null && temperature >= 55 ? colors.primary : "#4F86C6";
 

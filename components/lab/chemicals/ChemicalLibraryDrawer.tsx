@@ -8,23 +8,9 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { ChemicalType } from "@/types/labModuleTypes";
+import { CLOSED_OFFSET, DRAWER_HEIGHT, OPEN_OFFSET, PEEK_HEIGHT } from "@/constants/lab/chemicals.constants";
+import { ChemicalLibraryDrawerProps } from "@/types/lab";
 import ChemicalBottle from "./ChemicalBottle";
-
-const DRAWER_HEIGHT = 260;
-const PEEK_HEIGHT = 48;
-const OPEN_OFFSET = 0;
-const CLOSED_OFFSET = DRAWER_HEIGHT - PEEK_HEIGHT;
-
-type Props = {
-  chemicals: ChemicalType[];
-  isOpen: boolean;
-  onToggle: (open: boolean) => void;
-  search: string;
-  onSearchChange: (value: string) => void;
-  resolveDropTarget: (x: number, y: number) => Promise<string | null>;
-  onDropped: (chemical: ChemicalType, equipmentId: string) => void;
-};
 
 export default function ChemicalLibraryDrawer({
   chemicals,
@@ -34,7 +20,7 @@ export default function ChemicalLibraryDrawer({
   onSearchChange,
   resolveDropTarget,
   onDropped,
-}: Props) {
+}: ChemicalLibraryDrawerProps) {
   const translateY = useSharedValue(CLOSED_OFFSET);
 
   useEffect(() => {

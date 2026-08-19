@@ -3,28 +3,10 @@ import { Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { EquipmentInstanceType, LastMeasurementType } from "@/types/labModuleTypes";
-import { useDraggableBenchItem } from "@/hooks/use-draggable-bench-item";
+import { ART_SIZE, MEASURE_DEBOUNCE_MS, MEASURING_DURATION_MS } from "@/constants/lab/probes.constants";
+import { PhMeterLedState, ProbeInstrumentProps } from "@/types/lab";
+import { useDraggableBenchItem } from "@/hooks/lab/use-draggable-bench-item";
 import PhMeterArt from "./PhMeterArt";
-
-const ART_SIZE = 84; // 1.2x PhMeterArt's own viewBox height (70) — see probeOffset in labEquipment.ts
-const MEASURE_DEBOUNCE_MS = 150; // avoids a false trigger on a quick pass-through of the liquid
-const MEASURING_DURATION_MS = 1000;
-
-type ProbeState = "idle" | "in_liquid" | "measuring" | "complete";
-
-type Props = {
-  id: string;
-  label: string;
-  instance: EquipmentInstanceType;
-  equipment: EquipmentInstanceType[];
-  probeOffset: { x: number; y: number };
-  resolveLiquidRegion: (x: number, y: number) => Promise<string | null>;
-  onMove: (id: string, position: { x: number; y: number }) => void;
-  onInspect?: () => void;
-  probeMeasure: (probeId: string, targetId: string, onOutcome?: (measurement: LastMeasurementType) => void) => void;
-  probeDetach: (probeId: string) => void;
-};
 
 const phLabel = (value: number) => (value < 6.5 ? "Acidic" : value > 7.5 ? "Basic" : "Neutral");
 
@@ -39,13 +21,13 @@ export default function PhMeterInstrument({
   onInspect,
   probeMeasure,
   probeDetach,
-}: Props) {
+}: ProbeInstrumentProps) {
   const bodyRef = useRef<View>(null);
   const activeTargetIdRef = useRef<string | null>(instance.probeTargetId ?? null);
   const inLiquidTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measuringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [probeState, setProbeState] = useState<ProbeState>(instance.lastMeasurement?.value != null ? "complete" : "idle");
+  const [probeState, setProbeState] = useState<PhMeterLedState>(instance.lastMeasurement?.value != null ? "complete" : "idle");
 
   const clearTimers = () => {
     if (inLiquidTimerRef.current) clearTimeout(inLiquidTimerRef.current);

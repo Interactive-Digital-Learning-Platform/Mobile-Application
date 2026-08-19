@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import Svg, { Rect, Path, Circle } from "react-native-svg";
 import Animated, { useAnimatedProps, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";
-import { EquipmentVisualProps } from "./types";
+import { EquipmentVisualProps } from "@/types/lab";
 
 const VB_W = 36;
 const VB_H = 56;

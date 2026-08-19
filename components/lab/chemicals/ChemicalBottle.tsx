@@ -6,20 +6,9 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
-import { ChemicalType } from "@/types/labModuleTypes";
+import { ChemicalBottleProps } from "@/types/lab";
 
-type Props = {
-  chemical: ChemicalType;
-  resolveDropTarget: (x: number, y: number) => Promise<string | null>;
-  onDropped: (chemical: ChemicalType, equipmentId: string) => void;
-  onInspect?: (chemical: ChemicalType) => void;
-  // Fired (throttled to ~120ms, matching useDraggableBenchItem's own throttle) with the
-  // currently-hovered equipment id while dragging, and null once not over a valid target or on
-  // drop — drives the dashed hover highlight on the corresponding EquipmentContainer.
-  onHoverChange?: (targetId: string | null) => void;
-};
-
-export default function ChemicalBottle({ chemical, resolveDropTarget, onDropped, onInspect, onHoverChange }: Props) {
+export default function ChemicalBottle({ chemical, resolveDropTarget, onDropped, onInspect, onHoverChange }: ChemicalBottleProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);

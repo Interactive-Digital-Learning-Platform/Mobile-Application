@@ -1,15 +1,10 @@
 import { Modal, ScrollView, Text, View } from "react-native";
 import { colors } from "@/constants/colors";
-import { ReactionResultType } from "@/types/labModuleTypes";
+import { EducationalInfoPanelProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
 
-type Props = {
-  result: ReactionResultType | null;
-  onClose: () => void;
-};
-
-export default function EducationalInfoPanel({ result, onClose }: Props) {
+export default function EducationalInfoPanel({ result, onClose }: EducationalInfoPanelProps) {
   if (!result) return null;
 
   return (

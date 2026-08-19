@@ -1,10 +1,9 @@
 import { useEffect } from "react";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-
-type Props = { color: string; onFinish?: () => void };
+import { PourAnimationProps } from "@/types/lab";
 
 // A brief falling-stream animation, mounted for ~600ms by the parent when a chemical is dropped.
-export default function PourAnimation({ color, onFinish }: Props) {
+export default function PourAnimation({ color, onFinish }: PourAnimationProps) {
   const height = useSharedValue(0);
   const opacity = useSharedValue(1);
 

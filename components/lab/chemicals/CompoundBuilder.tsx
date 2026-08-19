@@ -14,20 +14,13 @@ import Animated, {
 } from "react-native-reanimated";
 import { CheckCircle2, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
-import { useDropTargetRegistry } from "@/hooks/use-drop-target-registry";
-import { useCompoundBuildTemplate, useSubmitCompoundBuild } from "@/hooks/use-compound-builder";
+import { useDropTargetRegistry } from "@/hooks/lab/use-drop-target-registry";
+import { useCompoundBuildTemplate, useSubmitCompoundBuild } from "@/hooks/lab/use-compound-builder";
+import { CompoundBuilderProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
 
 type RegisterFn = ReturnType<typeof useDropTargetRegistry>["register"];
-
-type Props = {
-  experimentId: string;
-  sessionId: string;
-  compoundId: string;
-  onClose: () => void;
-  onBuilt: (compoundId: string) => void;
-};
 
 // Reuses the same Gesture.Pan + drop-target-registry hit-testing pattern as ChemicalBottle.tsx
 // (dragging a chemical onto equipment), applied here to dragging a coefficient onto a blank in
@@ -159,7 +152,7 @@ const BlankBox = ({
   );
 };
 
-export default function CompoundBuilder({ experimentId, sessionId, compoundId, onClose, onBuilt }: Props) {
+export default function CompoundBuilder({ experimentId, sessionId, compoundId, onClose, onBuilt }: CompoundBuilderProps) {
   const { data: template, isLoading, isError, refetch } = useCompoundBuildTemplate(experimentId, compoundId);
   const submitMutation = useSubmitCompoundBuild(sessionId);
   const { register, resolveDropTarget } = useDropTargetRegistry();

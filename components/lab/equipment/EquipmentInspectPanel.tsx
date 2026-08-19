@@ -1,22 +1,13 @@
 import { Alert, Modal, ScrollView, Text, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
-import { ChemicalType, EquipmentInstanceType } from "@/types/labModuleTypes";
-import { LAB_EQUIPMENT_CATALOG } from "@/constants/labEquipment";
+import { LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
+import { EquipmentInspectPanelProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";
 
-type Props = {
-  instance: EquipmentInstanceType | null;
-  chemicalMap: Record<string, ChemicalType>;
-  onClose: () => void;
-  // Long-press-to-inspect doubles as "select this equipment" — removing it from here (rather
-  // than a separate selection UI) reuses that existing gesture instead of adding a new one.
-  onRemove?: (instanceId: string) => void;
-};
-
 // Long-press-to-inspect panel for a bench equipment instance — everything shown here already
 // lives in the LabRun state fetched for the workspace, so no extra network call is needed.
-export default function EquipmentInspectPanel({ instance, chemicalMap, onClose, onRemove }: Props) {
+export default function EquipmentInspectPanel({ instance, chemicalMap, onClose, onRemove }: EquipmentInspectPanelProps) {
   if (!instance) return null;
 
   const handleRemove = () => {

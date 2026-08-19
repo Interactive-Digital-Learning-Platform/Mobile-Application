@@ -11,17 +11,11 @@ import {
 import { FlashList, FlashListRef } from "@shopify/flash-list";
 import { Send, Sparkles, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
-import { MessageType } from "@/types/labModuleTypes";
+import { LabTutorChatProps, MessageType } from "@/types/lab";
 import Message from "@/components/Message";
-import { useLabTutor } from "@/hooks/use-lab-tutor";
+import { useLabTutor } from "@/hooks/lab/use-lab-tutor";
 
-type Props = {
-  labRunId: string | undefined;
-  visible: boolean;
-  onClose: () => void;
-};
-
-export default function LabTutorChat({ labRunId, visible, onClose }: Props) {
+export default function LabTutorChat({ labRunId, visible, onClose }: LabTutorChatProps) {
   const { messages, isSending, sendQuestion } = useLabTutor(labRunId);
   const [input, setInput] = useState("");
   const listRef = useRef<FlashListRef<MessageType>>(null);
