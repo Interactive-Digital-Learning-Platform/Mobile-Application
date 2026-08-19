@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { useState } from "react";
-import { HelpCircle, Trash2, type LucideIcon } from "lucide-react-native";
-import { ICON_COLORS, SUBJECT_ICONS, type Difficulty } from "@/constants/quizStyles";
+import { Trash2, type LucideIcon } from "lucide-react-native";
+import { ICON_COLORS, getSubjectIcon, formatSubjectLabel, type Difficulty } from "@/constants/quizStyles";
 import QuizDetailSheet from "@/components/quiz-componets/QuizDetailSheet";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import { useDeleteQuizSessionMutation } from "@/hooks/use-quiz";
@@ -37,7 +37,7 @@ function formatCreatedAt(iso: string): string {
 export default function QuizPracticeCard({ item, disabled = false }: { item: PracticeItem; disabled?: boolean }) {
 
   const [sheetVisible, setSheetVisible] = useState(false);
-  const Icon: LucideIcon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
+  const Icon: LucideIcon = getSubjectIcon(item.subject);
   const isComplete   = item.progress === 100;
   const hasStarted   = item.progress > 0;
   const correctCount = item.correct_count ?? 0;
@@ -88,7 +88,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </View>
 
           <View className="flex-1">
-            <Text className="text-sm font-bold text-slate-800">{item.subject}</Text>
+            <Text className="text-sm font-bold text-slate-800">{formatSubjectLabel(item.subject)}</Text>
             <View className="flex-row items-center gap-2 mt-1">
               <DifficultyBadge difficulty={item.difficulty} />
               <Text className="text-[11px] text-slate-400">{item.questions} questions</Text>

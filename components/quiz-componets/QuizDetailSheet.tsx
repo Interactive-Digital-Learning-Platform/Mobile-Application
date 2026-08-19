@@ -9,10 +9,10 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import {
-  Clock, BarChart2, ListChecks, Play, RotateCcw, X, HelpCircle,
+  Clock, BarChart2, ListChecks, Play, RotateCcw, X,
   type LucideIcon,
 } from "lucide-react-native";
-import { getDifficultyStyle, ICON_COLORS, SUBJECT_ICONS } from "@/constants/quizStyles";
+import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 
 const SHEET_OFFSCREEN_Y = 700;
@@ -68,7 +68,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
     transform: [{ translateY: sheetTranslateY.value }],
   }));
 
-  const Icon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
+  const Icon = getSubjectIcon(item.subject);
   const diff = getDifficultyStyle(item.difficulty);
   const hasStarted = item.progress > 0;
   const isComplete = item.progress === 100;
@@ -113,7 +113,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
               <Icon size={28} color={ICON_COLORS.slate500} strokeWidth={1.6} />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-black text-slate-800">{item.subject}</Text>
+              <Text className="text-xl font-black text-slate-800">{formatSubjectLabel(item.subject)}</Text>
               <View className={`self-start flex-row items-center gap-1 px-2.5 py-0.5 rounded-full mt-1.5 ${diff.bg}`}>
                 <View className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
                 <Text className={`text-xs font-semibold ${diff.text}`}>{item.difficulty}</Text>

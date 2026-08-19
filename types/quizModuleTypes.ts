@@ -1,11 +1,13 @@
 export interface GenerateQuizRequest {
   grade?: number;
-  subject: string;
+  subject?: string;
   lesson?: string;
   difficulty?: "easy" | "medium" | "hard";
   question_count: number;
   excluded_question_ids?: number[];
   force_cache?: boolean;
+  shuffle?: boolean;
+  subjects?: string[];
 }
 
 export interface QuestionOut {
@@ -24,6 +26,10 @@ export interface GenerateQuizResponse {
   cache_hit: boolean;
   difficulty: string;
   lesson: string;
+}
+
+export interface RetakeSessionResponse {
+  session_id: number;
 }
 
 export interface DraftAnswer {

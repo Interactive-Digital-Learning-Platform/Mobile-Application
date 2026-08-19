@@ -7,6 +7,7 @@ import {
   GenerateQuizResponse,
   QuestionOut,
   QuizSessionSummary,
+  RetakeSessionResponse,
   SavedQuizResponse,
   SaveProgressRequest,
   SaveProgressResponse,
@@ -49,6 +50,15 @@ export async function fetchQuizSession(
 ): Promise<SavedQuizResponse> {
   const { data } = await quizClient.get<SavedQuizResponse>(
     `/quiz/sessions/${sessionId}`
+  );
+  return data;
+}
+
+export async function retakeQuizSession(
+  sessionId: number
+): Promise<RetakeSessionResponse> {
+  const { data } = await quizClient.post<RetakeSessionResponse>(
+    `/quiz/sessions/${sessionId}/retake`
   );
   return data;
 }

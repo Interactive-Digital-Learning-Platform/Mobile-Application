@@ -7,6 +7,7 @@ import {
   fetchQuizSession,
   fetchQuizSessions,
   generateQuiz,
+  retakeQuizSession,
   saveQuizProgress,
   submitQuiz,
   submitQuizTimeout,
@@ -75,6 +76,12 @@ export function useQuizSessionQuery(sessionId: number | null) {
   });
 }
 
+export function useRetakeQuizSessionMutation() {
+  return useMutation({
+    mutationFn: (sessionId: number) => retakeQuizSession(sessionId),
+  });
+}
+
 export function useSaveQuizProgressMutation() {
   return useMutation({
     mutationFn: (payload: SaveProgressRequest) => saveQuizProgress(payload),
@@ -108,6 +115,7 @@ export function useDeleteQuizSessionMutation() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
     },
   });
 }
