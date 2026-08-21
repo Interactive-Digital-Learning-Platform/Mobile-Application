@@ -6,7 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
   Image,
+  StatusBar,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,7 +16,6 @@ import {
   ChevronLeft,
   Brain,
   BookOpen,
-  Clock,
   FileText,
   Layers,
   AlertCircle,
@@ -32,7 +33,7 @@ import {
 import { materialsApi, notesApi } from "@/api/notesAPI";
 import { getNotesResourceUrl } from "@/api/apiClients";
 import { colors } from "@/constants/colors";
-import Markdown from "react-native-markdown-display";
+import SeverityBadge from "@/components/notes/SeverityBadge";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,25 +73,7 @@ interface MaterialsOverview {
   missingCount: number;
 }
 
-
-
 // ─── Helper Components ────────────────────────────────────────────────────────
-
-const SeverityBadge = ({ severity }: { severity: "high" | "medium" | "low" }) => {
-  const config = {
-    high: { label: "High Gap", bg: "#FEE2E2", text: "#DC2626", icon: "🔴" },
-    medium: { label: "Medium Gap", bg: "#FEF3C7", text: "#D97706", icon: "🟡" },
-    low: { label: "Low Gap", bg: "#DCFCE7", text: "#16A34A", icon: "🟢" },
-  };
-  const s = config[severity];
-  return (
-    <View style={[styles.severityBadge, { backgroundColor: s.bg }]}>
-      <Text style={[styles.severityText, { color: s.text }]}>
-        {s.icon} {s.label}
-      </Text>
-    </View>
-  );
-};
 
 const ConceptChip = ({
   label,
@@ -141,6 +124,193 @@ const MaterialCard = ({
     <View style={[styles.materialStatusDot, { backgroundColor: isReady ? "#10b981" : "#d1d5db" }]} />
   </TouchableOpacity>
 );
+
+// ─── Processing Pipeline Card ────────────────────────────────────────────────
+
+const PIPELINE_STAGES_INFO = [
+  {
+    label: "Scanning Handwriting",
+    detail: "Running optical character recognition on your images…",
+    estimatedEndSec: 12,
+  },
+  {
+    label: "Detecting Subject & Grade",
+    detail: "Identifying subject area, topic, and curriculum level…",
+    estimatedEndSec: 24,
+  },
+  {
+    label: "Matching Curriculum",
+    detail: "Searching the curriculum knowledge base for relevant content…",
+    estimatedEndSec: 37,
+  },
+  {
+    label: "Analyzing Learning Gaps",
+    detail: "Calculating concept coverage and identifying missing knowledge…",
+    estimatedEndSec: 50,
+  },
+  {
+    label: "Building Study Materials",
+    detail: "Generating personalized flashcards, quizzes, and summaries…",
+    estimatedEndSec: 65,
+  },
+];
+
+const EST_TOTAL_SECS = 65;
+
+const ProcessingCard: React.FC<{ createdAt: string }> = ({ createdAt }) => {
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const progressAnim = React.useRef(new Animated.Value(0)).current;
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  // Pulsing "LIVE" badge animation
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, []);
+
+  // Elapsed timer — ticks every second
+  useEffect(() => {
+    const startTime = new Date(createdAt).getTime();
+    const tick = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+      setElapsedSec(elapsed);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  // Smooth progress bar animation (capped at 92% until server confirms done)
+  useEffect(() => {
+    const capped = Math.min((elapsedSec / EST_TOTAL_SECS) * 100, 92);
+    Animated.timing(progressAnim, {
+      toValue: capped,
+      duration: 600,
+      useNativeDriver: false,
+    }).start();
+  }, [elapsedSec]);
+
+  // Determine active stage index
+  const activeIdx = (() => {
+    const i = PIPELINE_STAGES_INFO.findIndex((s) => elapsedSec < s.estimatedEndSec);
+    return i === -1 ? PIPELINE_STAGES_INFO.length - 1 : i;
+  })();
+
+  const currentStage = PIPELINE_STAGES_INFO[activeIdx];
+  const pct = Math.min(Math.round((elapsedSec / EST_TOTAL_SECS) * 100), 92);
+  const etaSec = Math.max(0, EST_TOTAL_SECS - elapsedSec);
+  const fmtTime = (s: number) =>
+    s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+
+  return (
+    <View style={styles.aiProgressCard}>
+      {/* ── Header Row ── */}
+      <View style={styles.aiProgressHeader}>
+        <View style={styles.processingIconWrap}>
+          <Brain size={22} color={colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.processingTitle}>AI Analysis in Progress</Text>
+          <Text style={styles.processingSubtitle}>{fmtTime(elapsedSec)} elapsed</Text>
+        </View>
+        <Animated.View style={{ opacity: pulseAnim }}>
+          <View style={styles.liveIndicator}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>LIVE</Text>
+          </View>
+        </Animated.View>
+      </View>
+
+      {/* ── Animated Progress Bar ── */}
+      <View style={styles.progressBarTrack}>
+        <Animated.View
+          style={[
+            styles.progressBarFill,
+            {
+              width: progressAnim.interpolate({
+                inputRange: [0, 100],
+                outputRange: ["0%", "100%"],
+                extrapolate: "clamp",
+              }),
+            },
+          ]}
+        />
+      </View>
+      <View style={styles.progressLabelRow}>
+        <Text style={styles.progressPct}>{pct}% complete</Text>
+        <Text style={styles.progressEta}>~{fmtTime(etaSec)} remaining</Text>
+      </View>
+
+      {/* ── Current Stage Highlight ── */}
+      <View style={styles.currentStageBox}>
+        <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 10 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.currentStageLabel}>{currentStage.label}</Text>
+          <Text style={styles.currentStageDetail} numberOfLines={2}>
+            {currentStage.detail}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Stage Checklist ── */}
+      <View style={styles.stageList}>
+        {PIPELINE_STAGES_INFO.map((stage, idx) => {
+          const isDone = idx < activeIdx;
+          const isActive = idx === activeIdx;
+          return (
+            <View key={idx} style={styles.stageRow}>
+              <View
+                style={[
+                  styles.stageDot,
+                  isDone
+                    ? { backgroundColor: "#10b981" }
+                    : isActive
+                    ? { backgroundColor: colors.primary }
+                    : { backgroundColor: "#E2E8F0" },
+                ]}
+              >
+                {isDone ? (
+                  <CheckCircle2 size={12} color="#fff" />
+                ) : isActive ? (
+                  <ActivityIndicator size={10} color="#fff" />
+                ) : null}
+              </View>
+              <Text
+                style={[
+                  styles.stageLabel,
+                  isDone
+                    ? { color: "#10b981", fontWeight: "600" }
+                    : isActive
+                    ? { color: colors.primary, fontWeight: "700" }
+                    : { color: "#94A3B8", fontWeight: "400" },
+                ]}
+                numberOfLines={1}
+              >
+                {stage.label}
+              </Text>
+              {isDone && (
+                <View style={styles.stageDoneBadge}>
+                  <Text style={styles.stageDoneBadgeText}>Done</Text>
+                </View>
+              )}
+              {isActive && (
+                <View style={styles.stageActiveBadge}>
+                  <Text style={styles.stageActiveBadgeText}>Running</Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+};
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -243,7 +413,7 @@ export default function NoteDetail() {
 
   const navigateToMaterial = (type: string) => {
     router.push({
-      pathname: "/(tabs)/notes/material/[type]",
+      pathname: "/(main)/notes/material/[type]",
       params: { id, type },
     });
   };
@@ -273,44 +443,43 @@ export default function NoteDetail() {
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
-      {/* ── Header ── */}
-      <View style={styles.header}>
+      <StatusBar backgroundColor="#F8F9FB" barStyle="dark-content" />
+      {/* ── Top Back Button ── */}
+      <View style={styles.topBackRow}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ChevronLeft size={24} color={colors.primaryBlack} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {note.title}
-        </Text>
-        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isProcessing && { flexGrow: 1, justifyContent: "center" },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* ── Processing State ── */}
         {isProcessing && (
-          <View style={styles.processingCard}>
-            <View style={styles.processingIconWrap}>
-              <Brain size={32} color={colors.primary} />
+          <View style={styles.processingContainer}>
+            <View style={styles.processingHeaderBlock}>
+              <Text style={styles.noteTitleHeading} numberOfLines={2}>
+                {note.title}
+              </Text>
+              <Text style={styles.noteDateSub}>
+                Uploaded {new Date(note.createdAt).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
             </View>
-            <ActivityIndicator
-              size="small"
-              color={colors.primary}
-              style={{ marginBottom: 12 }}
-            />
-            <Text style={styles.processingTitle}>AI is analyzing your notes…</Text>
-            <Text style={styles.processingText}>
-              Extracting handwriting, identifying subject & topic, detecting learning gaps.
-              This takes 20–60 seconds.
+            <ProcessingCard createdAt={note.createdAt} />
+            <Text style={styles.processingFooterHint}>
+              ✦ Processing in background — you can stay or check back anytime
             </Text>
-            <View style={styles.pipelineSteps}>
-              {["OCR Extraction", "AI Analysis", "Generating Materials"].map(
-                (step, i) => (
-                  <View key={i} style={styles.pipelineStep}>
-                    <View style={[styles.pipelineDot, { backgroundColor: colors.primary }]} />
-                    <Text style={styles.pipelineStepText}>{step}</Text>
-                  </View>
-                )
-              )}
-            </View>
           </View>
         )}
 
@@ -708,8 +877,8 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 40,
   },
-  loadingText: { fontSize: 15, color: "#6B7280", fontFamily: "Author-Medium" },
-  errorText: { fontSize: 16, color: "#6B7280", fontFamily: "Author-Medium", textAlign: "center" },
+  loadingText: { fontSize: 15, color: "#6B7280", fontWeight: "500" },
+  errorText: { fontSize: 16, color: "#6B7280", fontWeight: "500", textAlign: "center" },
   backBtn: {
     marginTop: 12,
     backgroundColor: colors.primaryBlack,
@@ -717,32 +886,207 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  backBtnText: { color: "#fff", fontFamily: "Author-Medium", fontSize: 14 },
+  backBtnText: { color: "#fff", fontWeight: "500", fontSize: 14 },
 
-  // Header
-  header: {
+  // Top Back Row
+  topBackRow: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 4,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
   },
-  backButton: { padding: 6 },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: "Author-SemiBold",
-    color: colors.primaryBlack,
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: 8,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 40 },
 
-  // Processing
+  // ── AI Processing State ───────────────────────────────────────────────────
+  processingContainer: {
+    paddingVertical: 4,
+  },
+  processingHeaderBlock: {
+    paddingHorizontal: 20,
+    marginBottom: 4,
+  },
+  noteTitleHeading: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: colors.primaryBlack,
+    marginBottom: 4,
+    lineHeight: 28,
+  },
+  noteDateSub: {
+    fontSize: 13,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  aiProgressCard: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  aiProgressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 18,
+  },
+  processingIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: `${colors.primary}15`,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  processingTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.primaryBlack,
+    marginBottom: 2,
+  },
+  processingSubtitle: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  liveIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F59E0B",
+  },
+  liveText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#D97706",
+    letterSpacing: 0.5,
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: "#F1F5F9",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: "100%" as any,
+    backgroundColor: colors.primary,
+    borderRadius: 6,
+  },
+  progressLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  progressPct: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  progressEta: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  currentStageBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: `${colors.primary}08`,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: `${colors.primary}20`,
+  },
+  currentStageLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.primary,
+    marginBottom: 3,
+  },
+  currentStageDetail: {
+    fontSize: 12,
+    color: "#6B7280",
+    fontWeight: "400",
+    lineHeight: 18,
+  },
+  stageList: { gap: 6 },
+  stageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 6,
+  },
+  stageDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  stageLabel: { fontSize: 13, flex: 1 },
+  stageDoneBadge: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  stageDoneBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#16A34A",
+  },
+  stageActiveBadge: {
+    backgroundColor: `${colors.primary}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  stageActiveBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  processingFooterHint: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontWeight: "500",
+    textAlign: "center",
+    marginTop: 4,
+    paddingHorizontal: 24,
+    letterSpacing: 0.2,
+  },
+
+  // ── Failed state card ────────────────────────────────────────────────────
   processingCard: {
     margin: 20,
     backgroundColor: "#fff",
@@ -752,38 +1096,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: `${colors.primary}25`,
   },
-  processingIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: `${colors.primary}15`,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  processingTitle: {
-    fontSize: 18,
-    fontFamily: "Author-SemiBold",
-    color: colors.primaryBlack,
-    marginBottom: 8,
-    textAlign: "center",
-  },
   processingText: {
     fontSize: 14,
     color: "#6B7280",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 20,
   },
-  pipelineSteps: { alignSelf: "stretch", gap: 8 },
-  pipelineStep: { flexDirection: "row", alignItems: "center", gap: 10 },
-  pipelineDot: { width: 8, height: 8, borderRadius: 4 },
-  pipelineStepText: { fontSize: 13, color: "#6B7280", fontFamily: "Author-Medium" },
 
   // Summary card
   summaryCard: {
-    margin: 16,
+    marginHorizontal: 20,
+    marginTop: 8,
     marginBottom: 4,
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -810,11 +1135,11 @@ const styles = StyleSheet.create({
   },
   subjectName: {
     fontSize: 18,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: colors.primaryBlack,
     marginBottom: 2,
   },
-  topicName: { fontSize: 13, color: "#6B7280", fontFamily: "Author-Medium" },
+  topicName: { fontSize: 13, color: "#6B7280", fontWeight: "500" },
   gradeChip: {
     backgroundColor: `${colors.primary}15`,
     paddingHorizontal: 10,
@@ -824,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   gradeChipText: {
     fontSize: 11,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primary,
   },
   completenessRow: {
@@ -849,8 +1174,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  scoreText: { fontSize: 16, fontFamily: "Author-Bold" },
-  scoreLabel: { fontSize: 9, color: "#94A3B8", fontFamily: "Author-Medium" },
+  scoreText: { fontSize: 16, fontWeight: "700" },
+  scoreLabel: { fontSize: 9, color: "#94A3B8", fontWeight: "500" },
   statsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   statPill: {
     flexDirection: "row",
@@ -861,11 +1186,11 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
   },
-  statPillText: { fontSize: 12, fontFamily: "Author-SemiBold" },
+  statPillText: { fontSize: 12, fontWeight: "600" },
 
   // Sections
   section: {
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     marginTop: 14,
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -884,13 +1209,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
   },
   sectionSubtitle: {
     fontSize: 13,
     color: "#94A3B8",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     marginTop: 4,
     marginBottom: 12,
     lineHeight: 18,
@@ -902,7 +1227,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  chipText: { fontSize: 12, fontFamily: "Author-Medium" },
+  chipText: { fontSize: 12, fontWeight: "500" },
 
   // Gap cards
   gapCard: {
@@ -922,17 +1247,11 @@ const styles = StyleSheet.create({
   },
   gapConcept: {
     fontSize: 15,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
     flex: 1,
   },
-  severityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    flexShrink: 0,
-  },
-  severityText: { fontSize: 11, fontFamily: "Author-SemiBold" },
+
   gapSuggestionWrap: {
     flexDirection: "row",
     gap: 8,
@@ -943,7 +1262,7 @@ const styles = StyleSheet.create({
   gapSuggestion: {
     fontSize: 13,
     color: "#78350F",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     lineHeight: 20,
     flex: 1,
   },
@@ -965,7 +1284,7 @@ const styles = StyleSheet.create({
   ocrText: {
     fontSize: 13,
     color: "#475569",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     lineHeight: 22,
   },
   noteImage: {
@@ -993,16 +1312,17 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   pageTabActive: {
-    backgroundColor: colors.primaryBlack,
-    borderColor: colors.primaryBlack,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   pageTabText: {
     fontSize: 12,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     color: "#64748B",
   },
   pageTabTextActive: {
     color: "#FFFFFF",
+    fontWeight: "600",
   },
   pageNumberOverlay: {
     position: "absolute",
@@ -1016,7 +1336,7 @@ const styles = StyleSheet.create({
   pageNumberOverlayText: {
     color: "#FFFFFF",
     fontSize: 11,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
   },
 
   // Materials
@@ -1032,7 +1352,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 10,
   },
-  generateBtnText: { color: "#fff", fontSize: 12, fontFamily: "Author-Medium" },
+  generateBtnText: { color: "#fff", fontSize: 12, fontWeight: "500" },
   generatingBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -1041,7 +1361,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-  generatingBadgeText: { color: "#fff", fontSize: 12, fontFamily: "Author-Medium" },
+  generatingBadgeText: { color: "#fff", fontSize: 12, fontWeight: "500" },
   generatingInfo: {
     backgroundColor: `${colors.primary}10`,
     borderRadius: 12,
@@ -1053,7 +1373,7 @@ const styles = StyleSheet.create({
   generatingInfoText: {
     fontSize: 13,
     color: colors.primary,
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     lineHeight: 20,
   },
   materialsGrid: {
@@ -1081,7 +1401,7 @@ const styles = StyleSheet.create({
   },
   materialTitle: {
     fontSize: 13,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
     marginBottom: 6,
   },

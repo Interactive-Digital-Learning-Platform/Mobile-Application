@@ -7,7 +7,7 @@ import {
   Image,
   ActivityIndicator,
   ScrollView,
-  FlatList,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -103,7 +103,7 @@ export default function UploadNote() {
           text1: "Success",
           text2: `Uploaded ${images.length} page(s) and started processing!`,
         });
-        router.replace(`/(tabs)/notes/${response.data.noteId}`);
+        router.replace(`/(main)/notes/${response.data.noteId}` as any);
       } else {
         throw new Error(response.error || "Upload failed");
       }
@@ -120,6 +120,7 @@ export default function UploadNote() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Upload Multi-Page Note</Text>
         <TouchableOpacity
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: colors.primaryBlack,
   },
   closeButton: {
@@ -299,7 +300,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
     marginBottom: 12,
   },
@@ -312,7 +313,7 @@ const styles = StyleSheet.create({
   pageHelperText: {
     fontSize: 13,
     color: "#6b7280",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
   },
   imagePlaceholder: {
     borderWidth: 2,
@@ -341,14 +342,14 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: {
     fontSize: 18,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     color: colors.primaryBlack,
     marginBottom: 4,
   },
   placeholderSub: {
     fontSize: 14,
     color: "#6b7280",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     textAlign: "center",
     marginBottom: 24,
   },
@@ -369,7 +370,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     color: "#fff",
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     fontSize: 15,
   },
   actionBtnOutline: {
@@ -379,7 +380,7 @@ const styles = StyleSheet.create({
   },
   actionBtnOutlineText: {
     color: colors.primaryBlack,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     fontSize: 15,
   },
   pagesSection: {
@@ -415,7 +416,7 @@ const styles = StyleSheet.create({
   pageBadgeText: {
     color: "#fff",
     fontSize: 11,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
   },
   deletePageBtn: {
     position: "absolute",
@@ -452,7 +453,7 @@ const styles = StyleSheet.create({
   },
   addMoreText: {
     fontSize: 13,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     color: colors.primary,
   },
   addPagesBar: {
@@ -472,7 +473,7 @@ const styles = StyleSheet.create({
   },
   addBarBtnText: {
     color: "#fff",
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     fontSize: 13,
   },
   addBarBtnOutline: {
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
   },
   addBarBtnOutlineText: {
     color: colors.primaryBlack,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     fontSize: 13,
   },
   footer: {
@@ -505,6 +506,6 @@ const styles = StyleSheet.create({
   uploadButtonText: {
     color: "#fff",
     fontSize: 17,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
   },
 });

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
@@ -22,9 +23,11 @@ import {
   Lightbulb,
   Target,
   Heart,
+  LogOut,
 } from "lucide-react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useUser } from "@clerk/expo";
+import { useUser, useAuth } from "@clerk/expo";
+import { router } from "expo-router";
 import {
   useUserMeQuery,
   useAnalyticsMeQuery,
@@ -207,7 +210,9 @@ function FeedbackSkeleton() {
 export default function Profile() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
+  const { signOut } = useAuth();
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
   const {
@@ -222,6 +227,33 @@ export default function Profile() {
     error: feedbackError,
     refetch: refetchFeedback,
   } = useAnalyticsFeedbackQuery(true);
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoggingOut(true);
+              await signOut();
+              queryClient.clear();
+              router.replace("/(auth)/sign-in");
+            } catch (err) {
+              console.error("Logout error:", err);
+              Alert.alert("Error", "Failed to log out. Please try again.");
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -244,8 +276,8 @@ export default function Profile() {
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
       <View className="mt-5 px-[30px] bg-primary flex flex-row z-20 h-[160px] rounded-b-[40px] w-[100%] items-center justify-between absolute ">
-        <View >
-          <Text className="text-white text-2xl  font-bold">
+        <View className="flex-1 mr-2">
+          <Text className="text-white text-2xl font-bold" numberOfLines={1}>
             Hi {displayName}
           </Text>
           {joinDate && (
@@ -254,8 +286,23 @@ export default function Profile() {
             </Text>
           )}
         </View>
-        <View className=" h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
-          <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+        <View className="flex-row items-center gap-2.5">
+          <TouchableOpacity
+            onPress={handleLogout}
+            disabled={isLoggingOut}
+            className="h-[46px] w-[46px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center"
+            activeOpacity={0.7}
+            accessibilityLabel="Log Out"
+          >
+            {isLoggingOut ? (
+              <ActivityIndicator size="small" color={ICON_COLORS.white} />
+            ) : (
+              <LogOut size={20} color={ICON_COLORS.white} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+          <View className="h-[60px] w-[60px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
+            <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+          </View>
         </View>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}
@@ -437,6 +484,27 @@ export default function Profile() {
                 )}
               </Animated.View>
             ) : null}
+          </View>
+
+          {/* Temporary Dev Logout Button */}
+          <View className="px-4 mt-4 mb-12">
+            <TouchableOpacity
+              onPress={handleLogout}
+              disabled={isLoggingOut}
+              className="bg-rose-50 border border-rose-200 rounded-[18px] py-3.5 px-4 flex-row items-center justify-center gap-2"
+              activeOpacity={0.8}
+            >
+              {isLoggingOut ? (
+                <ActivityIndicator size="small" color="#e11d48" />
+              ) : (
+                <>
+                  <LogOut size={18} color="#e11d48" strokeWidth={2} />
+                  <Text className="text-rose-600 font-bold text-sm">
+                    Log Out (Temporary)
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
 
         </View>

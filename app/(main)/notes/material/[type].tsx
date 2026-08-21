@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  StatusBar,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,7 +19,6 @@ import {
   BookOpen,
   Volume2,
   Info,
-  Lightbulb,
   RotateCcw,
   CheckCircle2,
 } from "lucide-react-native";
@@ -32,7 +32,6 @@ import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
-
 const { width: SCREEN_W } = Dimensions.get("window");
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -40,7 +39,6 @@ const { width: SCREEN_W } = Dimensions.get("window");
 // ═══════════════════════════════════════════════════════════════════════════
 
 const Flashcard = ({ card }: { card: any }) => {
-
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
 
@@ -115,7 +113,6 @@ const Flashcard = ({ card }: { card: any }) => {
   );
 };
 
-
 // ═══════════════════════════════════════════════════════════════════════════
 // FLASHCARD LIST — Vertical scroll through all cards
 // ═══════════════════════════════════════════════════════════════════════════
@@ -184,7 +181,6 @@ const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
             </TouchableOpacity>
           </View>
           <Flashcard card={card} />
-
         </View>
       ))}
     </View>
@@ -539,7 +535,8 @@ export default function MaterialViewer() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.container}>
+      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: `${headerColor}20` }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -568,46 +565,46 @@ export default function MaterialViewer() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const markdownStyles = {
-  body: { fontSize: 16, color: "#374151", fontFamily: "Author-Regular", lineHeight: 26 },
+  body: { fontSize: 16, color: "#374151", fontWeight: "400" as const, lineHeight: 26 },
   heading1: {
     fontSize: 24,
-    fontFamily: "Author-Bold",
+    fontWeight: "700" as const,
     color: colors.primaryBlack,
     marginTop: 8,
     marginBottom: 14,
   },
   heading2: {
     fontSize: 20,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600" as const,
     color: colors.primaryBlack,
     marginTop: 20,
     marginBottom: 10,
   },
   heading3: {
     fontSize: 17,
-    fontFamily: "Author-Medium",
+    fontWeight: "500" as const,
     color: colors.primaryBlack,
     marginTop: 16,
     marginBottom: 6,
   },
   paragraph: { marginBottom: 14 },
   list_item: { marginBottom: 8, paddingLeft: 4 },
-  strong: { fontFamily: "Author-Bold", color: colors.primaryBlack },
-  em: { fontStyle: "italic", color: colors.primary },
+  strong: { fontWeight: "700" as const, color: colors.primaryBlack },
+  em: { fontStyle: "italic" as const, color: colors.primary },
   bullet_list: { marginBottom: 14 },
   ordered_list: { marginBottom: 14 },
   code_inline: {
     backgroundColor: "#F1F5F9",
     color: "#BE185D",
-    fontFamily: "Author-Medium",
+    fontWeight: "500" as const,
     paddingHorizontal: 4,
     borderRadius: 4,
   },
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FB" },
-  scroll: { flex: 1 },
+  container: { flex: 1, backgroundColor: "#fff" },
+  scroll: { flex: 1, backgroundColor: "#F8F9FB" },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -615,8 +612,8 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 80,
   },
-  loadingText: { marginTop: 14, fontSize: 15, color: "#6B7280", fontFamily: "Author-Medium" },
-  errorText: { fontSize: 15, color: "#94A3B8", fontFamily: "Author-Medium", textAlign: "center" },
+  loadingText: { marginTop: 14, fontSize: 15, color: "#6B7280", fontWeight: "500" },
+  errorText: { fontSize: 15, color: "#94A3B8", fontWeight: "500", textAlign: "center" },
 
   // Header
   header: {
@@ -631,7 +628,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 8 },
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerDot: { width: 10, height: 10, borderRadius: 5 },
-  headerTitle: { fontSize: 17, fontFamily: "Author-Bold", color: colors.primaryBlack },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: colors.primaryBlack },
 
   contentPad: { padding: 16 },
 
@@ -645,8 +642,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  heroTitle: { fontSize: 22, fontFamily: "Author-Bold", marginBottom: 4 },
-  heroSub: { fontSize: 14, color: "#94A3B8", fontFamily: "Author-Regular", textAlign: "center" },
+  heroTitle: { fontSize: 22, fontWeight: "700", marginBottom: 4 },
+  heroSub: { fontSize: 14, color: "#94A3B8", fontWeight: "400", textAlign: "center" },
 
   // ── Flashcards ──────────────────────────────────────────────────────────────
 
@@ -665,13 +662,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
   },
-  completionText: { fontSize: 14, fontFamily: "Author-SemiBold", color: "#16A34A" },
+  completionText: { fontSize: 14, fontWeight: "600", color: "#16A34A" },
 
   flashcardScene: { width: "100%", alignItems: "center" },
   flashcardCounter: {
     fontSize: 13,
     color: "#94A3B8",
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     marginBottom: 12,
   },
   flashcardWrapper: { width: "100%", height: 230, position: "relative" },
@@ -698,13 +695,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 18,
     fontSize: 11,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 1,
   },
   flashcardText: {
     fontSize: 18,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
     textAlign: "center",
     lineHeight: 28,
@@ -713,7 +710,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 18,
     fontSize: 12,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     color: "#CBD5E1",
   },
   resetBtn: {
@@ -726,7 +723,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#F1F5F9",
   },
-  resetBtnText: { fontSize: 12, color: "#6B7280", fontFamily: "Author-Medium" },
+  resetBtnText: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
 
   // ── Flashcard vertical list ──────────────────────────────────────────────────────────
   flashcardListContainer: { gap: 16 },
@@ -739,10 +736,10 @@ const styles = StyleSheet.create({
   flashcardListCount: {
     fontSize: 13,
     color: "#94A3B8",
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
   },
   flashcardDoneCount: { flexDirection: "row", alignItems: "center", gap: 4 },
-  flashcardDoneText: { fontSize: 13, color: "#16A34A", fontFamily: "Author-SemiBold" },
+  flashcardDoneText: { fontSize: 13, color: "#16A34A", fontWeight: "600" },
   flashcardListItem: { gap: 6 },
   flashcardListMeta: {
     flexDirection: "row",
@@ -752,7 +749,7 @@ const styles = StyleSheet.create({
   },
   flashcardListNum: {
     fontSize: 12,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#CBD5E1",
     letterSpacing: 0.5,
   },
@@ -768,7 +765,7 @@ const styles = StyleSheet.create({
   flashcardDoneBtnActive: { backgroundColor: "#DCFCE7" },
   flashcardDoneBtnText: {
     fontSize: 11,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: "#94A3B8",
   },
 
@@ -806,15 +803,15 @@ const styles = StyleSheet.create({
   },
   mmRootText: {
     fontSize: 17,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#fff",
   },
   mmChildPill: {
     borderWidth: 1.5,
   },
   mmDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
-  mmNodeText: { fontSize: 14, fontFamily: "Author-Medium", flexShrink: 1 },
-  mmChildText: { fontSize: 14, fontFamily: "Author-Medium" },
+  mmNodeText: { fontSize: 14, fontWeight: "500", flexShrink: 1 },
+  mmChildText: { fontSize: 14, fontWeight: "500" },
   mmChildrenWrap: {
     marginLeft: 20,
     paddingLeft: 14,
@@ -828,7 +825,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     color: "#94A3B8",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     marginTop: 16,
   },
 
@@ -861,7 +858,7 @@ const styles = StyleSheet.create({
   },
   playStatus: {
     fontSize: 12,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: colors.primary,
     letterSpacing: 2,
     marginBottom: 20,
@@ -876,7 +873,7 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 3 },
   timeRow: { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-  timeText: { fontSize: 12, fontFamily: "Author-Medium", color: "#94A3B8" },
+  timeText: { fontSize: 12, fontWeight: "500", color: "#94A3B8" },
 
   transcriptCard: {
     backgroundColor: "#fff",
@@ -896,17 +893,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: "flex-start",
   },
-  infoText: { flex: 1, fontSize: 13, fontFamily: "Author-Medium", color: "#0369A1", lineHeight: 20 },
+  infoText: { flex: 1, fontSize: 13, fontWeight: "500", color: "#0369A1", lineHeight: 20 },
   transcriptLabel: {
     fontSize: 11,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 1,
     marginBottom: 10,
   },
   transcriptText: {
     fontSize: 15,
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     color: colors.primaryBlack,
     lineHeight: 26,
   },
@@ -934,9 +931,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexShrink: 0,
   },
-  defIndexText: { fontSize: 14, fontFamily: "Author-Bold" },
-  defTerm: { fontSize: 16, fontFamily: "Author-Bold", marginBottom: 6 },
-  defDefinition: { fontSize: 14, fontFamily: "Author-Regular", color: "#475569", lineHeight: 22 },
+  defIndexText: { fontSize: 14, fontWeight: "700" },
+  defTerm: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
+  defDefinition: { fontSize: 14, fontWeight: "400", color: "#475569", lineHeight: 22 },
 
   // ── Markdown ─────────────────────────────────────────────────────────────────
 

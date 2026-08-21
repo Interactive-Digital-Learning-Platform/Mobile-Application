@@ -66,7 +66,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="notes"
+        name="notes/index"
         options={{
           title: "Notes",
           headerShown: false,
