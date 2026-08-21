@@ -29,11 +29,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   Sparkles,
+  Clock,
 } from "lucide-react-native";
+import Svg, { Circle } from "react-native-svg";
 import { materialsApi, notesApi } from "@/api/notesAPI";
 import { getNotesResourceUrl } from "@/api/apiClients";
 import { colors } from "@/constants/colors";
 import SeverityBadge from "@/components/notes/SeverityBadge";
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const RING_SIZE = 170;
+const RING_STROKE = 10;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -211,6 +220,12 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
   const fmtTime = (s: number) =>
     s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 
+  const strokeDashoffset = progressAnim.interpolate({
+    inputRange: [0, 100],
+    outputRange: [RING_CIRCUMFERENCE, 0],
+    extrapolate: "clamp",
+  });
+
   return (
     <View style={styles.fullScreenProcessing}>
       {/* ── Top Navigation Bar ── */}
@@ -237,43 +252,55 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
         contentContainerStyle={styles.processingScrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero Section ── */}
+        {/* ── Circular Progress & Brain Hero Section ── */}
         <View style={styles.processingHero}>
-          <Animated.View style={{ opacity: pulseAnim }}>
-            <View style={styles.processingIconWrapLarge}>
-              <Brain size={38} color={colors.primary} strokeWidth={2.2} />
+          <View style={styles.circleProgressWrap}>
+            <Svg width={RING_SIZE} height={RING_SIZE} style={styles.circleSvg}>
+              {/* Background Track Circle */}
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke="#E2E8F0"
+                strokeWidth={RING_STROKE}
+                fill="transparent"
+              />
+              {/* Animated Progress Circle */}
+              <AnimatedCircle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={colors.primary}
+                strokeWidth={RING_STROKE}
+                fill="transparent"
+                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
+              />
+            </Svg>
+
+            {/* Inner Content (Brain Icon + Percentage + Status Text) */}
+            <View style={styles.circleInnerContent}>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <Brain size={34} color={colors.primary} strokeWidth={2.2} />
+              </Animated.View>
+              <Text style={styles.circlePctText}>{pct}%</Text>
+              <Text style={styles.circleStatusText}>ANALYZING</Text>
             </View>
-          </Animated.View>
+          </View>
 
           <Text style={styles.processingMainTitle}>AI Analysis in Progress</Text>
           <Text style={styles.processingMainSubtitle}>
             Extracting handwriting, identifying topics, and generating learning materials
           </Text>
-        </View>
 
-        {/* ── Full-Width Progress Section ── */}
-        <View style={styles.processingProgressSection}>
-          <View style={styles.progressBarTrackFull}>
-            <Animated.View
-              style={[
-                styles.progressBarFillFull,
-                {
-                  width: progressAnim.interpolate({
-                    inputRange: [0, 100],
-                    outputRange: ["0%", "100%"],
-                    extrapolate: "clamp",
-                  }),
-                },
-              ]}
-            />
-          </View>
-
-          <View style={styles.progressLabelRowFull}>
-            <Text style={styles.progressPctFull}>{pct}% Completed</Text>
-            <View style={styles.progressTimeBadge}>
-              <Text style={styles.progressTimeText}>{fmtTime(elapsedSec)} elapsed</Text>
-            </View>
-            <Text style={styles.progressEtaFull}>~{fmtTime(etaSec)} left</Text>
+          {/* Time Info Badges Row */}
+          <View style={styles.timeInfoRow}>
+            <Clock size={13} color="#64748B" />
+            <Text style={styles.timeInfoText}>{fmtTime(elapsedSec)} elapsed</Text>
+            <View style={styles.timeInfoDot} />
+            <Text style={styles.timeInfoEta}>~{fmtTime(etaSec)} remaining</Text>
           </View>
         </View>
 
@@ -963,28 +990,55 @@ const styles = StyleSheet.create({
   },
   processingHero: {
     alignItems: "center",
-    marginTop: 4,
-    marginBottom: 24,
+    marginTop: 6,
+    marginBottom: 20,
   },
-  processingIconPulse: {
+  circleProgressWrap: {
+    width: 170,
+    height: 170,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 14,
+    position: "relative",
   },
-  processingIconWrapLarge: {
-    width: 76,
-    height: 76,
-    borderRadius: 24,
-    backgroundColor: `${colors.primary}14`,
-    justifyContent: "center",
+  circleSvg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+  },
+  circleInnerContent: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    backgroundColor: "#fff",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: `${colors.primary}25`,
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: `${colors.primary}18`,
   },
-  processingMainTitle: {
+  circlePctText: {
     fontSize: 22,
     fontWeight: "800",
     color: colors.primaryBlack,
-    marginTop: 16,
+    marginTop: 4,
+  },
+  circleStatusText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.primary,
+    letterSpacing: 0.8,
+    marginTop: 2,
+  },
+  processingMainTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.primaryBlack,
+    marginTop: 4,
     textAlign: "center",
   },
   processingMainSubtitle: {
@@ -995,47 +1049,38 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     paddingHorizontal: 16,
   },
-  processingProgressSection: {
-    width: "100%",
-    marginBottom: 20,
-  },
-  progressBarTrackFull: {
-    height: 10,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 6,
-    overflow: "hidden",
-    marginBottom: 10,
-  },
-  progressBarFillFull: {
-    height: "100%",
-    backgroundColor: colors.primary,
-    borderRadius: 6,
-  },
-  progressLabelRowFull: {
+  timeInfoRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fff",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  progressPctFull: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  progressTimeBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  progressTimeText: {
-    fontSize: 11,
+  timeInfoText: {
+    fontSize: 12,
     fontWeight: "600",
     color: "#64748B",
   },
-  progressEtaFull: {
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#94A3B8",
+  timeInfoDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#CBD5E1",
+  },
+  timeInfoEta: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary,
   },
   activeStageBanner: {
     backgroundColor: "#fff",
