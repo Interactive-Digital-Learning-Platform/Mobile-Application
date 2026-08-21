@@ -280,17 +280,32 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
               />
             </Svg>
 
-            {/* Inner Content (Brain Icon + Percentage + Status Text) */}
+            {/* Inner Content (Bottom-to-Top Filling Core + Static Brain Icon + Percentage + Status Text) */}
             <View style={styles.circleInnerContent}>
-              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+              {/* Bottom-to-Top Animated Core Fill */}
+              <Animated.View
+                style={[
+                  styles.circleCoreFill,
+                  {
+                    height: progressAnim.interpolate({
+                      inputRange: [0, 100],
+                      outputRange: ["0%", "100%"],
+                      extrapolate: "clamp",
+                    }),
+                  },
+                ]}
+              />
+
+              {/* Static Content Layer */}
+              <View style={styles.circleContentLayer}>
                 <Brain size={34} color={colors.primary} strokeWidth={2.2} />
-              </Animated.View>
-              <Text style={styles.circlePctText}>{pct}%</Text>
-              <Text style={styles.circleStatusText}>ANALYZING</Text>
+                <Text style={styles.circlePctText}>{pct}%</Text>
+                <Text style={styles.circleStatusText}>ANALYZING</Text>
+              </View>
             </View>
           </View>
 
-          <Text style={styles.processingMainTitle}>AI Analysis in Progress</Text>
+          <Text style={styles.processingMainTitle}>Analysis in Progress</Text>
           <Text style={styles.processingMainSubtitle}>
             Extracting handwriting, identifying topics, and generating learning materials
           </Text>
@@ -1013,13 +1028,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+    position: "relative",
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 3,
     borderWidth: 1,
-    borderColor: `${colors.primary}18`,
+    borderColor: `${colors.primary}20`,
+  },
+  circleCoreFill: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: `${colors.primary}20`,
+    borderTopWidth: 1.5,
+    borderTopColor: `${colors.primary}60`,
+  },
+  circleContentLayer: {
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
   },
   circlePctText: {
     fontSize: 22,
