@@ -157,17 +157,20 @@ const PIPELINE_STAGES_INFO = [
 
 const EST_TOTAL_SECS = 65;
 
-const ProcessingCard: React.FC<{ createdAt: string }> = ({ createdAt }) => {
+const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
+  createdAt,
+  onBack,
+}) => {
   const [elapsedSec, setElapsedSec] = useState(0);
   const progressAnim = React.useRef(new Animated.Value(0)).current;
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
-  // Pulsing "LIVE" badge animation
+  // Pulsing "LIVE" badge & icon animation
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.4, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
       ])
     );
     pulse.start();
@@ -209,105 +212,153 @@ const ProcessingCard: React.FC<{ createdAt: string }> = ({ createdAt }) => {
     s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 
   return (
-    <View style={styles.aiProgressCard}>
-      {/* ── Header Row ── */}
-      <View style={styles.aiProgressHeader}>
-        <View style={styles.processingIconWrap}>
-          <Brain size={22} color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.processingTitle}>AI Analysis in Progress</Text>
-          <Text style={styles.processingSubtitle}>{fmtTime(elapsedSec)} elapsed</Text>
-        </View>
+    <View style={styles.fullScreenProcessing}>
+      {/* ── Top Navigation Bar ── */}
+      <View style={styles.processingTopBar}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backButton}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ChevronLeft size={24} color={colors.primaryBlack} />
+        </TouchableOpacity>
+
         <Animated.View style={{ opacity: pulseAnim }}>
           <View style={styles.liveIndicator}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>LIVE</Text>
+            <Text style={styles.liveText}>PROCESSING</Text>
           </View>
         </Animated.View>
       </View>
 
-      {/* ── Animated Progress Bar ── */}
-      <View style={styles.progressBarTrack}>
-        <Animated.View
-          style={[
-            styles.progressBarFill,
-            {
-              width: progressAnim.interpolate({
-                inputRange: [0, 100],
-                outputRange: ["0%", "100%"],
-                extrapolate: "clamp",
-              }),
-            },
-          ]}
-        />
-      </View>
-      <View style={styles.progressLabelRow}>
-        <Text style={styles.progressPct}>{pct}% complete</Text>
-        <Text style={styles.progressEta}>~{fmtTime(etaSec)} remaining</Text>
-      </View>
+      <ScrollView
+        style={styles.processingScrollView}
+        contentContainerStyle={styles.processingScrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Hero Section ── */}
+        <View style={styles.processingHero}>
+          <Animated.View style={{ opacity: pulseAnim }}>
+            <View style={styles.processingIconWrapLarge}>
+              <Brain size={38} color={colors.primary} strokeWidth={2.2} />
+            </View>
+          </Animated.View>
 
-      {/* ── Current Stage Highlight ── */}
-      <View style={styles.currentStageBox}>
-        <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 10 }} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.currentStageLabel}>{currentStage.label}</Text>
-          <Text style={styles.currentStageDetail} numberOfLines={2}>
-            {currentStage.detail}
+          <Text style={styles.processingMainTitle}>AI Analysis in Progress</Text>
+          <Text style={styles.processingMainSubtitle}>
+            Extracting handwriting, identifying topics, and generating learning materials
           </Text>
         </View>
-      </View>
 
-      {/* ── Stage Checklist ── */}
-      <View style={styles.stageList}>
-        {PIPELINE_STAGES_INFO.map((stage, idx) => {
-          const isDone = idx < activeIdx;
-          const isActive = idx === activeIdx;
-          return (
-            <View key={idx} style={styles.stageRow}>
-              <View
-                style={[
-                  styles.stageDot,
-                  isDone
-                    ? { backgroundColor: "#10b981" }
-                    : isActive
-                    ? { backgroundColor: colors.primary }
-                    : { backgroundColor: "#E2E8F0" },
-                ]}
-              >
-                {isDone ? (
-                  <CheckCircle2 size={12} color="#fff" />
-                ) : isActive ? (
-                  <ActivityIndicator size={10} color="#fff" />
-                ) : null}
-              </View>
-              <Text
-                style={[
-                  styles.stageLabel,
-                  isDone
-                    ? { color: "#10b981", fontWeight: "600" }
-                    : isActive
-                    ? { color: colors.primary, fontWeight: "700" }
-                    : { color: "#94A3B8", fontWeight: "400" },
-                ]}
-                numberOfLines={1}
-              >
-                {stage.label}
-              </Text>
-              {isDone && (
-                <View style={styles.stageDoneBadge}>
-                  <Text style={styles.stageDoneBadgeText}>Done</Text>
-                </View>
-              )}
-              {isActive && (
-                <View style={styles.stageActiveBadge}>
-                  <Text style={styles.stageActiveBadgeText}>Running</Text>
-                </View>
-              )}
+        {/* ── Full-Width Progress Section ── */}
+        <View style={styles.processingProgressSection}>
+          <View style={styles.progressBarTrackFull}>
+            <Animated.View
+              style={[
+                styles.progressBarFillFull,
+                {
+                  width: progressAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ["0%", "100%"],
+                    extrapolate: "clamp",
+                  }),
+                },
+              ]}
+            />
+          </View>
+
+          <View style={styles.progressLabelRowFull}>
+            <Text style={styles.progressPctFull}>{pct}% Completed</Text>
+            <View style={styles.progressTimeBadge}>
+              <Text style={styles.progressTimeText}>{fmtTime(elapsedSec)} elapsed</Text>
             </View>
-          );
-        })}
-      </View>
+            <Text style={styles.progressEtaFull}>~{fmtTime(etaSec)} left</Text>
+          </View>
+        </View>
+
+        {/* ── Current Active Stage Banner ── */}
+        <View style={styles.activeStageBanner}>
+          <View style={styles.activeStageHeaderRow}>
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={styles.activeStageTag}>CURRENT STEP</Text>
+          </View>
+          <Text style={styles.activeStageTitle}>{currentStage.label}</Text>
+          <Text style={styles.activeStageDetail}>{currentStage.detail}</Text>
+        </View>
+
+        {/* ── Pipeline Stages Checklist across screen ── */}
+        <View style={styles.pipelineSection}>
+          <Text style={styles.pipelineSectionTitle}>ANALYSIS PIPELINE</Text>
+          <View style={styles.pipelineList}>
+            {PIPELINE_STAGES_INFO.map((stage, idx) => {
+              const isDone = idx < activeIdx;
+              const isActive = idx === activeIdx;
+
+              return (
+                <View
+                  key={idx}
+                  style={[
+                    styles.pipelineCard,
+                    isDone && styles.pipelineCardDone,
+                    isActive && styles.pipelineCardActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.pipelineDotWrap,
+                      isDone && styles.pipelineDotDone,
+                      isActive && styles.pipelineDotActive,
+                    ]}
+                  >
+                    {isDone ? (
+                      <CheckCircle2 size={15} color="#fff" />
+                    ) : isActive ? (
+                      <ActivityIndicator size={12} color="#fff" />
+                    ) : (
+                      <Text style={styles.pipelineIndexText}>{idx + 1}</Text>
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.pipelineStageName,
+                        isDone && styles.pipelineStageNameDone,
+                        isActive && styles.pipelineStageNameActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {stage.label}
+                    </Text>
+                    {isActive && (
+                      <Text style={styles.pipelineStageDesc} numberOfLines={2}>
+                        {stage.detail}
+                      </Text>
+                    )}
+                  </View>
+
+                  {isDone && (
+                    <View style={styles.stageDonePill}>
+                      <Text style={styles.stageDonePillText}>Done</Text>
+                    </View>
+                  )}
+                  {isActive && (
+                    <View style={styles.stageActivePill}>
+                      <Text style={styles.stageActivePillText}>Running</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── Footer Hint ── */}
+        <Text style={styles.processingBottomHint}>
+          ✦ Processing in background — you can stay or check back anytime
+        </Text>
+      </ScrollView>
     </View>
   );
 };
@@ -441,6 +492,15 @@ export default function NoteDetail() {
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
+  if (isProcessing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar backgroundColor="#F8F9FB" barStyle="dark-content" />
+        <ProcessingView createdAt={note.createdAt} onBack={() => router.back()} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#F8F9FB" barStyle="dark-content" />
@@ -453,36 +513,9 @@ export default function NoteDetail() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          isProcessing && { flexGrow: 1, justifyContent: "center" },
-        ]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Processing State ── */}
-        {isProcessing && (
-          <View style={styles.processingContainer}>
-            <View style={styles.processingHeaderBlock}>
-              <Text style={styles.noteTitleHeading} numberOfLines={2}>
-                {note.title}
-              </Text>
-              <Text style={styles.noteDateSub}>
-                Uploaded {new Date(note.createdAt).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
-            </View>
-            <ProcessingCard createdAt={note.createdAt} />
-            <Text style={styles.processingFooterHint}>
-              ✦ Processing in background — you can stay or check back anytime
-            </Text>
-          </View>
-        )}
-
         {/* ── Failed State ── */}
         {isFailed && (
           <View style={[styles.processingCard, { borderColor: "#FCA5A5" }]}>
@@ -908,65 +941,240 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 40 },
 
-  // ── AI Processing State ───────────────────────────────────────────────────
-  processingContainer: {
-    paddingVertical: 4,
+  // ── Full-Screen AI Processing State ───────────────────────────────────────
+  fullScreenProcessing: {
+    flex: 1,
+    backgroundColor: "#F8F9FB",
   },
-  processingHeaderBlock: {
-    paddingHorizontal: 20,
-    marginBottom: 4,
-  },
-  noteTitleHeading: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: colors.primaryBlack,
-    marginBottom: 4,
-    lineHeight: 28,
-  },
-  noteDateSub: {
-    fontSize: 13,
-    color: "#94A3B8",
-    fontWeight: "500",
-  },
-  aiProgressCard: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 16,
-    backgroundColor: "#fff",
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  aiProgressHeader: {
+  processingTopBar: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 18,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
-  processingIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: `${colors.primary}15`,
+  processingScrollView: {
+    flex: 1,
+  },
+  processingScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  processingHero: {
+    alignItems: "center",
+    marginTop: 4,
+    marginBottom: 24,
+  },
+  processingIconPulse: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  processingIconWrapLarge: {
+    width: 76,
+    height: 76,
+    borderRadius: 24,
+    backgroundColor: `${colors.primary}14`,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: `${colors.primary}25`,
   },
-  processingTitle: {
+  processingMainTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.primaryBlack,
+    marginTop: 16,
+    textAlign: "center",
+  },
+  processingMainSubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    marginTop: 6,
+    textAlign: "center",
+    lineHeight: 19,
+    paddingHorizontal: 16,
+  },
+  processingProgressSection: {
+    width: "100%",
+    marginBottom: 20,
+  },
+  progressBarTrackFull: {
+    height: 10,
+    backgroundColor: "#E2E8F0",
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 10,
+  },
+  progressBarFillFull: {
+    height: "100%",
+    backgroundColor: colors.primary,
+    borderRadius: 6,
+  },
+  progressLabelRowFull: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressPctFull: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  progressTimeBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  progressTimeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  progressEtaFull: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: "#94A3B8",
+  },
+  activeStageBanner: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: `${colors.primary}30`,
+    marginBottom: 22,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  activeStageHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  activeStageTag: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.primary,
+    letterSpacing: 0.8,
+  },
+  activeStageTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: colors.primaryBlack,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  processingSubtitle: {
+  activeStageDetail: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 18,
+  },
+  pipelineSection: {
+    marginBottom: 20,
+  },
+  pipelineSectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#94A3B8",
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  pipelineList: {
+    gap: 8,
+  },
+  pipelineCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  pipelineCardDone: {
+    borderColor: "#E2E8F0",
+  },
+  pipelineCardActive: {
+    borderColor: `${colors.primary}40`,
+    backgroundColor: "#fff",
+  },
+  pipelineDotWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pipelineDotDone: {
+    backgroundColor: "#10B981",
+  },
+  pipelineDotActive: {
+    backgroundColor: colors.primary,
+  },
+  pipelineIndexText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  pipelineStageName: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#94A3B8",
+  },
+  pipelineStageNameDone: {
+    color: colors.primaryBlack,
+    fontWeight: "600",
+  },
+  pipelineStageNameActive: {
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  pipelineStageDesc: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  stageDonePill: {
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  stageDonePillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#16A34A",
+  },
+  stageActivePill: {
+    backgroundColor: `${colors.primary}15`,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  stageActivePillText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  processingBottomHint: {
     fontSize: 12,
     color: "#94A3B8",
     fontWeight: "500",
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 12,
+    letterSpacing: 0.2,
   },
   liveIndicator: {
     flexDirection: "row",
@@ -988,102 +1196,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#D97706",
     letterSpacing: 0.5,
-  },
-  progressBarTrack: {
-    height: 8,
-    backgroundColor: "#F1F5F9",
-    borderRadius: 6,
-    overflow: "hidden",
-    marginBottom: 8,
-  },
-  progressBarFill: {
-    height: "100%" as any,
-    backgroundColor: colors.primary,
-    borderRadius: 6,
-  },
-  progressLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  progressPct: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primary,
-  },
-  progressEta: {
-    fontSize: 12,
-    color: "#94A3B8",
-    fontWeight: "500",
-  },
-  currentStageBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: `${colors.primary}08`,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: `${colors.primary}20`,
-  },
-  currentStageLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.primary,
-    marginBottom: 3,
-  },
-  currentStageDetail: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "400",
-    lineHeight: 18,
-  },
-  stageList: { gap: 6 },
-  stageRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 6,
-  },
-  stageDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  stageLabel: { fontSize: 13, flex: 1 },
-  stageDoneBadge: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  stageDoneBadgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#16A34A",
-  },
-  stageActiveBadge: {
-    backgroundColor: `${colors.primary}15`,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  stageActiveBadgeText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: colors.primary,
-  },
-  processingFooterHint: {
-    fontSize: 12,
-    color: "#94A3B8",
-    fontWeight: "500",
-    textAlign: "center",
-    marginTop: 4,
-    paddingHorizontal: 24,
-    letterSpacing: 0.2,
   },
 
   // ── Failed state card ────────────────────────────────────────────────────
