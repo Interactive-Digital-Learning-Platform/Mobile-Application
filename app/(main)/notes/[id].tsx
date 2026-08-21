@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Sparkles,
   Clock,
+  Minimize2,
 } from "lucide-react-native";
 import Svg, { Circle } from "react-native-svg";
 import { materialsApi, notesApi } from "@/api/notesAPI";
@@ -43,6 +44,14 @@ const RING_SIZE = 170;
 const RING_STROKE = 10;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+const PROCESSING_TIPS = [
+  "Clear handwriting and good lighting yield the best diagram and text extraction.",
+  "AI is identifying key topics and calculating your personalized curriculum coverage.",
+  "Building tailored interactive flashcards, quizzes, and revision summaries…",
+  "Analysis keeps running in the background — feel free to explore other tabs anytime!",
+  "Pinpointing learning gaps so you know exactly which areas need more practice.",
+];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -171,20 +180,8 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
   onBack,
 }) => {
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [tipIndex, setTipIndex] = useState(0);
   const progressAnim = React.useRef(new Animated.Value(0)).current;
-  const pulseAnim = React.useRef(new Animated.Value(1)).current;
-
-  // Pulsing "LIVE" badge & icon animation
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
 
   // Elapsed timer — ticks every second
   useEffect(() => {
@@ -197,6 +194,14 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [createdAt]);
+
+  // Rotate helpful learning tips every 4.5 seconds
+  useEffect(() => {
+    const tipInterval = setInterval(() => {
+      setTipIndex((prev) => (prev + 1) % PROCESSING_TIPS.length);
+    }, 4500);
+    return () => clearInterval(tipInterval);
+  }, []);
 
   // Smooth progress bar animation (capped at 92% until server confirms done)
   useEffect(() => {
@@ -214,7 +219,6 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
     return i === -1 ? PIPELINE_STAGES_INFO.length - 1 : i;
   })();
 
-  const currentStage = PIPELINE_STAGES_INFO[activeIdx];
   const pct = Math.min(Math.round((elapsedSec / EST_TOTAL_SECS) * 100), 92);
   const etaSec = Math.max(0, EST_TOTAL_SECS - elapsedSec);
   const fmtTime = (s: number) =>
@@ -228,23 +232,26 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
 
   return (
     <View style={styles.fullScreenProcessing}>
-      {/* ── Top Navigation Bar ── */}
+      {/* ── Top Navigation Bar with clear background action ── */}
       <View style={styles.processingTopBar}>
         <TouchableOpacity
           onPress={onBack}
-          style={styles.backButton}
+          style={styles.backButtonWithLabel}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <ChevronLeft size={24} color={colors.primaryBlack} />
+          <ChevronLeft size={22} color={colors.primaryBlack} />
+          <Text style={styles.backLabelText}>Notes</Text>
         </TouchableOpacity>
 
-        <Animated.View style={{ opacity: pulseAnim }}>
-          <View style={styles.liveIndicator}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>PROCESSING</Text>
-          </View>
-        </Animated.View>
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.runInBackgroundBtn}
+          activeOpacity={0.8}
+        >
+          <Minimize2 size={13} color="#C2410C" />
+          <Text style={styles.runInBackgroundText}>Run in Background</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -270,7 +277,7 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
                 cx={RING_SIZE / 2}
                 cy={RING_SIZE / 2}
                 r={RING_RADIUS}
-                stroke={colors.primary}
+                stroke="#EA580C"
                 strokeWidth={RING_STROKE}
                 fill="transparent"
                 strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
@@ -280,7 +287,7 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
               />
             </Svg>
 
-            {/* Inner Content (Bottom-to-Top Filling Core + Static Brain Icon + Percentage + Status Text) */}
+            {/* Inner Content (Bottom-to-Top Filling Core + Static Brain Icon + Percentage + ETA) */}
             <View style={styles.circleInnerContent}>
               {/* Bottom-to-Top Animated Core Fill */}
               <Animated.View
@@ -298,40 +305,37 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
 
               {/* Static Content Layer */}
               <View style={styles.circleContentLayer}>
-                <Brain size={34} color={colors.primary} strokeWidth={2.2} />
+                <Brain size={30} color="#EA580C" strokeWidth={2.2} />
                 <Text style={styles.circlePctText}>{pct}%</Text>
-                <Text style={styles.circleStatusText}>ANALYZING</Text>
+                <Text style={styles.circleEtaText}>~{fmtTime(etaSec)} left</Text>
               </View>
             </View>
           </View>
 
           <Text style={styles.processingMainTitle}>Analysis in Progress</Text>
           <Text style={styles.processingMainSubtitle}>
-            Extracting handwriting, identifying topics, and generating learning materials
+            Extracting handwritten content & building study materials
           </Text>
 
-          {/* Time Info Badges Row */}
-          <View style={styles.timeInfoRow}>
-            <Clock size={13} color="#64748B" />
-            <Text style={styles.timeInfoText}>{fmtTime(elapsedSec)} elapsed</Text>
-            <View style={styles.timeInfoDot} />
-            <Text style={styles.timeInfoEta}>~{fmtTime(etaSec)} remaining</Text>
+          {/* Rotating Educational Tip Card */}
+          <View style={styles.tipCard}>
+            <Sparkles size={14} color="#EA580C" style={{ marginTop: 2 }} />
+            <Text style={styles.tipText} numberOfLines={2}>
+              {PROCESSING_TIPS[tipIndex]}
+            </Text>
           </View>
         </View>
 
-        {/* ── Current Active Stage Banner ── */}
-        <View style={styles.activeStageBanner}>
-          <View style={styles.activeStageHeaderRow}>
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-            <Text style={styles.activeStageTag}>CURRENT STEP</Text>
-          </View>
-          <Text style={styles.activeStageTitle}>{currentStage.label}</Text>
-          <Text style={styles.activeStageDetail}>{currentStage.detail}</Text>
-        </View>
-
-        {/* ── Pipeline Stages Checklist across screen ── */}
+        {/* ── Pipeline Stages Section (Directly below Hero) ── */}
         <View style={styles.pipelineSection}>
-          <Text style={styles.pipelineSectionTitle}>ANALYSIS PIPELINE</Text>
+          <View style={styles.pipelineHeaderRow}>
+            <Text style={styles.pipelineSectionTitle}>ANALYSIS PIPELINE</Text>
+            <View style={styles.pipelineElapsedBadge}>
+              <Clock size={11} color="#64748B" />
+              <Text style={styles.pipelineElapsedText}>{fmtTime(elapsedSec)} elapsed</Text>
+            </View>
+          </View>
+
           <View style={styles.pipelineList}>
             {PIPELINE_STAGES_INFO.map((stage, idx) => {
               const isDone = idx < activeIdx;
@@ -354,7 +358,7 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
                     ]}
                   >
                     {isDone ? (
-                      <CheckCircle2 size={15} color="#fff" />
+                      <CheckCircle2 size={15} color="#fff" strokeWidth={2.5} />
                     ) : isActive ? (
                       <ActivityIndicator size={12} color="#fff" />
                     ) : (
@@ -396,9 +400,9 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
           </View>
         </View>
 
-        {/* ── Footer Hint ── */}
+        {/* ── Footer Background Notice ── */}
         <Text style={styles.processingBottomHint}>
-          ✦ Processing in background — you can stay or check back anytime
+          ✦ Processing continues in the background — you can safely leave this screen anytime
         </Text>
       </ScrollView>
     </View>
@@ -994,7 +998,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 10,
+  },
+  backButtonWithLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 6,
+    paddingRight: 8,
+  },
+  backLabelText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.primaryBlack,
+  },
+  runInBackgroundBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#FFEDD5",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#FDBA74",
+  },
+  runInBackgroundText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#C2410C",
   },
   processingScrollView: {
     flex: 1,
@@ -1005,15 +1037,15 @@ const styles = StyleSheet.create({
   },
   processingHero: {
     alignItems: "center",
-    marginTop: 6,
-    marginBottom: 20,
+    marginTop: 4,
+    marginBottom: 18,
   },
   circleProgressWrap: {
     width: 170,
     height: 170,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 14,
+    marginBottom: 12,
     position: "relative",
   },
   circleSvg: {
@@ -1030,22 +1062,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
     position: "relative",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowColor: "#EA580C",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     elevation: 3,
     borderWidth: 1,
-    borderColor: `${colors.primary}20`,
+    borderColor: "rgba(234, 88, 12, 0.18)",
   },
   circleCoreFill: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: `${colors.primary}20`,
+    backgroundColor: "rgba(234, 88, 12, 0.15)",
     borderTopWidth: 1.5,
-    borderTopColor: `${colors.primary}60`,
+    borderTopColor: "rgba(234, 88, 12, 0.55)",
   },
   circleContentLayer: {
     alignItems: "center",
@@ -1053,42 +1085,41 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   circlePctText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
-    color: colors.primaryBlack,
-    marginTop: 4,
-  },
-  circleStatusText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.primary,
-    letterSpacing: 0.8,
+    color: "#0F172A",
     marginTop: 2,
   },
+  circleEtaText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#C2410C",
+    marginTop: 1,
+  },
   processingMainTitle: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: "800",
-    color: colors.primaryBlack,
-    marginTop: 4,
+    color: "#0F172A",
+    marginTop: 2,
     textAlign: "center",
   },
   processingMainSubtitle: {
     fontSize: 13,
-    color: "#64748B",
-    marginTop: 6,
+    color: "#475569",
+    marginTop: 4,
     textAlign: "center",
-    lineHeight: 19,
-    paddingHorizontal: 16,
+    lineHeight: 18,
+    paddingHorizontal: 12,
   },
-  timeInfoRow: {
+  tipCard: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
     backgroundColor: "#fff",
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginTop: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#000",
@@ -1097,66 +1128,41 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
-  timeInfoText: {
+  tipText: {
+    flex: 1,
     fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  timeInfoDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#CBD5E1",
-  },
-  timeInfoEta: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.primary,
-  },
-  activeStageBanner: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: `${colors.primary}30`,
-    marginBottom: 22,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  activeStageHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  activeStageTag: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: colors.primary,
-    letterSpacing: 0.8,
-  },
-  activeStageTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.primaryBlack,
-    marginBottom: 4,
-  },
-  activeStageDetail: {
-    fontSize: 13,
-    color: "#64748B",
-    lineHeight: 18,
+    color: "#334155",
+    lineHeight: 17,
+    fontWeight: "500",
   },
   pipelineSection: {
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  pipelineHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
   pipelineSectionTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#94A3B8",
-    letterSpacing: 1,
-    marginBottom: 12,
+    color: "#64748B",
+    letterSpacing: 0.8,
+  },
+  pipelineElapsedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  pipelineElapsedText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#475569",
   },
   pipelineList: {
     gap: 8,
@@ -1166,7 +1172,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 14,
-    padding: 14,
+    padding: 13,
     gap: 12,
     borderWidth: 1,
     borderColor: "#F1F5F9",
@@ -1180,8 +1186,9 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   pipelineCardActive: {
-    borderColor: `${colors.primary}40`,
-    backgroundColor: "#fff",
+    borderColor: "#FDBA74",
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1.5,
   },
   pipelineDotWrap: {
     width: 28,
@@ -1195,30 +1202,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#10B981",
   },
   pipelineDotActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: "#EA580C",
   },
   pipelineIndexText: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#94A3B8",
+    fontWeight: "700",
+    color: "#64748B",
   },
   pipelineStageName: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: "500",
-    color: "#94A3B8",
+    color: "#64748B",
   },
   pipelineStageNameDone: {
-    color: colors.primaryBlack,
-    fontWeight: "600",
+    color: "#0F172A",
+    fontWeight: "700",
   },
   pipelineStageNameActive: {
-    color: colors.primary,
-    fontWeight: "700",
+    color: "#9A3412",
+    fontWeight: "800",
   },
   pipelineStageDesc: {
     fontSize: 12,
-    color: "#64748B",
-    marginTop: 2,
+    color: "#431407",
+    marginTop: 3,
     lineHeight: 16,
   },
   stageDonePill: {
@@ -1229,49 +1236,28 @@ const styles = StyleSheet.create({
   },
   stageDonePillText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#16A34A",
+    fontWeight: "700",
+    color: "#15803D",
   },
   stageActivePill: {
-    backgroundColor: `${colors.primary}15`,
+    backgroundColor: "#FFEDD5",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
   },
   stageActivePillText: {
     fontSize: 11,
-    fontWeight: "700",
-    color: colors.primary,
+    fontWeight: "800",
+    color: "#C2410C",
   },
   processingBottomHint: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: "#64748B",
     fontWeight: "500",
     textAlign: "center",
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: 12,
-    letterSpacing: 0.2,
-  },
-  liveIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#FEF3C7",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#F59E0B",
-  },
-  liveText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#D97706",
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
   },
 
   // ── Failed state card ────────────────────────────────────────────────────
