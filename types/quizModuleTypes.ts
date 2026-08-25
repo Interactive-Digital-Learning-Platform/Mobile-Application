@@ -351,6 +351,19 @@ export interface AIFeedbackResponse {
   generated_at: string;
 }
 
+export interface QuizQuoteRequest {
+  subject: string;
+  difficulty: string;
+  accuracy: number;
+  correct_count: number;
+  total_questions: number;
+  is_timeout: boolean;
+}
+
+export interface QuizQuoteResponse {
+  quote: string;
+}
+
 export interface UserOut {
   id: number;
   clerk_id: string;

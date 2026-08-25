@@ -71,6 +71,9 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
   }));
 
   const Icon = getSubjectIcon(item.subject);
+  const isShuffleQuiz = item.subject === "Mixed";
+  // Shuffle mode has no difficulty of its own — each subject picks its own
+  // independently at generation time — so no difficulty badge is shown here.
   const diff = getDifficultyStyle(item.difficulty);
   const hasStarted = item.progress > 0;
   const isComplete = item.progress === 100;
@@ -112,6 +115,12 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
         resumeSessionId: String(item.session_id),
         // Retake: load same questions from DB but reset all answers
         ...(isComplete ? { restartSession: "true" } : {}),
+        // Without this, quiz-session.tsx has no way to know a resumed/
+        // retaken session was Shuffle Mode (its own generation request is
+        // skipped entirely on resume, so it never gets this from `subjects`)
+        // — it needs `shuffle` itself to show each question's real subject
+        // and avoid rendering a single misleading difficulty for the quiz.
+        ...(isShuffleQuiz ? { shuffle: "true" } : {}),
       },
     } as any);
   };
@@ -133,11 +142,15 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
               <Icon size={28} color={ICON_COLORS.slate500} strokeWidth={1.6} />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-black text-slate-800">{formatSubjectLabel(item.subject)}</Text>
-              <View className={`self-start flex-row items-center gap-1 px-2.5 py-0.5 rounded-full mt-1.5 ${diff.bg}`}>
-                <View className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
-                <Text className={`text-xs font-semibold ${diff.text}`}>{item.difficulty}</Text>
-              </View>
+              <Text className="text-xl font-black text-slate-800" numberOfLines={1}>
+                {formatSubjectLabel(item.subject)}
+              </Text>
+              {!isShuffleQuiz && (
+                <View className={`self-start flex-row items-center gap-1 px-2.5 py-0.5 rounded-full mt-1.5 ${diff.bg}`}>
+                  <View className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
+                  <Text className={`text-xs font-semibold ${diff.text}`}>{item.difficulty}</Text>
+                </View>
+              )}
             </View>
           </View>
 

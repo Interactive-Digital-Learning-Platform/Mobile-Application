@@ -34,6 +34,7 @@ import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } f
 import { OPTION_LABELS, formatTime } from "@/constants/quizHelpers";
 import TimesUpModel from "@/components/quiz-componets/TimesUpModel";
 import ExitQuizModal from "@/components/quiz-componets/ExitQuizModal";
+import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import {
   useGenerateQuizMutation,
   useQuizSessionQuery,
@@ -219,6 +220,12 @@ export default function QuizSession() {
   // the "already completed" redirect guard below can read it.
   const submissionTriggeredRef = useRef(false);
 
+  // Holds the countdown's active setInterval id so it can be stopped the
+  // instant the user taps Submit — otherwise it keeps ticking (and can
+  // still fire the timeout auto-submit) while the submit request is in
+  // flight and this screen is still mounted.
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [frozenQuestions,  setFrozenQuestions]  = useState<QuestionOut[]>([]);
   const [frozenSessionId,  setFrozenSessionId]  = useState<number | null>(null);
 
@@ -377,6 +384,7 @@ export default function QuizSession() {
         return prev - 1;
       });
     }, 1000);
+    timerIntervalRef.current = id;
     return () => clearInterval(id);
   }, [isReady, timeUp]);
 
@@ -470,6 +478,7 @@ export default function QuizSession() {
   const goToResults = () => {
     if (submissionTriggeredRef.current) return;
     submissionTriggeredRef.current = true;
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     recordQuestionTime(current);
     clearTimeout(autosaveTimerRef.current);
     doSaveProgress(answers, questionTimes, timeLeft);
@@ -539,9 +548,14 @@ export default function QuizSession() {
 
         <View className="items-center justify-center">
           <Text className="text-md font-black text-slate-800">{displaySubject}</Text>
-          <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
-            <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
-          </View>
+          {/* Shuffle mode has no difficulty of its own — each subject picks
+              its own independently at generation time — so no difficulty
+              pill is shown here at all when isShuffle. */}
+          {!isShuffle && (
+            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
+              <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -645,32 +659,15 @@ export default function QuizSession() {
       <View className="w-full flex-1 py-2 px-4">
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
           <View className="gap-2.5">
-            {(q?.options ?? []).map((opt, i) => {
-              const isSelected = selectedOpt === i;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  activeOpacity={0.8}
-                  onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
-                  className={`flex-row items-center gap-3 p-4 rounded-2xl border ${
-                    isSelected ? "bg-primary border-primary" : "bg-white border-slate-200"
-                  }`}
-                >
-                  <View className={`w-8 h-8 rounded-full justify-center items-center ${
-                    isSelected ? "bg-white/25" : "bg-slate-100"
-                  }`}>
-                    <Text className={`text-md font-black ${isSelected ? "text-white" : "text-slate-600"}`}>
-                      {OPTION_LABELS[i]}
-                    </Text>
-                  </View>
-                  <Text className={`flex-1 text-sm font-medium leading-5 ${
-                    isSelected ? "text-white" : "text-slate-700"
-                  }`}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {(q?.options ?? []).map((opt, i) => (
+              <QuizOptionButton
+                key={i}
+                label={OPTION_LABELS[i]}
+                optionText={opt}
+                isSelected={selectedOpt === i}
+                onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
+              />
+            ))}
           </View>
 
         </ScrollView>

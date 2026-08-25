@@ -61,6 +61,11 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
     : displayPct >= 50 ? "text-amber-500"
     : "text-rose-500";
 
+  // Shuffle mode has no difficulty of its own — each subject picks its own
+  // independently at generation time — so no difficulty badge is shown for
+  // a shuffle session at all.
+  const isShuffleQuiz = item.subject === "Mixed";
+
   const { mutate: deleteSession, isPending: isDeleting } = useDeleteQuizSessionMutation();
 
   const handleDelete = () => {
@@ -88,13 +93,14 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </View>
 
           <View className="flex-1">
-            <Text className="text-sm font-bold text-slate-800">{formatSubjectLabel(item.subject)}</Text>
+            <Text className="text-sm font-bold text-slate-800" numberOfLines={1}>
+              {formatSubjectLabel(item.subject)}
+            </Text>
             <View className="flex-row items-center gap-2 mt-1">
-              <DifficultyBadge difficulty={item.difficulty} />
+              {!isShuffleQuiz && <DifficultyBadge difficulty={item.difficulty} />}
               <Text className="text-[11px] text-slate-400">{item.questions} questions</Text>
               <Text className="text-[11px] text-slate-400">{item.timer}</Text>
             </View>
-            
           </View>
           <Text className="text-[10px] text-slate-500 mt-0.5">{formatCreatedAt(item.created_at)}</Text>
 

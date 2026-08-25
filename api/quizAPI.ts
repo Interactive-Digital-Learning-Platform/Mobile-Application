@@ -6,6 +6,8 @@ import {
   GenerateQuizRequest,
   GenerateQuizResponse,
   QuestionOut,
+  QuizQuoteRequest,
+  QuizQuoteResponse,
   QuizSessionSummary,
   RetakeSessionResponse,
   SavedQuizResponse,
@@ -107,6 +109,16 @@ export async function fetchAnalytics(): Promise<UserAnalyticsResponse> {
 export async function fetchAIFeedback(): Promise<AIFeedbackResponse> {
   const { data } = await quizClient.get<AIFeedbackResponse>(
     "/analytics/feedback"
+  );
+  return data;
+}
+
+export async function fetchMotivationalQuote(
+  payload: QuizQuoteRequest
+): Promise<QuizQuoteResponse> {
+  const { data } = await quizClient.post<QuizQuoteResponse>(
+    "/quiz/motivational-quote",
+    payload
   );
   return data;
 }
