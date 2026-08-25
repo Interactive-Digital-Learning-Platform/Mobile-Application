@@ -40,10 +40,22 @@ export const notesApi = {
           const blob = await response.blob();
           formData.append("images", blob, `note-page-${i + 1}.jpg`);
         } else {
+          const filename = uri.split("/").pop() || `note-page-${i + 1}.jpg`;
+          const extMatch = /\.(\w+)$/.exec(filename);
+          const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+          const type =
+            ext === "png"
+              ? "image/png"
+              : ext === "webp"
+              ? "image/webp"
+              : ext === "heic" || ext === "heif"
+              ? "image/heic"
+              : "image/jpeg";
+
           formData.append("images", {
             uri,
-            name: `note-page-${i + 1}.jpg`,
-            type: "image/jpeg",
+            name: filename.includes(".") ? filename : `note-page-${i + 1}.jpg`,
+            type,
           } as any);
         }
       }
@@ -56,9 +68,9 @@ export const notesApi = {
         formData,
         {
           headers: {
-            "Content-Type": "multipart/form-data",
+            Accept: "application/json",
           },
-          transformRequest: (data) => data,
+          timeout: 60000,
         },
       );
 

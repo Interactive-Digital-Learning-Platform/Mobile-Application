@@ -171,31 +171,26 @@ const PIPELINE_STAGES_INFO = [
   {
     label: "Scanning Handwriting",
     detail: "Running optical character recognition on your images…",
-    estimatedEndSec: 12,
+    estimatedEndSec: 8,
   },
   {
     label: "Detecting Subject & Grade",
     detail: "Identifying subject area, topic, and curriculum level…",
-    estimatedEndSec: 24,
+    estimatedEndSec: 16,
   },
   {
     label: "Matching Curriculum",
-    detail: "Searching the curriculum knowledge base for relevant content…",
-    estimatedEndSec: 37,
+    detail: "Searching curriculum knowledge base & textbook passages…",
+    estimatedEndSec: 24,
   },
   {
     label: "Analyzing Learning Gaps",
     detail: "Calculating concept coverage and identifying missing knowledge…",
-    estimatedEndSec: 50,
-  },
-  {
-    label: "Building Study Materials",
-    detail: "Generating personalized flashcards, quizzes, and summaries…",
-    estimatedEndSec: 65,
+    estimatedEndSec: 32,
   },
 ];
 
-const EST_TOTAL_SECS = 65;
+const EST_TOTAL_SECS = 32;
 
 const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
   createdAt,
@@ -336,7 +331,7 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
 
           <Text style={styles.processingMainTitle}>Analysis in Progress</Text>
           <Text style={styles.processingMainSubtitle}>
-            Extracting handwritten content & building study materials
+            Extracting handwritten content & analyzing curriculum gaps
           </Text>
 
           {/* Rotating Educational Tip Card */}
@@ -444,6 +439,7 @@ export default function NoteDetail() {
   const [ocrExpanded, setOcrExpanded] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
+  const [gapsExpanded, setGapsExpanded] = useState(false);
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
 
@@ -478,15 +474,15 @@ export default function NoteDetail() {
     }
   }, [id]);
 
-  // ── Auto-generate materials when analysis completes ─────────────────────────
+  // ── Manual / Re-trigger material generation ─────────────────────────────────
   const triggerMaterialGeneration = useCallback(async () => {
     if (isGenerating) return;
     setIsGenerating(true);
     try {
-      console.log("⚙️ Auto-triggering material generation...");
+      console.log("⚙️ Triggering material generation...");
       await materialsApi.generateMaterials(id);
       // Wait a moment then fetch materials
-      setTimeout(fetchMaterials, 4000);
+      setTimeout(fetchMaterials, 2000);
     } catch (error) {
       console.error("Material generation failed:", error);
     } finally {
@@ -494,33 +490,37 @@ export default function NoteDetail() {
     }
   }, [id, isGenerating, fetchMaterials]);
 
-  // ── Polling while processing ────────────────────────────────────────────────
+  // ── Polling note while processing ───────────────────────────────────────────
   useEffect(() => {
     fetchNote();
   }, [fetchNote]);
 
   useEffect(() => {
     if (!isProcessing) return;
-    const interval = setInterval(fetchNote, 3500);
+    const interval = setInterval(fetchNote, 3000);
     return () => clearInterval(interval);
   }, [isProcessing, fetchNote]);
 
-  // ── When analysis is done, fetch materials ──────────────────────────────────
+  // ── When analysis is done, fetch materials & poll while missingCount > 0 ────
   useEffect(() => {
     if (!isAnalyzed) return;
     fetchMaterials();
   }, [isAnalyzed, fetchMaterials]);
 
-  // ── Auto-generate if no materials yet (fires ONCE per mount) ───────────────
   useEffect(() => {
     if (!isAnalyzed) return;
-    if (materialsOverview === null) return; // still loading
-    if (hasTriggeredGeneration.current) return; // already fired
-    if (materialsOverview.generatedTypes.length === 0) {
-      hasTriggeredGeneration.current = true;
-      triggerMaterialGeneration();
+    // Stop polling if all materials have been generated
+    if (materialsOverview && materialsOverview.missingCount === 0 && materialsOverview.generatedTypes.length > 0) {
+      return;
     }
-  }, [isAnalyzed, materialsOverview]);
+
+    // Poll periodically while materials are being generated in the background
+    const interval = setInterval(() => {
+      fetchMaterials();
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [isAnalyzed, materialsOverview?.missingCount, materialsOverview?.generatedTypes.length, fetchMaterials]);
 
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -614,7 +614,7 @@ export default function NoteDetail() {
         {/* ── Analyzed State ── */}
         {isAnalyzed && note.analysis && (
           <>
-            {/* ── Subject / Topic Identity Card ── */}
+            {/* ── 1. Identity Card ── */}
             <View style={styles.identityCard}>
               <View style={styles.identityTopRow}>
                 <View style={styles.identityIconWrap}>
@@ -629,9 +629,8 @@ export default function NoteDetail() {
                 </View>
               </View>
 
-              {/* ── Score Ring + Metric Tiles ── */}
+              {/* Score Ring + Metric Tiles */}
               <View style={styles.scoreRow}>
-                {/* SVG Score Ring */}
                 <View style={styles.scoreRingWrap}>
                   {(() => {
                     const score = note.analysis.overallCompleteness;
@@ -663,17 +662,16 @@ export default function NoteDetail() {
                   })()}
                 </View>
 
-                {/* Metric Tiles */}
                 <View style={styles.metricTilesCol}>
                   <View style={[styles.metricTile, { borderColor: "#FECACA" }]}>
                     <AlertTriangle size={14} color="#DC2626" />
                     <Text style={[styles.metricTileNum, { color: "#DC2626" }]}>{note.analysis.learningGaps.length}</Text>
-                    <Text style={styles.metricTileLabel}>Gaps</Text>
+                    <Text style={styles.metricTileLabel}>Gaps Found</Text>
                   </View>
                   <View style={[styles.metricTile, { borderColor: "#BBF7D0" }]}>
                     <Sparkles size={14} color="#16A34A" />
                     <Text style={[styles.metricTileNum, { color: "#16A34A" }]}>{note.analysis.keyConcepts.length}</Text>
-                    <Text style={styles.metricTileLabel}>Concepts</Text>
+                    <Text style={styles.metricTileLabel}>Covered</Text>
                   </View>
                   <View style={[styles.metricTile, { borderColor: "#FDE68A" }]}>
                     <Star size={14} color="#B45309" />
@@ -684,115 +682,85 @@ export default function NoteDetail() {
               </View>
             </View>
 
-            {/* ── Study Materials ── */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={styles.sectionTitleRow}>
-                  <BookOpen size={17} color={colors.primaryBlack} />
-                  <Text style={styles.sectionTitle}>Study Materials</Text>
-                </View>
-                {isGenerating ? (
-                  <View style={styles.generatingBadge}>
-                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 5 }} />
-                    <Text style={styles.generatingBadgeText}>Generating…</Text>
+            {/* ── 2. Biggest Learning Gap Spotlight ── */}
+            {note.analysis.learningGaps.length > 0 && (() => {
+              const topGap =
+                note.analysis.learningGaps.find(g => g.severity === "high") ||
+                note.analysis.learningGaps.find(g => g.severity === "medium") ||
+                note.analysis.learningGaps[0];
+              const severityBgColor = topGap.severity === "high" ? "#FEE2E2" : topGap.severity === "medium" ? "#FEF3C7" : "#DBEAFE";
+              const severityTextColor = topGap.severity === "high" ? "#DC2626" : topGap.severity === "medium" ? "#D97706" : "#2563EB";
+              const severityBorderColor = topGap.severity === "high" ? "#FECACA" : topGap.severity === "medium" ? "#FDE68A" : "#BFDBFE";
+              return (
+                <View style={styles.biggestGapCard}>
+                  <View style={styles.bgcLabelRow}>
+                    <AlertTriangle size={13} color={colors.primary} />
+                    <Text style={styles.bgcLabel}>YOUR BIGGEST LEARNING GAP</Text>
                   </View>
-                ) : materialsOverview && materialsOverview.missingCount > 0 ? (
-                  <TouchableOpacity style={styles.regenBtn} onPress={triggerMaterialGeneration}>
-                    <Text style={styles.regenBtnText}>Re-generate</Text>
+                  <Text style={styles.bgcConceptName}>{topGap.concept}</Text>
+                  <View style={[styles.bgcSeverityBadge, { backgroundColor: severityBgColor, borderColor: severityBorderColor }]}>
+                    <Text style={[styles.bgcSeverityText, { color: severityTextColor }]}>
+                      {topGap.severity.toUpperCase()} PRIORITY
+                    </Text>
+                  </View>
+                  <Text style={styles.bgcBody}>{topGap.suggestion}</Text>
+                  <TouchableOpacity
+                    style={styles.bgcCtaBtn}
+                    onPress={() => navigateToMaterial("structured_notes")}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.bgcCtaBtnText}>Start reviewing  →</Text>
                   </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {isGenerating && (
-                <View style={styles.generatingInfoBanner}>
-                  <Sparkles size={14} color={colors.primary} />
-                  <Text style={styles.generatingInfoText}>
-                    AI is generating all 7 study materials. This takes about 30–60 seconds…
-                  </Text>
                 </View>
-              )}
+              );
+            })()}
 
-              <View style={styles.materialsList}>
-                <MaterialCard
-                  icon={<BookOpen size={20} color="#3B82F6" />}
-                  title="Structured Notes"
-                  color="#3B82F6"
-                  isReady={materialsOverview?.generatedTypes.includes("structured_notes") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("structured_notes")}
-                />
-                <MaterialCard
-                  icon={<Layers size={20} color="#8B5CF6" />}
-                  title="Flashcards"
-                  color="#8B5CF6"
-                  isReady={materialsOverview?.generatedTypes.includes("flashcards") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("flashcards")}
-                />
-                <MaterialCard
-                  icon={<FileText size={20} color="#10B981" />}
-                  title="Revision Summary"
-                  color="#10B981"
-                  isReady={materialsOverview?.generatedTypes.includes("revision_summary") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("revision_summary")}
-                />
-                <MaterialCard
-                  icon={<Target size={20} color="#EF4444" />}
-                  title="Learning Points"
-                  color="#EF4444"
-                  isReady={materialsOverview?.generatedTypes.includes("learning_points") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("learning_points")}
-                />
-                <MaterialCard
-                  icon={<Play size={20} color="#F59E0B" />}
-                  title="Audio Lesson"
-                  color="#F59E0B"
-                  isReady={materialsOverview?.generatedTypes.includes("audio") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("audio")}
-                />
-                <MaterialCard
-                  icon={<BookOpen size={20} color="#6366F1" />}
-                  title="Key Definitions"
-                  color="#6366F1"
-                  isReady={materialsOverview?.generatedTypes.includes("definitions") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("definitions")}
-                />
-                <MaterialCard
-                  icon={<Layers size={20} color="#EC4899" />}
-                  title="Mind Map"
-                  color="#EC4899"
-                  isReady={materialsOverview?.generatedTypes.includes("mindmap") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("mindmap")}
-                />
-              </View>
-            </View>
-
-            {/* ── Key Concepts ── */}
-            {note.analysis.keyConcepts.length > 0 && (
+            {/* ── 3. Learning Gaps (progressive disclosure) ── */}
+            {note.analysis.learningGaps.length > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Sparkles size={17} color={colors.primary} />
-                  <Text style={styles.sectionTitle}>Key Concepts</Text>
+                <View style={[styles.sectionTitleRow, { marginBottom: 4 }]}>
+                  <Target size={17} color="#DC2626" />
+                  <Text style={[styles.sectionTitle, { color: "#DC2626" }]}>Learning Gaps</Text>
                 </View>
-                <View style={styles.conceptList}>
-                  {note.analysis.keyConcepts.map((concept, i) => (
-                    <View key={i} style={styles.conceptRow}>
-                      <View style={styles.conceptIndex}>
-                        <Text style={styles.conceptIndexText}>{i + 1}</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {note.analysis.learningGaps.length} curriculum concept{note.analysis.learningGaps.length !== 1 ? "s" : ""}{" "}
+                  need{note.analysis.learningGaps.length === 1 ? "s" : ""} your attention
+                </Text>
+                {(gapsExpanded
+                  ? note.analysis.learningGaps
+                  : note.analysis.learningGaps.slice(0, 3)
+                ).map((gap, i) => {
+                  const severityAccentColor = gap.severity === "high" ? "#DC2626" : gap.severity === "medium" ? "#B45309" : "#2563EB";
+                  return (
+                    <View key={i} style={[styles.gapCard, { borderLeftColor: severityAccentColor }]}>
+                      <View style={styles.gapCardHeader}>
+                        <Text style={styles.gapConcept}>{gap.concept}</Text>
+                        <SeverityBadge severity={gap.severity} />
                       </View>
-                      <Text style={styles.conceptLabel}>{concept}</Text>
+                      <View style={styles.gapSuggestionWrap}>
+                        <View style={[styles.gapSuggestionAccent, { backgroundColor: severityAccentColor }]} />
+                        <Text style={styles.gapSuggestion}>{gap.suggestion}</Text>
+                      </View>
                     </View>
-                  ))}
-                </View>
+                  );
+                })}
+                {note.analysis.learningGaps.length > 3 && (
+                  <TouchableOpacity
+                    style={styles.viewAllGapsBtn}
+                    onPress={() => setGapsExpanded(!gapsExpanded)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.viewAllGapsText}>
+                      {gapsExpanded
+                        ? "Show less"
+                        : `View all ${note.analysis.learningGaps.length} learning gaps →`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
-            {/* ── Strength Areas ── */}
+            {/* ── 4. What You Did Well ── */}
             {note.analysis.strengthAreas.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionTitleRow}>
@@ -810,58 +778,105 @@ export default function NoteDetail() {
               </View>
             )}
 
-            {/* ── Learning Gaps ── */}
-            {note.analysis.learningGaps.length > 0 && (
+            {/* ── 5. Curriculum Coverage (Covered + Missing) ── */}
+            {(note.analysis.keyConcepts.length > 0 || note.analysis.missingConcepts.length > 0) && (
               <View style={styles.section}>
                 <View style={styles.sectionTitleRow}>
-                  <Target size={17} color="#DC2626" />
-                  <Text style={[styles.sectionTitle, { color: "#DC2626" }]}>Learning Gaps Detected</Text>
+                  <BookOpen size={17} color={colors.primaryBlack} />
+                  <Text style={styles.sectionTitle}>Curriculum Coverage</Text>
                 </View>
                 <Text style={styles.sectionSubtitle}>
-                  Focus your revision on these — they're missing or unclear in your notes.
+                  {note.analysis.keyConcepts.length} concept{note.analysis.keyConcepts.length !== 1 ? "s" : ""} identified in your notes
+                  {note.analysis.missingConcepts.length > 0
+                    ? ` · ${note.analysis.missingConcepts.length} missing`
+                    : ""}
                 </Text>
-                {note.analysis.learningGaps.map((gap, i) => {
-                  const severityBorderColor = gap.severity === "high" ? "#FCA5A5" : gap.severity === "medium" ? "#FCD34D" : "#93C5FD";
-                  const severityAccentColor = gap.severity === "high" ? "#DC2626" : gap.severity === "medium" ? "#B45309" : "#2563EB";
-                  return (
-                    <View key={i} style={[styles.gapCard, { borderLeftColor: severityAccentColor }]}>
-                      <View style={styles.gapCardHeader}>
-                        <Text style={styles.gapConcept}>{gap.concept}</Text>
-                        <SeverityBadge severity={gap.severity} />
-                      </View>
-                      <View style={styles.gapSuggestionWrap}>
-                        <View style={[styles.gapSuggestionAccent, { backgroundColor: severityAccentColor }]} />
-                        <Text style={styles.gapSuggestion}>{gap.suggestion}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
+                {note.analysis.keyConcepts.map((concept, i) => (
+                  <View key={`c-${i}`} style={styles.curriculumRow}>
+                    <CheckCircle2 size={16} color="#16A34A" style={{ flexShrink: 0 }} />
+                    <Text style={styles.curriculumConceptCovered}>{concept}</Text>
+                  </View>
+                ))}
+                {note.analysis.missingConcepts.map((concept, i) => (
+                  <View key={`m-${i}`} style={styles.curriculumRow}>
+                    <View style={styles.curriculumMissingDot} />
+                    <Text style={styles.curriculumConceptMissing}>{concept}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
-            {/* ── Missing Concepts ── */}
-            {note.analysis.missingConcepts.length > 0 && (
-              <View style={styles.section}>
+            {/* ── 6. Your Study Plan (Materials) ── */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
-                  <AlertCircle size={17} color="#D97706" />
-                  <Text style={[styles.sectionTitle, { color: "#92400E" }]}>Missing from Your Notes</Text>
+                  <Sparkles size={17} color={colors.primaryBlack} />
+                  <Text style={styles.sectionTitle}>Your Study Plan</Text>
                 </View>
-                <Text style={styles.sectionSubtitle}>These topics should be in your notes but weren't found.</Text>
-                <View style={styles.chipWrap}>
-                  {note.analysis.missingConcepts.map((concept, i) => (
-                    <View key={i} style={styles.missingChip}>
-                      <AlertCircle size={11} color="#D97706" />
-                      <Text style={styles.missingChipText}>{concept}</Text>
-                    </View>
-                  ))}
-                </View>
+                {isGenerating || (!materialsOverview) || (materialsOverview.missingCount > 0 && materialsOverview.generatedTypes.length < 7) ? (
+                  <View style={styles.generatingBadge}>
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 5 }} />
+                    <Text style={styles.generatingBadgeText}>
+                      {materialsOverview && materialsOverview.generatedTypes.length > 0
+                        ? `${materialsOverview.generatedTypes.length}/7 Ready`
+                        : "Generating…"}
+                    </Text>
+                  </View>
+                ) : materialsOverview && materialsOverview.missingCount === 0 ? (
+                  <View style={[styles.generatingBadge, { backgroundColor: "#DCFCE7" }]}>
+                    <CheckCircle2 size={13} color="#16A34A" style={{ marginRight: 4 }} />
+                    <Text style={[styles.generatingBadgeText, { color: "#16A34A" }]}>All Ready</Text>
+                  </View>
+                ) : materialsOverview && materialsOverview.missingCount > 0 ? (
+                  <TouchableOpacity style={styles.regenBtn} onPress={triggerMaterialGeneration}>
+                    <Text style={styles.regenBtnText}>Re-generate</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
-            )}
 
-            {/* ── Original Note Images (Collapsible) ── */}
+              <Text style={[styles.sectionSubtitle, { marginTop: -8 }]}>
+                {note.analysis.learningGaps.length > 0
+                  ? `Personalized resources based on your ${note.analysis.learningGaps.length} learning gap${note.analysis.learningGaps.length !== 1 ? "s" : ""}`
+                  : "Personalized learning resources for your notes"}
+              </Text>
+
+              {(!materialsOverview || materialsOverview.missingCount > 0 || isGenerating) && (
+                <View style={styles.generatingInfoBanner}>
+                  <Sparkles size={14} color={colors.primary} />
+                  <Text style={styles.generatingInfoText}>
+                    AI is generating study materials in the background. Ready items can be opened immediately.
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.materialsList}>
+                <MaterialCard icon={<BookOpen size={20} color="#3B82F6" />} title="Structured Notes" color="#3B82F6"
+                  isReady={materialsOverview?.generatedTypes.includes("structured_notes") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("structured_notes")} />
+                <MaterialCard icon={<Layers size={20} color="#8B5CF6" />} title="Flashcards" color="#8B5CF6"
+                  isReady={materialsOverview?.generatedTypes.includes("flashcards") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("flashcards")} />
+                <MaterialCard icon={<FileText size={20} color="#10B981" />} title="Revision Summary" color="#10B981"
+                  isReady={materialsOverview?.generatedTypes.includes("revision_summary") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("revision_summary")} />
+                <MaterialCard icon={<Target size={20} color="#EF4444" />} title="Learning Points" color="#EF4444"
+                  isReady={materialsOverview?.generatedTypes.includes("learning_points") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("learning_points")} />
+                <MaterialCard icon={<Play size={20} color="#F59E0B" />} title="Audio Lesson" color="#F59E0B"
+                  isReady={materialsOverview?.generatedTypes.includes("audio") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("audio")} />
+                <MaterialCard icon={<BookOpen size={20} color="#6366F1" />} title="Key Definitions" color="#6366F1"
+                  isReady={materialsOverview?.generatedTypes.includes("definitions") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("definitions")} />
+                <MaterialCard icon={<Layers size={20} color="#EC4899" />} title="Mind Map" color="#EC4899"
+                  isReady={materialsOverview?.generatedTypes.includes("mindmap") ?? false}
+                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("mindmap")} />
+              </View>
+            </View>
+
+            {/* ── 7. Original Note Images (Collapsible) ── */}
             {(() => {
-              const allPages =
-                note.imageUrls && note.imageUrls.length > 0 ? note.imageUrls : [note.imageUrl];
+              const allPages = note.imageUrls && note.imageUrls.length > 0 ? note.imageUrls : [note.imageUrl];
               return (
                 <View style={styles.section}>
                   <TouchableOpacity
@@ -920,7 +935,7 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── OCR Text (Collapsible) ── */}
+            {/* ── 8. Extracted Text (Collapsible) ── */}
             {note.rawText ? (
               <View style={styles.section}>
                 <TouchableOpacity
@@ -1782,4 +1797,118 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   regenBtnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+
+  // ── Biggest Gap Spotlight Card ──────────────────────────────────────────────
+  biggestGapCard: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1.5,
+    borderColor: "#FED7AA",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  bgcLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  bgcLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.primary,
+    letterSpacing: 0.8,
+  },
+  bgcConceptName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.primaryBlack,
+    marginBottom: 8,
+    lineHeight: 26,
+  },
+  bgcSeverityBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  bgcSeverityText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  bgcBody: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: "400",
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  bgcCtaBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  bgcCtaBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+
+  // ── View All Gaps Button ────────────────────────────────────────────────────
+  viewAllGapsBtn: {
+    marginTop: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFF5F5",
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  viewAllGapsText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+
+  // ── Curriculum Coverage Rows ────────────────────────────────────────────────
+  curriculumRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  curriculumConceptCovered: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#166534",
+    flex: 1,
+  },
+  curriculumConceptMissing: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#92400E",
+    flex: 1,
+  },
+  curriculumMissingDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#D97706",
+    flexShrink: 0,
+  },
 });
