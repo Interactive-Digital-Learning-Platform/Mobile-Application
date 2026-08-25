@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AlertTriangle, Brain, Clock, LogOut, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
 import { getDifficultyStyle, ICON_COLORS } from "@/constants/quizStyles";
+import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import { useBattleMatch } from "@/hooks/use-battle-match";
@@ -75,6 +76,8 @@ export default function BattleMatchSessionScreen() {
     lastAnswerFeedback,
     initialLoadError,
     ownScore,
+    myProgress,
+    opponentProgress,
     submitAnswer,
     forfeit,
     manualRetry,
@@ -333,21 +336,31 @@ export default function BattleMatchSessionScreen() {
               </Text>
               <Text className="text-sm font-black text-slate-800 mt-0.5">Score: {ownScore}</Text>
             </View>
-            <View className="flex-row items-center gap-3">
-              <Text className="text-xs text-slate-400 font-medium">
-                Opponent: {matchState.opponent_progress?.answered_count ?? 0}/{matchState.question_count}
+            <View className="flex-row items-center gap-1">
+              <Clock size={13} color={ICON_COLORS.primary500} strokeWidth={3} />
+              <Text className="text-sm font-black text-primary">
+                {Math.max(
+                  0,
+                  Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
+                )}
+                s
               </Text>
-              <View className="flex-row items-center gap-1">
-                <Clock size={13} color={ICON_COLORS.primary500} strokeWidth={3} />
-                <Text className="text-sm font-black text-primary">
-                  {Math.max(
-                    0,
-                    Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
-                  )}
-                  s
-                </Text>
-              </View>
             </View>
+          </View>
+
+          <View className="mx-4 mt-3">
+            <BattleProgressBar
+              label="You"
+              count={matchState.question_count ?? 0}
+              currentIndex={matchState.question_index ?? 0}
+              answers={myProgress}
+            />
+            <BattleProgressBar
+              label="Opponent"
+              count={matchState.question_count ?? 0}
+              currentIndex={matchState.question_index ?? 0}
+              answers={opponentProgress}
+            />
           </View>
 
           <View className="bg-white rounded-2xl py-8 px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">
@@ -356,44 +369,48 @@ export default function BattleMatchSessionScreen() {
             </Text>
           </View>
 
-          <View className="px-4 gap-2.5">
-            {(matchState.question?.options ?? []).map((opt, i) => {
-              const isLocked = !!matchState.has_answered_current_question;
-              return (
-                <QuizOptionButton
-                  key={i}
-                  label={OPTION_LABELS[i]}
-                  optionText={opt}
-                  isSelected={selectedOption === opt}
-                  disabled={isLocked}
-                  onPress={() => {
-                    setSelectedOption(opt);
-                    if (matchState.question) {
-                      submitAnswer(matchState.question.question_id, opt);
-                    }
-                  }}
-                />
-              );
-            })}
-          </View>
+          <View className="flex-1">
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+              <View className="px-4 gap-2.5">
+                {(matchState.question?.options ?? []).map((opt, i) => {
+                  const isLocked = !!matchState.has_answered_current_question;
+                  return (
+                    <QuizOptionButton
+                      key={i}
+                      label={OPTION_LABELS[i]}
+                      optionText={opt}
+                      isSelected={selectedOption === opt}
+                      disabled={isLocked}
+                      onPress={() => {
+                        setSelectedOption(opt);
+                        if (matchState.question) {
+                          submitAnswer(matchState.question.question_id, opt);
+                        }
+                      }}
+                    />
+                  );
+                })}
+              </View>
 
-          {lastAnswerFeedback && matchState.has_answered_current_question && (
-            <View
-              className={`mx-4 mt-4 rounded-xl px-4 py-3 ${
-                lastAnswerFeedback.isCorrect ? "bg-emerald-100" : "bg-rose-100"
-              }`}
-            >
-              <Text
-                className={`font-black text-sm ${
-                  lastAnswerFeedback.isCorrect ? "text-emerald-700" : "text-rose-700"
-                }`}
-              >
-                {lastAnswerFeedback.isCorrect
-                  ? `Correct! +${lastAnswerFeedback.totalQuestionScore} points`
-                  : "Incorrect"}
-              </Text>
-            </View>
-          )}
+              {lastAnswerFeedback && matchState.has_answered_current_question && (
+                <View
+                  className={`mx-4 mt-4 rounded-xl px-4 py-3 ${
+                    lastAnswerFeedback.isCorrect ? "bg-emerald-100" : "bg-rose-100"
+                  }`}
+                >
+                  <Text
+                    className={`font-black text-sm ${
+                      lastAnswerFeedback.isCorrect ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {lastAnswerFeedback.isCorrect
+                      ? `Correct! +${lastAnswerFeedback.totalQuestionScore} points`
+                      : "Incorrect"}
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
         </View>
       )}
 

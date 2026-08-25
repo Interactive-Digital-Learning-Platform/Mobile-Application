@@ -118,8 +118,8 @@ export default function BattleResultsScreen() {
   };
 
   return (
-    <SafeAreaView edges={["top"]} className="flex-1 bg-slate-50">
-      <View className={`${style.bg} px-5 pt-8 pb-8`}>
+    <SafeAreaView edges={["top"]} className={`flex-1 ${style.bg}`}>
+      <View className="px-5 pt-8 pb-8">
         <Text className="text-white text-3xl font-black text-center">{style.label}</Text>
         <Text className="text-white/70 text-sm text-center mt-1">{style.sub}</Text>
 
@@ -230,5 +230,6 @@ export default function BattleResultsScreen() {
         )}
       </View>
     </SafeAreaView>
+    
   );
 }

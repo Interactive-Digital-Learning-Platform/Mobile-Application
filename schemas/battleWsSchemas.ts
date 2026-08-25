@@ -12,6 +12,11 @@ const battleQuestionPublicSchema = z.object({
   options: z.array(z.string()).nullable().optional(),
 });
 
+const battleAnswerProgressSchema = z.object({
+  question_order: z.number(),
+  is_correct: z.boolean(),
+});
+
 const battleParticipantProgressSchema = z.object({
   user_id: z.number(),
   answered_count: z.number(),
@@ -45,11 +50,13 @@ const battleMatchStateSchema = z.object({
   subject: z.string().nullable().optional(),
   difficulty: z.string().nullable().optional(),
   question_count: z.number().nullable().optional(),
-  question_index: z.number().nullable().optional(),
   time_remaining_seconds: z.number().nullable().optional(),
   countdown_seconds_remaining: z.number().nullable().optional(),
+  question_index: z.number().nullable().optional(),
   question: battleQuestionPublicSchema.nullable().optional(),
   has_answered_current_question: z.boolean().nullable().optional(),
+  my_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
+  opponent_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
   my_progress: battleParticipantProgressSchema.nullable().optional(),
   opponent_progress: battleParticipantProgressSchema.nullable().optional(),
   started_at: z.string().nullable().optional(),
@@ -87,12 +94,13 @@ const matchStartedEventSchema = z.object({
 const questionStartedEventSchema = z.object({
   type: z.literal("question_started"),
   question_index: z.number(),
-  question: battleQuestionPublicSchema.nullable(),
+  question: battleQuestionPublicSchema,
   time_remaining_seconds: z.number(),
 });
 
 const answerAcknowledgedEventSchema = z.object({
   type: z.literal("answer_acknowledged"),
+  question_id: z.number(),
   is_correct: z.boolean(),
   base_score: z.number(),
   speed_bonus: z.number(),
@@ -105,6 +113,8 @@ const opponentAnsweredEventSchema = z.object({
   type: z.literal("opponent_answered"),
   user_id: z.number(),
   answered_count: z.number(),
+  question_order: z.number(),
+  is_correct: z.boolean(),
 });
 
 const playerDisconnectedEventSchema = z.object({

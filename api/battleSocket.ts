@@ -22,7 +22,7 @@ export interface BattleSocketHandle {
   // use this; queued server-side confirmation still arrives as its own
   // inbound event (e.g. "player_ready").
   sendReady: () => boolean;
-  sendAnswer: (questionId: number, selectedOption: string) => void;
+  sendAnswer: (questionId: number, selectedOption: string) => boolean;
   sendForfeit: () => void;
   close: () => void;
 }

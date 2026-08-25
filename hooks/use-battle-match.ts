@@ -5,7 +5,7 @@ import { fetchMatchState } from "@/api/battleAPI";
 import { getClerkToken } from "@/api/apiClients";
 import { BattleSocketHandle, connectBattleSocket } from "@/api/battleSocket";
 import { useUserMeQuery } from "@/hooks/use-quiz";
-import { BattleMatchResult, BattleMatchStateResponse } from "@/types/battleModuleTypes";
+import { BattleAnswerProgress, BattleMatchResult, BattleMatchStateResponse } from "@/types/battleModuleTypes";
 import { BattleWsInboundEvent } from "@/types/battleWsTypes";
 
 export type BattleConnectionStatus = "connecting" | "open" | "reconnecting" | "failed" | "closed";
@@ -45,9 +45,17 @@ export function useBattleMatch(matchId: number | null) {
   const [lastAnswerFeedback, setLastAnswerFeedback] = useState<AnswerFeedback | null>(null);
   const [initialLoadError, setInitialLoadError] = useState(false);
   const [ownScore, setOwnScore] = useState(0);
+  // Per-question outcome for each side's progress bar (lockstep play: both
+  // players share the same question_index, so these two arrays line up
+  // segment-for-segment). Seeded from matchState.my_answers/opponent_answers
+  // on load/reconnect, appended to live as answer_acknowledged/
+  // opponent_answered events arrive.
+  const [myProgress, setMyProgress] = useState<BattleAnswerProgress[]>([]);
+  const [opponentProgress, setOpponentProgress] = useState<BattleAnswerProgress[]>([]);
 
   const socketRef = useRef<BattleSocketHandle | null>(null);
   const answerGuardRef = useRef(false);
+  const currentQuestionIndexRef = useRef<number | null>(null);
   const unmountedRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,6 +63,18 @@ export function useBattleMatch(matchId: number | null) {
   const connectRef = useRef<() => void>(() => {});
   const authExpiredToastShownRef = useRef(false);
   const reconnectingToastShownRef = useRef(false);
+
+  useEffect(() => {
+    currentQuestionIndexRef.current = matchState?.question_index ?? null;
+  }, [matchState?.question_index]);
+
+  useEffect(() => {
+    if (matchState?.my_answers) setMyProgress(matchState.my_answers);
+  }, [matchState?.my_answers]);
+
+  useEffect(() => {
+    if (matchState?.opponent_answers) setOpponentProgress(matchState.opponent_answers);
+  }, [matchState?.opponent_answers]);
 
   const isTerminal = matchState?.status === "completed" || matchState?.status === "cancelled";
   // The socket that calls onClose was opened by a `connect()` invocation
@@ -137,6 +157,14 @@ export function useBattleMatch(matchId: number | null) {
                 }
               : prev
           );
+          const order = currentQuestionIndexRef.current;
+          if (order !== null) {
+            setMyProgress((prev) =>
+              prev.some((p) => p.question_order === order)
+                ? prev
+                : [...prev, { question_order: order, is_correct: event.is_correct }]
+            );
+          }
           break;
         }
         case "opponent_answered": {
@@ -148,6 +176,11 @@ export function useBattleMatch(matchId: number | null) {
                   opponent_progress: { user_id: event.user_id, answered_count: event.answered_count },
                 }
               : prev
+          );
+          setOpponentProgress((prev) =>
+            prev.some((p) => p.question_order === event.question_order)
+              ? prev
+              : [...prev, { question_order: event.question_order, is_correct: event.is_correct }]
           );
           break;
         }
@@ -344,6 +377,8 @@ export function useBattleMatch(matchId: number | null) {
     setDisconnectInfo(null);
     setInitialLoadError(false);
     setOwnScore(0);
+    setMyProgress([]);
+    setOpponentProgress([]);
 
     if (matchId === null) return;
 
@@ -414,6 +449,8 @@ export function useBattleMatch(matchId: number | null) {
     lastAnswerFeedback,
     initialLoadError,
     ownScore,
+    myProgress,
+    opponentProgress,
     myUserId,
     sendReady,
     submitAnswer,

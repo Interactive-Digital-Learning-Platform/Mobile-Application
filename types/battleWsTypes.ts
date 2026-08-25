@@ -9,6 +9,7 @@
 import {
   BattleMatchStateResponse,
   BattleParticipantResult,
+  BattleQuestionPublic,
 } from "@/types/battleModuleTypes";
 
 export interface BattleWsConnectedEvent {
@@ -37,19 +38,19 @@ export interface BattleWsMatchStartedEvent {
   started_at: string;
 }
 
+// Pushed once per question boundary (including the very first, right after
+// match_started) — lockstep play, both players receive the SAME
+// question_index/question at the SAME instant.
 export interface BattleWsQuestionStartedEvent {
   type: "question_started";
   question_index: number;
-  question: {
-    question_id: number;
-    question: string;
-    options: string[] | null;
-  } | null;
+  question: BattleQuestionPublic;
   time_remaining_seconds: number;
 }
 
 export interface BattleWsAnswerAcknowledgedEvent {
   type: "answer_acknowledged";
+  question_id: number;
   is_correct: boolean;
   base_score: number;
   speed_bonus: number;
@@ -62,6 +63,11 @@ export interface BattleWsOpponentAnsweredEvent {
   type: "opponent_answered";
   user_id: number;
   answered_count: number;
+  // Which question slot this was for and whether it was correct — drives
+  // the opponent's live progress-bar segment. Never includes the selected
+  // option itself.
+  question_order: number;
+  is_correct: boolean;
 }
 
 export interface BattleWsPlayerDisconnectedEvent {

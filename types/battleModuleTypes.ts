@@ -114,6 +114,14 @@ export interface BattleMatchResult {
   opponent: BattleParticipantResult | null;
 }
 
+export interface BattleAnswerProgress {
+  // One question slot's outcome for a participant's progress bar. Absence
+  // of an entry for a question_order that's already in the past means that
+  // participant never answered it before its window closed.
+  question_order: number;
+  is_correct: boolean;
+}
+
 // Polymorphic — populated fields vary by `status`, see battle_gameplay_service's
 // per-status builders. Everything besides status/match_id is optional.
 export interface BattleMatchStateResponse {
@@ -122,11 +130,17 @@ export interface BattleMatchStateResponse {
   subject?: string | null;
   difficulty?: string | null;
   question_count?: number | null;
-  question_index?: number | null;
+  // Seconds remaining in the CURRENT question's fixed window (lockstep play).
   time_remaining_seconds?: number | null;
   countdown_seconds_remaining?: number | null;
+  // The single live question both players are currently on.
+  question_index?: number | null;
   question?: BattleQuestionPublic | null;
   has_answered_current_question?: boolean | null;
+  // Every question slot answered so far by each side, for progress-bar
+  // hydration on initial load/reconnect.
+  my_answers?: BattleAnswerProgress[] | null;
+  opponent_answers?: BattleAnswerProgress[] | null;
   my_progress?: BattleParticipantProgress | null;
   opponent_progress?: BattleParticipantProgress | null;
   started_at?: string | null;
@@ -162,6 +176,7 @@ export interface SubmitBattleAnswerRequest {
 }
 
 export interface SubmitBattleAnswerResponse {
+  question_id: number;
   is_correct: boolean;
   base_score: number;
   speed_bonus: number;
