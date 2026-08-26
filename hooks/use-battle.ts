@@ -15,6 +15,7 @@ export const battleKeys = {
   leaderboard: (subject: string, page: number) => ["battle", "leaderboard", subject, page] as const,
   profile:    ["battle", "profile"] as const,
   queueStatus: ["battle", "queue", "status"] as const,
+  availability: ["battle", "availability"] as const,
   history:    (subject: string | null, page: number) => ["battle", "history", subject, page] as const,
 };
 
@@ -85,6 +86,31 @@ export function useQueueStatusQuery(enabled: boolean) {
     queryFn: fetchQueueStatus,
     enabled,
     refetchInterval: (query) => (query.state.data?.status === "searching" ? 2000 : false),
+    staleTime: 0,
+  });
+}
+
+// Deliberately a SEPARATE cache key from battleKeys.queueStatus above, even
+// though both hit the same GET /battle/queue/status endpoint: this one's job
+// is "can the player start a NEW search at all" (watched from the subject
+// picker, well before any queue.tsx screen exists), while queueStatus is
+// owned end-to-end by an actual in-progress queue.tsx session. Keeping them
+// separate avoids the two screens' polling/cache-clearing fighting over one
+// shared entry the way earlier bugs in this feature did.
+//
+// "matched" here almost always means a PREVIOUS match's server-side state
+// hasn't finished tearing down yet (the opponent's socket dropped, a crash,
+// an app restart mid-match, etc.) rather than a real match to jump into --
+// the backend's own reconciler/stale-match reaper (Quiz-Battle-Service)
+// self-heals this back to "idle" within a couple of minutes on its own, with
+// no action needed from this client. Polling only while "matched" (not
+// "idle") means this goes fully quiet the instant nothing needs watching.
+export function useBattleAvailabilityQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: battleKeys.availability,
+    queryFn: fetchQueueStatus,
+    enabled,
+    refetchInterval: (query) => (query.state.data?.status === "matched" ? 3000 : false),
     staleTime: 0,
   });
 }

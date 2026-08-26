@@ -1,10 +1,11 @@
-import { useState } from "react";
-import { FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Globe } from "lucide-react-native";
+import Toast from "react-native-toast-message";
 import { SUBJECTS, ICON_COLORS } from "@/constants/quizStyles";
 import { BATTLE_RESULT_STYLES, BattleResultTheme, getLeagueStyle } from "@/constants/battleStyles";
-import { useBattleHistoryQuery } from "@/hooks/use-battle";
+import { useBattleAvailabilityQuery, useBattleHistoryQuery } from "@/hooks/use-battle";
 import { BattleHistoryEntry } from "@/types/battleModuleTypes";
 import BattleSubjectModal from "@/components/quiz-componets/BattleSubjectModal";
 import Skeleton from "@/components/Skeleton";
@@ -195,6 +196,26 @@ export default function OnlineList() {
   const [page, setPage] = useState(1);
   const { data, isLoading, isFetching, isError, refetch } = useBattleHistoryQuery(subject, page);
 
+  // Watched from the moment this screen mounts (not just after a failed
+  // join attempt) so the FAB can visibly reflect "you can't search yet"
+  // instead of only discovering that after tapping it and getting a 409.
+  const { data: availability } = useBattleAvailabilityQuery(true);
+  const isWrappingUp = availability?.status === "matched";
+  const wasWrappingUpRef = useRef(false);
+
+  useEffect(() => {
+    if (isWrappingUp) {
+      wasWrappingUpRef.current = true;
+    } else if (wasWrappingUpRef.current) {
+      wasWrappingUpRef.current = false;
+      Toast.show({
+        type: "success",
+        text1: "Ready to Battle!",
+        text2: "Your last match has wrapped up — you can search for a new one now.",
+      });
+    }
+  }, [isWrappingUp]);
+
   const handleFindMatch = (subject: string) => {
     setModalVisible(false);
     router.push({ pathname: "/(main)/battle/queue", params: { subject } } as any);
@@ -331,12 +352,27 @@ export default function OnlineList() {
       )}
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
+        className={`absolute bottom-6 right-6 w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40 ${
+          isWrappingUp ? "bg-slate-300" : "bg-primary"
+        }`}
         activeOpacity={0.85}
+        disabled={isWrappingUp}
         onPress={() => setModalVisible(true)}
       >
-        <Globe size={26} color={ICON_COLORS.white} strokeWidth={2} />
+        {isWrappingUp ? (
+          <ActivityIndicator size="small" color={ICON_COLORS.white} />
+        ) : (
+          <Globe size={26} color={ICON_COLORS.white} strokeWidth={2} />
+        )}
       </TouchableOpacity>
+
+      {isWrappingUp && (
+        <View className="absolute bottom-24 right-6 bg-slate-800 px-3 py-2 rounded-xl max-w-[200px]">
+          <Text className="text-white text-[11px] font-semibold text-center">
+            Finishing up your last battle…
+          </Text>
+        </View>
+      )}
 
       <BattleSubjectModal
         visible={modalVisible}

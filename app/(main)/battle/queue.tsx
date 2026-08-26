@@ -136,10 +136,32 @@ export default function BattleQueueScreen() {
 
   const myReady = myUserId != null && readyUserIds.has(myUserId);
 
+  // No manual "I'm Ready" button -- readying up is automatic 5 seconds
+  // after a match is found, with Cancel Match (above/below) as the only way
+  // to back out before that fires. Counts down once per second; on a failed
+  // send (e.g. a brief reconnect) it resets to a short 2s retry instead of
+  // tightly looping, and stops entirely once readyPending/myReady is true.
+  const [autoReadyCountdown, setAutoReadyCountdown] = useState(5);
+
   useEffect(() => {
     setReadyPending(false);
+    setAutoReadyCountdown(5);
     matchStartedNavigatedRef.current = false;
   }, [matchId]);
+
+  useEffect(() => {
+    if (!isMatched || myReady || readyPending || connectionStatus !== "open") return;
+    if (autoReadyCountdown > 0) {
+      const timer = setTimeout(() => setAutoReadyCountdown((s) => s - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+    setReadyPending(true);
+    const sent = sendReady();
+    if (!sent) {
+      setReadyPending(false);
+      setAutoReadyCountdown(2);
+    }
+  }, [isMatched, myReady, readyPending, connectionStatus, autoReadyCountdown, sendReady]);
 
   // Not "matched" -> we're no longer holding a queue slot, so an unmount
   // from here on shouldn't cancel a queue entry that doesn't exist anymore.
@@ -164,20 +186,6 @@ export default function BattleQueueScreen() {
       } as any);
     }
   }, [matchId, readyUserIds, router]);
-
-  const handleReady = () => {
-    if (readyPending || myReady) return;
-    setReadyPending(true);
-    const sent = sendReady();
-    if (!sent) {
-      setReadyPending(false);
-      Toast.show({
-        type: "error",
-        text1: "Couldn't ready up",
-        text2: "Check your connection and try again.",
-      });
-    }
-  };
 
   const pulse = useSharedValue(1);
   useEffect(() => {
@@ -394,37 +402,36 @@ export default function BattleQueueScreen() {
               </View>
             </View>
 
-            <Text className="text-white/70 text-sm text-center mt-6 mb-3">
-              {myReady ? "Waiting for opponent to ready up…" : "Ready up to start the match"}
+            <Text className="text-white/70 text-sm text-center mt-6 mb-1">
+              {myReady || readyPending
+                ? "Waiting for opponent to ready up…"
+                : "Readying up automatically…"}
             </Text>
 
-            <TouchableOpacity
-              className={`w-full flex-row justify-center items-center gap-2 py-4 rounded-2xl ${
-                myReady || readyPending ? "bg-white/15" : "bg-white"
-              }`}
-              activeOpacity={0.85}
-              disabled={myReady || readyPending || connectionStatus !== "open"}
-              onPress={handleReady}
-            >
-              {(myReady || readyPending) && (
-                <CheckCircle2 size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
+            <View className="w-full flex-row items-center justify-center gap-2 py-4">
+              {myReady || readyPending ? (
+                <>
+                  <CheckCircle2 size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
+                  <Text className="font-black text-base text-white">Ready!</Text>
+                </>
+              ) : (
+                <Text className="font-black text-3xl text-white">{autoReadyCountdown}</Text>
               )}
-              <Text className={`font-black text-base ${myReady || readyPending ? "text-white" : "text-primary"}`}>
-                {myReady || readyPending ? "Waiting for opponent…" : "I'm Ready"}
-              </Text>
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
-              activeOpacity={0.8}
-              disabled={isLeavingMatch}
-              onPress={() => setShowLeaveConfirm(true)}
-            >
-              <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
-              <Text className="text-white/80 font-bold text-sm">
-                {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
-              </Text>
-            </TouchableOpacity>
+            {!myReady && !readyPending && (
+              <TouchableOpacity
+                className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
+                activeOpacity={0.8}
+                disabled={isLeavingMatch}
+                onPress={() => setShowLeaveConfirm(true)}
+              >
+                <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
+                <Text className="text-white/80 font-bold text-sm">
+                  {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </Animated.View>
         )}
         </View>

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AlertTriangle, Brain, Clock, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
+import Toast from "react-native-toast-message";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { getLeagueStyle } from "@/constants/battleStyles";
@@ -11,7 +12,7 @@ import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import { useBattleMatch } from "@/hooks/use-battle-match";
-import { useBattleProfileQuery } from "@/hooks/use-battle";
+import { useBattleProfileQuery, useForfeitMatchMutation } from "@/hooks/use-battle";
 
 const GENERATING_STEPS: QuizStatusStep[] = [
   { icon: Swords, text: "Entering the arena…" },
@@ -36,9 +37,18 @@ export default function BattleMatchSessionScreen() {
     myProgress,
     opponentProgress,
     submitAnswer,
-    forfeit,
     manualRetry,
   } = useBattleMatch(matchId);
+
+  // REST, not the match WS's fire-and-forget sendForfeit -- same reliability
+  // rationale as queue.tsx's forfeit flow (a plain request/response
+  // round-trips before anything else happens, unlike a WS send that could
+  // silently drop). Matters even more here since confirming forfeit now
+  // covers the whole screen with a blocking "Ending Match…" overlay --
+  // isPending drives that overlay directly, and a failed send surfaces as a
+  // toast + the overlay coming back down, rather than leaving the player
+  // staring at a spinner that never resolves.
+  const { mutate: forfeitMatchMutation, isPending: isForfeiting } = useForfeitMatchMutation();
 
   const { data: battleProfile } = useBattleProfileQuery();
   const myLeague = battleProfile?.subjects.find((s) => s.subject === matchState?.subject)?.league;
@@ -116,8 +126,24 @@ export default function BattleMatchSessionScreen() {
   };
 
   const handleForfeitConfirm = () => {
+    if (matchId === null) return;
     setShowForfeit(false);
-    forfeit();
+    // No onSuccess navigation here -- the REST response only confirms the
+    // forfeit was recorded. The actual transition away from this screen is
+    // still driven by the existing WS match_finished handling above (same
+    // socket this screen already listens on), which populates finalResult
+    // and flips matchState.status to "completed", triggering the effect
+    // that navigates to battle-results. This just makes SENDING the
+    // forfeit reliable, not the navigation that follows it.
+    forfeitMatchMutation(matchId, {
+      onError: (error) => {
+        Toast.show({
+          type: "error",
+          text1: "Couldn't forfeit",
+          text2: error instanceof Error ? error.message : "Check your connection and try again.",
+        });
+      },
+    });
   };
 
   if (!matchState && initialLoadError) {
@@ -276,11 +302,15 @@ export default function BattleMatchSessionScreen() {
         // down from the real (larger) duration.
         const display = Math.min(secondsLeft, 3);
         return (
-          <View className="flex-1 items-center justify-center">
-            <Text className="text-slate-400 font-bold text-sm uppercase tracking-widest mb-2">
+          // Absolutely positioned over the whole screen (not just the flex
+          // space below the header) -- the header above takes up its own
+          // height, so a plain flex-1 centered View here would center
+          // itself within the remaining space, not the true screen center.
+          <View className="absolute inset-0 items-center justify-center bg-white">
+            <Text className="text-slate-400 font-bold text-lg uppercase tracking-widest mb-4">
               {display > 0 ? "Starting In" : "Get Ready"}
             </Text>
-            <Text className="text-primary text-7xl font-black">
+            <Text className="text-primary text-9xl font-black">
               {display > 0 ? display : "GO!"}
             </Text>
           </View>
@@ -388,6 +418,18 @@ export default function BattleMatchSessionScreen() {
         onCancel={() => setShowForfeit(false)}
         onConfirm={handleForfeitConfirm}
       />
+
+      {isForfeiting && (
+        // Covers the whole screen (not just a modal) from the moment
+        // forfeit is confirmed until the WS match_finished handling above
+        // navigates away to battle-results -- the live question grid stays
+        // interactive/frozen mid-state underneath otherwise, which looks
+        // broken during that brief gap.
+        <View className="absolute inset-0 items-center justify-center bg-white">
+          <ActivityIndicator size="large" color={ICON_COLORS.primary500} style={{ marginBottom: 16 }} />
+          <Text className="text-slate-800 font-black text-lg">Ending Match…</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
