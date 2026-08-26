@@ -485,6 +485,7 @@ export default function NoteDetail() {
   const [imageExpanded, setImageExpanded] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [gapsExpanded, setGapsExpanded] = useState(false);
+  const [priorityGapExplainerOpen, setPriorityGapExplainerOpen] = useState(false);
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
 
@@ -817,35 +818,162 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 2. Biggest Learning Gap Spotlight ── */}
+            {/* ── 2. Priority Learning Gap Card (Improvement 2) ── */}
             {note.analysis.learningGaps.length > 0 && (() => {
               const topGap =
-                note.analysis.learningGaps.find(g => g.severity === "high") ||
-                note.analysis.learningGaps.find(g => g.severity === "medium") ||
+                note.analysis.learningGaps.find((g) => g.severity === "high") ||
+                note.analysis.learningGaps.find((g) => g.severity === "medium") ||
                 note.analysis.learningGaps[0];
-              const severityBgColor = topGap.severity === "high" ? "#FEE2E2" : topGap.severity === "medium" ? "#FEF3C7" : "#DBEAFE";
-              const severityTextColor = topGap.severity === "high" ? "#DC2626" : topGap.severity === "medium" ? "#D97706" : "#2563EB";
-              const severityBorderColor = topGap.severity === "high" ? "#FECACA" : topGap.severity === "medium" ? "#FDE68A" : "#BFDBFE";
+
+              const topExplainableGap =
+                note.analysis.explainableGaps?.find(
+                  (eg) =>
+                    eg.outcomeDescription === topGap.concept ||
+                    eg.missingConcepts.some((mc) => topGap.concept.includes(mc.name))
+                ) || note.analysis.explainableGaps?.[0];
+
+              const isHigh = topGap.severity === "high";
+              const isMedium = topGap.severity === "medium";
+
+              const missingList =
+                topExplainableGap && topExplainableGap.missingConcepts.length > 0
+                  ? topExplainableGap.missingConcepts.map((c) => c.name)
+                  : topGap.concept.split(/[,/]/).map((s) => s.trim()).filter(Boolean);
+
+              const outcomeStatusText =
+                topExplainableGap?.status === "not_achieved"
+                  ? "Not Achieved"
+                  : topExplainableGap?.status === "partially_achieved"
+                  ? "Partially Achieved"
+                  : isHigh
+                  ? "Not Achieved"
+                  : "Partially Achieved";
+
+              const outcomeStatusColor =
+                outcomeStatusText === "Not Achieved"
+                  ? { bg: "#FEE2E2", text: "#DC2626", border: "#FECACA" }
+                  : { bg: "#FEF3C7", text: "#D97706", border: "#FDE68A" };
+
               return (
-                <View style={styles.biggestGapCard}>
-                  <View style={styles.bgcLabelRow}>
-                    <AlertTriangle size={13} color={colors.primary} />
-                    <Text style={styles.bgcLabel}>YOUR BIGGEST LEARNING GAP</Text>
+                <View style={styles.priorityGapCard}>
+                  {/* Header Tag + Importance Badge */}
+                  <View style={styles.priorityGapHeaderRow}>
+                    <View style={styles.priorityGapTag}>
+                      <AlertTriangle size={13} color="#DC2626" />
+                      <Text style={styles.priorityGapTagText}>PRIORITY LEARNING GAP</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.priorityGapSeverityBadge,
+                        {
+                          backgroundColor: isHigh ? "#FEE2E2" : isMedium ? "#FEF3C7" : "#DBEAFE",
+                          borderColor: isHigh ? "#FECACA" : isMedium ? "#FDE68A" : "#BFDBFE",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.priorityGapSeverityText,
+                          { color: isHigh ? "#DC2626" : isMedium ? "#D97706" : "#2563EB" },
+                        ]}
+                      >
+                        {isHigh ? "🔴 HIGH PRIORITY" : isMedium ? "🟠 NEEDS ATTENTION" : "🟡 REVIEW RECOMMENDED"}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.bgcConceptName}>{topGap.concept}</Text>
-                  <View style={[styles.bgcSeverityBadge, { backgroundColor: severityBgColor, borderColor: severityBorderColor }]}>
-                    <Text style={[styles.bgcSeverityText, { color: severityTextColor }]}>
-                      {topGap.severity.toUpperCase()} PRIORITY
+
+                  {/* Main Concept / Outcome Name */}
+                  <Text style={styles.priorityGapConceptName}>
+                    {topExplainableGap?.outcomeDescription || topGap.concept}
+                  </Text>
+
+                  {/* Why this is a gap block */}
+                  <View style={styles.whyGapBox}>
+                    <View style={styles.whyGapTitleRow}>
+                      <Target size={13} color="#475569" />
+                      <Text style={styles.whyGapTitle}>Why this is a gap</Text>
+                    </View>
+                    <Text style={styles.whyGapExplanation}>
+                      {topExplainableGap && topExplainableGap.missingConcepts.length > 0
+                        ? `Key required concepts are missing from your handwritten notes for this learning outcome.`
+                        : `Your notes have incomplete coverage for this core syllabus requirement.`}
                     </Text>
+
+                    {/* Missing concepts bullet list */}
+                    {missingList.length > 0 && (
+                      <View style={styles.priorityMissingList}>
+                        <Text style={styles.priorityMissingLabel}>Missing concepts:</Text>
+                        {missingList.map((conceptName, idx) => (
+                          <View key={idx} style={styles.priorityMissingItem}>
+                            <View style={styles.priorityMissingCross}>
+                              <Text style={styles.priorityMissingCrossText}>✕</Text>
+                            </View>
+                            <Text style={styles.priorityMissingItemText}>{conceptName}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {/* Status indicator row */}
+                    <View style={styles.outcomeStatusRow}>
+                      <Text style={styles.outcomeStatusLabel}>Learning Outcome:</Text>
+                      <View
+                        style={[
+                          styles.outcomeStatusBadge,
+                          {
+                            backgroundColor: outcomeStatusColor.bg,
+                            borderColor: outcomeStatusColor.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.outcomeStatusText, { color: outcomeStatusColor.text }]}>
+                          {outcomeStatusText}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                  <Text style={styles.bgcBody}>{topGap.suggestion}</Text>
-                  <TouchableOpacity
-                    style={styles.bgcCtaBtn}
-                    onPress={() => navigateToMaterial("structured_notes")}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.bgcCtaBtnText}>Start reviewing  →</Text>
-                  </TouchableOpacity>
+
+                  {/* Expandable Explanation (Why was this detected?) */}
+                  {priorityGapExplainerOpen && (
+                    <View style={styles.explainerDrawer}>
+                      {topExplainableGap?.evidence ? (
+                        <View style={styles.explainerSection}>
+                          <Text style={styles.explainerSubhead}>Evidence found in your notes:</Text>
+                          <View style={styles.explainerQuoteBox}>
+                            <Text style={styles.explainerQuoteText}>"{topExplainableGap.evidence}"</Text>
+                          </View>
+                        </View>
+                      ) : null}
+
+                      <View style={styles.explainerSection}>
+                        <Text style={styles.explainerSubhead}>System Recommendation:</Text>
+                        <Text style={styles.explainerRecommendationText}>
+                          {topExplainableGap?.recommendation || topGap.suggestion}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Card Action Buttons */}
+                  <View style={styles.priorityGapActionsRow}>
+                    <TouchableOpacity
+                      style={styles.priorityGapExplainerBtn}
+                      onPress={() => setPriorityGapExplainerOpen(!priorityGapExplainerOpen)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.priorityGapExplainerBtnText}>
+                        {priorityGapExplainerOpen ? "Hide Explanation ▲" : "See Why Detected ▼"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.priorityGapReviewBtn}
+                      onPress={() => navigateToMaterial("structured_notes")}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.priorityGapReviewBtnText}>Start Reviewing →</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               );
             })()}
@@ -2002,68 +2130,226 @@ const styles = StyleSheet.create({
   },
   regenBtnText: { color: "#fff", fontSize: 12, fontWeight: "600" },
 
-  // ── Biggest Gap Spotlight Card ──────────────────────────────────────────────
-  biggestGapCard: {
+  // ── Priority Learning Gap Card (Improvement 2) ──────────────────────────────
+  priorityGapCard: {
     marginHorizontal: 20,
     marginTop: 14,
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: 22,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: "#FED7AA",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: "#FECACA",
+    shadowColor: "#DC2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  bgcLabelRow: {
+  priorityGapHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  priorityGapTag: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 8,
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
   },
-  bgcLabel: {
+  priorityGapTagText: {
     fontSize: 11,
     fontWeight: "800",
-    color: colors.primary,
-    letterSpacing: 0.8,
+    color: "#DC2626",
+    letterSpacing: 0.5,
   },
-  bgcConceptName: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: colors.primaryBlack,
-    marginBottom: 8,
-    lineHeight: 26,
-  },
-  bgcSeverityBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
+  priorityGapSeverityBadge: {
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 12,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  bgcSeverityText: {
-    fontSize: 10,
+  priorityGapSeverityText: {
+    fontSize: 10.5,
     fontWeight: "800",
-    letterSpacing: 0.6,
+    letterSpacing: 0.3,
   },
-  bgcBody: {
-    fontSize: 14,
+  priorityGapConceptName: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.primaryBlack,
+    marginBottom: 14,
+    lineHeight: 24,
+    letterSpacing: -0.2,
+  },
+  whyGapBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  whyGapTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 6,
+  },
+  whyGapTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#334155",
+  },
+  whyGapExplanation: {
+    fontSize: 13,
+    color: "#64748B",
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  priorityMissingList: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    gap: 6,
+  },
+  priorityMissingLabel: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#64748B",
+    marginBottom: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  priorityMissingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  priorityMissingCross: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priorityMissingCrossText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  priorityMissingItemText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
+  },
+  outcomeStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  outcomeStatusLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  outcomeStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  outcomeStatusText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  explainerDrawer: {
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 10,
+  },
+  explainerSection: {
+    gap: 4,
+  },
+  explainerSubhead: {
+    fontSize: 11.5,
+    fontWeight: "700",
     color: "#475569",
-    fontWeight: "400",
-    lineHeight: 21,
-    marginBottom: 16,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
-  bgcCtaBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 13,
+  explainerQuoteBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  explainerQuoteText: {
+    fontSize: 12.5,
+    fontStyle: "italic",
+    color: "#334155",
+    lineHeight: 18,
+  },
+  explainerRecommendationText: {
+    fontSize: 12.5,
+    color: "#334155",
+    lineHeight: 18,
+  },
+  priorityGapActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  priorityGapExplainerBtn: {
+    flex: 1,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
-  bgcCtaBtnText: {
-    fontSize: 14,
+  priorityGapExplainerBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  priorityGapReviewBtn: {
+    flex: 1.2,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  priorityGapReviewBtnText: {
+    fontSize: 12.5,
     fontWeight: "700",
     color: "#FFFFFF",
   },
