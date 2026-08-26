@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AlertTriangle, Brain, Clock, LogOut, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
+import { AlertTriangle, Brain, Clock, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
-import { getDifficultyStyle, ICON_COLORS } from "@/constants/quizStyles";
+import { ICON_COLORS } from "@/constants/quizStyles";
+import { getLeagueStyle } from "@/constants/battleStyles";
 import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
+import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import { useBattleMatch } from "@/hooks/use-battle-match";
+import { useBattleProfileQuery } from "@/hooks/use-battle";
 
 const GENERATING_STEPS: QuizStatusStep[] = [
   { icon: Swords, text: "Entering the arena…" },
@@ -16,52 +19,6 @@ const GENERATING_STEPS: QuizStatusStep[] = [
   { icon: Zap,    text: "Balancing the difficulty…" },
   { icon: Sparkles, text: "Almost ready!" },
 ];
-
-function ForfeitModal({
-  visible,
-  onCancel,
-  onConfirm,
-}: {
-  visible: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View className="flex-1 justify-center items-center bg-black/60 px-8">
-        <View className="bg-white rounded-3xl w-full overflow-hidden shadow-2xl">
-          <View className="bg-rose-500 pt-8 pb-6 items-center px-6">
-            <View className="w-16 h-16 rounded-full bg-white/20 justify-center items-center mb-3">
-              <AlertTriangle size={32} color={ICON_COLORS.white} strokeWidth={2} />
-            </View>
-            <Text className="text-white text-xl font-black">Forfeit Match?</Text>
-            <Text className="text-white/80 text-sm text-center mt-1">
-              You&apos;ll lose this match and rating points.
-            </Text>
-          </View>
-          <View className="px-6 pt-5 pb-6">
-            <TouchableOpacity
-              className="w-full bg-rose-500 flex-row justify-center items-center gap-2 py-4 rounded-2xl mb-3"
-              activeOpacity={0.85}
-              onPress={onConfirm}
-            >
-              <LogOut size={18} color={ICON_COLORS.white} strokeWidth={2} />
-              <Text className="text-white font-black text-base">Yes, Forfeit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="w-full bg-slate-100 flex-row justify-center items-center gap-2 py-4 rounded-2xl"
-              activeOpacity={0.85}
-              onPress={onCancel}
-            >
-              <X size={18} color={ICON_COLORS.slate500} strokeWidth={2} />
-              <Text className="text-slate-600 font-black text-base">Keep Playing</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
 export default function BattleMatchSessionScreen() {
   const router = useRouter();
@@ -82,6 +39,9 @@ export default function BattleMatchSessionScreen() {
     forfeit,
     manualRetry,
   } = useBattleMatch(matchId);
+
+  const { data: battleProfile } = useBattleProfileQuery();
+  const myLeague = battleProfile?.subjects.find((s) => s.subject === matchState?.subject)?.league;
 
   const [showForfeit, setShowForfeit] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -234,7 +194,7 @@ export default function BattleMatchSessionScreen() {
   // is just narrowing the type for everything below.
   if (!matchState) return null;
 
-  const diff = getDifficultyStyle(matchState.difficulty ?? "medium");
+  const leagueStyle = getLeagueStyle(myLeague);
 
   // Set once, synchronously during render (not in an effect, which would
   // land a whole tick late and let the "active" branch flash first): the
@@ -269,9 +229,9 @@ export default function BattleMatchSessionScreen() {
 
         <View className="items-center">
           <Text className="text-md font-black text-slate-800">{matchState.subject}</Text>
-          {!!matchState.difficulty && (
-            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
-              <Text className={`text-[11px] font-bold ${diff.text}`}>{matchState.difficulty}</Text>
+          {!!myLeague && (
+            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${leagueStyle.bg}`}>
+              <Text className={`text-[11px] font-bold ${leagueStyle.text}`}>{myLeague}</Text>
             </View>
           )}
         </View>
@@ -330,13 +290,18 @@ export default function BattleMatchSessionScreen() {
       {matchState.status === "active" && !isCountingDown && (
         <View className="flex-1">
           <View className="mx-4 mt-2 flex-row items-center justify-between">
-            <View>
+            <View className="flex-1">
               <Text className="text-xs text-slate-400 font-medium">
                 Question {(matchState.question_index ?? 0) + 1} / {matchState.question_count}
               </Text>
-              <Text className="text-sm font-black text-slate-800 mt-0.5">Score: {ownScore}</Text>
             </View>
-            <View className="flex-row items-center gap-1">
+            <View className="flex-1 items-center">
+              <Text className="text-2xl font-black text-slate-800">{ownScore}</Text>
+              <Text className="text-[8px] font-bold text-slate-400 uppercase tracking-wide -mt-1">
+                Score
+              </Text>
+            </View>
+            <View className="flex-1 flex-row items-center justify-end gap-1">
               <Clock size={13} color={ICON_COLORS.primary500} strokeWidth={3} />
               <Text className="text-sm font-black text-primary">
                 {Math.max(
@@ -354,13 +319,17 @@ export default function BattleMatchSessionScreen() {
               count={matchState.question_count ?? 0}
               currentIndex={matchState.question_index ?? 0}
               answers={myProgress}
+              size="md"
             />
-            <BattleProgressBar
-              label="Opponent"
-              count={matchState.question_count ?? 0}
-              currentIndex={matchState.question_index ?? 0}
-              answers={opponentProgress}
-            />
+            <View className="mt-2">
+              <BattleProgressBar
+                label="Opponent"
+                count={matchState.question_count ?? 0}
+                currentIndex={matchState.question_index ?? 0}
+                answers={opponentProgress}
+                size="sm"
+              />
+            </View>
           </View>
 
           <View className="bg-white rounded-2xl py-8 px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">

@@ -1,7 +1,7 @@
 import { Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { BookOpen, Home, RotateCcw, TrendingDown, TrendingUp } from "lucide-react-native";
+import { BookOpen, Home, TrendingDown, TrendingUp,ChevronsRight } from "lucide-react-native";
 import { BATTLE_RESULT_STYLES, BattleResultTheme, getLeagueStyle } from "@/constants/battleStyles";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { filterTestSubjectNames } from "@/constants/quizHelpers";
@@ -196,8 +196,8 @@ export default function BattleResultsScreen() {
           activeOpacity={0.85}
           onPress={handleRematch}
         >
-          <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
-          <Text className="text-white font-black text-base">Play Again</Text>
+          <ChevronsRight size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
+          <Text className="text-white font-black text-base">Next Match</Text>
         </TouchableOpacity>
 
         {/* dismissTo (not replace): this crosses from the (main) group's

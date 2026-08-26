@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import Toast from "react-native-toast-message";
@@ -12,10 +14,12 @@ import {
   battleKeys,
   useBattleProfileQuery,
   useCancelQueueMutation,
+  useForfeitMatchMutation,
   useJoinQueueMutation,
   useQueueStatusQuery,
 } from "@/hooks/use-battle";
 import { useBattleMatch } from "@/hooks/use-battle-match";
+import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 
 export default function BattleQueueScreen() {
   const router = useRouter();
@@ -55,10 +59,20 @@ export default function BattleQueueScreen() {
         // "You're already in an active battle." for a 409) -- show that
         // instead of a generic message, since the specific reason is what
         // actually tells you what to do next.
+        const detail = error instanceof Error ? error.message : null;
+        // This specific 409 almost always means a *previous* match never
+        // got a chance to finish server-side (app closed/crashed mid-match,
+        // connection dropped) rather than something wrong with THIS join --
+        // the backend self-heals it automatically within a few minutes (see
+        // Quiz-online's stale-match reaper), so say that instead of leaving
+        // the player thinking they're permanently stuck.
+        const isStaleActiveBattle = detail === "You're already in an active battle.";
         Toast.show({
           type: "error",
-          text1: "Couldn't join the queue",
-          text2: error instanceof Error ? error.message : "Check your connection and try again.",
+          text1: isStaleActiveBattle ? "Finishing up your last battle" : "Couldn't join the queue",
+          text2: isStaleActiveBattle
+            ? "A previous match is still wrapping up. Try again in a couple of minutes."
+            : detail ?? "Check your connection and try again.",
         });
         router.back();
       },
@@ -86,11 +100,39 @@ export default function BattleQueueScreen() {
   // guards against the same stale-cache hazard the mount effect's
   // removeQueries() targets above: a "matched" response for a DIFFERENT
   // subject can only be stale leftover data from a previous session.
+  const isMatched = status?.status === "matched";
   const matchId =
     status?.status === "matched" && status.subject === subject ? status.match_id ?? null : null;
-  const { readyUserIds, myUserId, sendReady, connectionStatus } = useBattleMatch(matchId);
+  const { matchState, readyUserIds, myUserId, sendReady, connectionStatus } = useBattleMatch(matchId);
+  const { mutate: forfeitMatch, isPending: isLeavingMatch } = useForfeitMatchMutation();
   const [readyPending, setReadyPending] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const matchStartedNavigatedRef = useRef(false);
+  // Distinguishes "I cancelled" (handleLeaveMatchConfirm navigates away
+  // immediately, no need to react to the match_cancelled echo that comes
+  // back over my own socket) from "the opponent cancelled" (this screen
+  // should auto-requeue instead) -- both sides see the same event.
+  const selfCancelledRef = useRef(false);
+
+  const navigation = useNavigation();
+  const pendingLeaveActionRef = useRef<any>(null);
+  const [leavingConfirmed, setLeavingConfirmed] = useState(false);
+
+  // Backing out of a matched-but-not-started screen via the hardware back
+  // button or an iOS swipe-back gesture bypasses handleLeaveMatchConfirm
+  // entirely -- no in-app button press means no forfeit call, leaving the
+  // match stuck "waiting" server-side forever: the opponent never gets
+  // notified and neither player can queue into a new match while the old
+  // one still looks active to the backend. Intercept any removal attempt
+  // for as long as we're matched and the match hasn't already started
+  // (readyUserIds reaching 2 is our own signal to router.replace() away to
+  // match-session below -- excluding that keeps this guard from blocking
+  // that legitimate, in-app navigation) and route it through the same
+  // confirm-then-forfeit flow as the explicit "Cancel Match" button.
+  usePreventRemove(isMatched && readyUserIds.size < 2 && !leavingConfirmed, (e) => {
+    pendingLeaveActionRef.current = e.data.action;
+    setShowLeaveConfirm(true);
+  });
 
   const myReady = myUserId != null && readyUserIds.has(myUserId);
 
@@ -169,13 +211,113 @@ export default function BattleQueueScreen() {
     cancelQueue(undefined, { onSettled: () => router.back() });
   };
 
-  const isMatched = status?.status === "matched";
+  // Once matched, matchmaking is already done (holdingQueueSlotRef was
+  // cleared above) -- a real BattleMatch row exists, so backing out here
+  // sends a forfeit same as the header X in match-session.tsx. The backend
+  // treats forfeiting a still-"waiting" match (matched but not yet both-
+  // ready) as voiding it rather than scoring a win, since no question has
+  // ever been shown to either player.
+  //
+  // This uses the REST forfeit endpoint, awaited, rather than the match
+  // WS's fire-and-forget `sendForfeit` -- firing that and immediately
+  // calling router.back() (as this used to) unmounts useBattleMatch and
+  // closes the socket with no guarantee the server ever received the
+  // frame, silently dropping the cancellation and leaving both players'
+  // server-side state stuck on the dead match (opponent never notified,
+  // neither side able to queue again). A plain request/response has no
+  // such race: we only navigate away once the server has confirmed it.
+  const handleLeaveMatchConfirm = () => {
+    if (matchId === null || isLeavingMatch) return;
+    setShowLeaveConfirm(false);
+    // Unblocks usePreventRemove above *before* the navigation below fires,
+    // so the leave we're about to perform (either replaying a gesture/back-
+    // button's originally-intercepted action, or our own router.back())
+    // doesn't immediately re-trigger the same guard.
+    setLeavingConfirmed(true);
+    selfCancelledRef.current = true;
+    forfeitMatch(matchId, {
+      onSuccess: () => {
+        // battleKeys.queueStatus is a single GLOBAL cache key, not scoped to
+        // this screen instance -- it still holds {status:"matched", this
+        // now-cancelled match_id}. Left alone, a fresh queue.tsx mounted
+        // later (tapping "Find Match" again) would read this stale entry on
+        // its very FIRST render, before its own mount effect gets a chance
+        // to clear it, briefly resolving matchId back to this dead match --
+        // which pulls in its "cancelled" matchState and fires the "opponent
+        // left, auto-requeue" effect at the exact same time as the new
+        // mount's own join call. Two concurrent joinQueue calls race, one
+        // 409s, and that screen's onError sends the player right back out --
+        // exactly the "can't start a match after cancelling" symptom this
+        // avoids by clearing the cache now, at the source, instead of
+        // leaving the next mount to clean up after the fact.
+        queryClient.removeQueries({ queryKey: battleKeys.queueStatus, exact: true });
+        if (pendingLeaveActionRef.current) {
+          navigation.dispatch(pendingLeaveActionRef.current);
+          pendingLeaveActionRef.current = null;
+        } else {
+          router.back();
+        }
+      },
+      onError: (error) => {
+        selfCancelledRef.current = false;
+        setLeavingConfirmed(false);
+        pendingLeaveActionRef.current = null;
+        Toast.show({
+          type: "error",
+          text1: "Couldn't cancel match",
+          text2: error instanceof Error ? error.message : "Check your connection and try again.",
+        });
+      },
+    });
+  };
+
+  // The OPPONENT's screen sees this fire when I cancel above (both sockets
+  // get the same match_cancelled event) -- auto-requeue for a new match
+  // instead of dead-ending, since nothing about their own search failed.
+  //
+  // Deliberately does NOT call queryClient.removeQueries() here (unlike the
+  // mount effect above) and does NOT flip holdingQueueSlotRef until
+  // joinQueue's own onSuccess: pollingEnabled is already true at this point
+  // (left on from when we originally matched), so battleKeys.queueStatus is
+  // actively observed -- removing it would make React Query refetch
+  // immediately, landing on GET /battle/queue/status right after the
+  // backend clears our match state but before joinQueue below re-adds us,
+  // which comes back "idle". If holdingQueueSlotRef were already true at
+  // that moment, the "removed from queue by the server" effect further
+  // below would misread that transient blip as a real kick and send this
+  // player home too -- exactly the bug this ordering avoids. joinQueue's
+  // own onSuccess overwrites the stale "matched" cache directly, so no
+  // manual cache-clear is needed.
+  useEffect(() => {
+    if (matchState?.status !== "cancelled" || selfCancelledRef.current || !subject) return;
+    Toast.show({
+      type: "info",
+      text1: "Opponent left",
+      text2: "Looking for a new match…",
+    });
+    joinQueue(subject, {
+      onSuccess: () => {
+        holdingQueueSlotRef.current = true;
+        setPollingEnabled(true);
+      },
+      onError: (error) => {
+        Toast.show({
+          type: "error",
+          text1: "Couldn't rejoin the queue",
+          text2: error instanceof Error ? error.message : "Check your connection and try again.",
+        });
+        router.back();
+      },
+    });
+  }, [matchState?.status, subject, joinQueue, router]);
+
   const opponent = status?.opponent;
   const league = getLeagueStyle(opponent?.league);
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} className="flex-1 bg-primary">
-      <View className="flex-1 items-center justify-center px-8">
+    <LinearGradient colors={[ICON_COLORS.primary500, "#FF8F30"]} style={{ flex: 1 }}>
+      <SafeAreaView edges={["top", "bottom"]} className="flex-1">
+        <View className="flex-1 items-center justify-center px-8">
         {!isMatched ? (
           <>
             <Animated.View
@@ -271,9 +413,35 @@ export default function BattleQueueScreen() {
                 {myReady || readyPending ? "Waiting for opponent…" : "I'm Ready"}
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
+              activeOpacity={0.8}
+              disabled={isLeavingMatch}
+              onPress={() => setShowLeaveConfirm(true)}
+            >
+              <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
+              <Text className="text-white/80 font-bold text-sm">
+                {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
+              </Text>
+            </TouchableOpacity>
           </Animated.View>
         )}
-      </View>
-    </SafeAreaView>
+        </View>
+
+        <ForfeitModal
+          visible={showLeaveConfirm}
+          onCancel={() => {
+            setShowLeaveConfirm(false);
+            pendingLeaveActionRef.current = null;
+          }}
+          onConfirm={handleLeaveMatchConfirm}
+          title="Cancel This Match?"
+          message="Your opponent will be notified and matched with someone else. No rating changes."
+          confirmLabel="Yes, Cancel Match"
+          cancelLabel="Stay In Match"
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 }

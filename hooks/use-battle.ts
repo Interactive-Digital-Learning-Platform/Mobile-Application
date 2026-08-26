@@ -5,6 +5,7 @@ import {
   fetchBattleProfile,
   fetchLeaderboard,
   fetchQueueStatus,
+  forfeitMatch,
   joinQueue,
 } from "@/api/battleAPI";
 import { QueueStatusResponse } from "@/types/battleModuleTypes";
@@ -59,6 +60,19 @@ export function useCancelQueueMutation() {
     onSuccess: (data) => {
       queryClient.setQueryData<QueueStatusResponse>(battleKeys.queueStatus, data);
     },
+  });
+}
+
+// REST, not the match WS, is the reliable way to back out of a still-
+// "waiting" (matched but not yet both-ready) match on the queue screen: a
+// plain request/response round-trips before the caller navigates away,
+// unlike firing a WS message and immediately unmounting (which can close
+// the socket before the frame is even confirmed sent, silently dropping the
+// cancellation and leaving both players' server-side state stuck on the
+// dead match).
+export function useForfeitMatchMutation() {
+  return useMutation({
+    mutationFn: (matchId: number) => forfeitMatch(matchId),
   });
 }
 

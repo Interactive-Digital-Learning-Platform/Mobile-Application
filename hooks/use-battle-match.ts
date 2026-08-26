@@ -225,14 +225,22 @@ export function useBattleMatch(matchId: number | null) {
         case "match_cancelled": {
           isTerminalRef.current = true;
           setMatchState((prev) => (prev ? { ...prev, status: "cancelled", reason: event.reason } : prev));
+          // Only the AI-generation-failure case gets a toast here -- it's
+          // the one "match_cancelled" reason with no more specific UI of its
+          // own. The "opponent left before ready" case is deliberately NOT
+          // toasted from this shared hook: both sides' sockets get the same
+          // event, but queue.tsx already shows the right message to each --
+          // "Opponent left / Looking for a new match" only to the player who
+          // stays and auto-requeues, nothing to the one who chose to leave
+          // (they're already mid-navigation-away and know they cancelled).
+          // A generic toast here fired for BOTH regardless of who cancelled,
+          // which is what this comment replaces.
           if (event.reason?.includes("could be generated or found")) {
             Toast.show({
               type: "error",
               text1: "Question generation failed",
               text2: "We couldn't prepare questions for this match. No rating changes applied.",
             });
-          } else {
-            Toast.show({ type: "error", text1: "Match cancelled", text2: event.reason ?? undefined });
           }
           break;
         }

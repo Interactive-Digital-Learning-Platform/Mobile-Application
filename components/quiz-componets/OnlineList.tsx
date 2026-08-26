@@ -1,13 +1,21 @@
 import { useState } from "react";
-import { FlatList, RefreshControl, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
-import { AlertTriangle, ChevronLeft, ChevronRight, Globe } from "lucide-react-native";
-import { SUBJECTS, getSubjectIcon, ICON_COLORS } from "@/constants/quizStyles";
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Globe } from "lucide-react-native";
+import { SUBJECTS, ICON_COLORS } from "@/constants/quizStyles";
 import { BATTLE_RESULT_STYLES, BattleResultTheme, getLeagueStyle } from "@/constants/battleStyles";
 import { useBattleHistoryQuery } from "@/hooks/use-battle";
 import { BattleHistoryEntry } from "@/types/battleModuleTypes";
 import BattleSubjectModal from "@/components/quiz-componets/BattleSubjectModal";
 import Skeleton from "@/components/Skeleton";
+
+type ResultFilter = "All" | BattleResultTheme;
+const RESULT_FILTERS: ResultFilter[] = ["All", "win", "loss", "draw", "forfeit"];
+const SUBJECT_FILTERS = ["All", ...SUBJECTS];
+
+function resultFilterLabel(value: ResultFilter): string {
+  return value === "All" ? "All" : BATTLE_RESULT_STYLES[value].label;
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -112,10 +120,78 @@ function HistoryListSkeleton() {
   );
 }
 
+type ActiveDropdown = "subject" | "result" | null;
+
+function FilterChip({
+  label, value, isOpen, onPress,
+}: {
+  label: string; value: string; isOpen: boolean; onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      className={`flex-row items-center gap-1.5 px-3 py-2 rounded-xl border ${
+        isOpen ? "border-primary bg-primary-50" : "border-slate-200 bg-white"
+      }`}
+      activeOpacity={0.8}
+      onPress={onPress}
+    >
+      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-slate-600"}`}>
+        {label}: {value}
+      </Text>
+      <ChevronDown
+        size={12}
+        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.slate400}
+        strokeWidth={2.5}
+        style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
+      />
+    </TouchableOpacity>
+  );
+}
+
+function DropdownMenu<T extends string>({
+  options, selected, onSelect, getLabel, getDotClass,
+}: {
+  options: T[];
+  selected: T;
+  onSelect: (val: T) => void;
+  getLabel?: (val: T) => string;
+  getDotClass?: (val: T) => string | null;
+}) {
+  return (
+    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-slate-100 shadow-md shadow-black/10 overflow-hidden">
+      {options.map((opt, i) => {
+        const isSelected = opt === selected;
+        const label = getLabel ? getLabel(opt) : opt;
+        const dotClass = getDotClass ? getDotClass(opt) : null;
+        return (
+          <TouchableOpacity
+            key={opt}
+            className={`flex-row items-center justify-between px-4 py-3 ${
+              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+            }`}
+            activeOpacity={0.75}
+            onPress={() => onSelect(opt)}
+          >
+            <View className="flex-row items-center gap-2">
+              {dotClass && <View className={`w-2 h-2 rounded-full ${dotClass}`} />}
+              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-slate-700"}`}>
+                {label}
+              </Text>
+            </View>
+            {isSelected && <Check size={14} color={ICON_COLORS.primary500} strokeWidth={2.5} />}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function OnlineList() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<ActiveDropdown>(null);
   const [subject, setSubject] = useState<string | null>(null);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [page, setPage] = useState(1);
   const { data, isLoading, isFetching, isError, refetch } = useBattleHistoryQuery(subject, page);
 
@@ -124,46 +200,71 @@ export default function OnlineList() {
     router.push({ pathname: "/(main)/battle/queue", params: { subject } } as any);
   };
 
-  const handleSubjectChange = (s: string | null) => {
-    setSubject(s);
+  const handleSubjectChange = (s: string) => {
+    setSubject(s === "All" ? null : s);
     setPage(1);
+    setActiveDropdown(null);
   };
+
+  const handleResultChange = (r: ResultFilter) => {
+    setResultFilter(r);
+    setActiveDropdown(null);
+  };
+
+  const toggleDropdown = (type: "subject" | "result") =>
+    setActiveDropdown((prev) => (prev === type ? null : type));
+
+  const entries = (data?.entries ?? []).filter(
+    (entry) => resultFilter === "All" || entry.me.result === resultFilter
+  );
 
   return (
     <View className="flex-1 w-full relative">
-      <View className="pt-3">
-        <Text className="text-slate-800 font-black text-xs uppercase tracking-wider mx-4 mb-2.5">
-          Battle History
-        </Text>
+      <View className="pt-3 pb-1">
+        <View className="flex-row gap-2 px-4 pb-2 justify-center items-center">
+          <FilterChip
+            label="Subject"
+            value={subject === null ? "All" : subject.split(" ")[0]}
+            isOpen={activeDropdown === "subject"}
+            onPress={() => toggleDropdown("subject")}
+          />
+          <FilterChip
+            label="Result"
+            value={resultFilterLabel(resultFilter)}
+            isOpen={activeDropdown === "result"}
+            onPress={() => toggleDropdown("result")}
+          />
+        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-4 mb-2" contentContainerStyle={{ gap: 8 }}>
+        {activeDropdown === "subject" && (
+          <DropdownMenu
+            options={SUBJECT_FILTERS}
+            selected={subject === null ? "All" : subject}
+            onSelect={handleSubjectChange}
+          />
+        )}
+        {activeDropdown === "result" && (
+          <DropdownMenu
+            options={RESULT_FILTERS}
+            selected={resultFilter}
+            onSelect={handleResultChange}
+            getLabel={resultFilterLabel}
+            getDotClass={(val) => (val === "All" ? null : BATTLE_RESULT_STYLES[val].bg)}
+          />
+        )}
+
+        {(subject !== null || resultFilter !== "All") && (
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleSubjectChange(null)}
-            className={`flex-row items-center px-3.5 py-2 rounded-full border ${
-              subject === null ? "bg-primary border-primary" : "bg-white border-slate-200"
-            }`}
+            className="mx-4 mb-1"
+            onPress={() => {
+              setSubject(null);
+              setResultFilter("All");
+              setPage(1);
+            }}
           >
-            <Text className={`text-xs font-bold ${subject === null ? "text-white" : "text-slate-600"}`}>All</Text>
+            <Text className="text-xs text-slate-400 font-medium">Clear filters</Text>
           </TouchableOpacity>
-          {SUBJECTS.map((s) => {
-            const SubjectIcon = getSubjectIcon(s);
-            const active = s === subject;
-            return (
-              <TouchableOpacity
-                key={s}
-                activeOpacity={0.8}
-                onPress={() => handleSubjectChange(s)}
-                className={`flex-row items-center gap-1.5 px-3.5 py-2 rounded-full border ${
-                  active ? "bg-primary border-primary" : "bg-white border-slate-200"
-                }`}
-              >
-                <SubjectIcon size={13} color={active ? ICON_COLORS.white : ICON_COLORS.slate500} strokeWidth={2} />
-                <Text className={`text-xs font-bold ${active ? "text-white" : "text-slate-600"}`}>{s}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        )}
       </View>
 
       {isLoading ? (
@@ -184,7 +285,7 @@ export default function OnlineList() {
         </View>
       ) : (
         <FlatList
-          data={data?.entries ?? []}
+          data={entries}
           keyExtractor={(item) => `${item.match_id}`}
           renderItem={({ item }) => <HistoryRow entry={item} />}
           showsVerticalScrollIndicator={false}
@@ -195,7 +296,9 @@ export default function OnlineList() {
           ListEmptyComponent={
             <View className="items-center py-16 px-8">
               <Text className="text-slate-400 text-sm text-center">
-                No completed battles yet{subject ? ` for ${subject}` : ""}. Tap the globe button to find your first match.
+                No completed battles yet{subject ? ` for ${subject}` : ""}
+                {resultFilter !== "All" ? ` marked as ${resultFilterLabel(resultFilter)}` : ""}. Tap the globe
+                button to find your first match.
               </Text>
             </View>
           }
