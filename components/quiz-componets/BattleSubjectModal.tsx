@@ -9,8 +9,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { X, Swords } from "lucide-react-native";
 import { getSubjectIcon, ICON_COLORS, SUBJECTS } from "@/constants/quizStyles";
-import { getLeagueStyle } from "@/constants/battleStyles";
 import { useBattleProfileQuery } from "@/hooks/use-battle";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
@@ -54,7 +54,6 @@ export default function BattleSubjectModal({ visible, onClose, onFindMatch }: Ba
   }));
 
   const mySubjectProfile = profile?.subjects.find((s) => s.subject === subject);
-  const myLeagueStyle = getLeagueStyle(mySubjectProfile?.league);
 
   return (
     <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
@@ -101,11 +100,7 @@ export default function BattleSubjectModal({ visible, onClose, onFindMatch }: Ba
           </ScrollView>
 
           <View className="flex-row items-center gap-2 bg-slate-50 px-4 py-3 rounded-2xl mb-7">
-            <View className={`px-2 py-0.5 rounded-full ${myLeagueStyle.bg}`}>
-              <Text className={`text-[10px] font-bold ${myLeagueStyle.text}`}>
-                {mySubjectProfile?.league ?? "Unranked"}
-              </Text>
-            </View>
+            <LeagueBadge league={mySubjectProfile?.league} />
             <Text className="text-slate-600 text-xs font-semibold">
               {mySubjectProfile ? `Rating ${mySubjectProfile.rating}` : "Play your first match to get rated"}
             </Text>

@@ -5,11 +5,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import Toast from "react-native-toast-message";
-import { CheckCircle2, Swords, User, X } from "lucide-react-native";
+import { Swords, X } from "lucide-react-native";
 import { getSubjectIcon, ICON_COLORS } from "@/constants/quizStyles";
-import { getLeagueStyle } from "@/constants/battleStyles";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import {
   battleKeys,
   useBattleProfileQuery,
@@ -19,7 +19,9 @@ import {
   useQueueStatusQuery,
 } from "@/hooks/use-battle";
 import { useBattleMatch } from "@/hooks/use-battle-match";
+import { useUserMeQuery } from "@/hooks/use-quiz";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
+import VersusIntro from "@/components/quiz-componets/VersusIntro";
 
 export default function BattleQueueScreen() {
   const router = useRouter();
@@ -91,7 +93,6 @@ export default function BattleQueueScreen() {
   const { data: status } = useQueueStatusQuery(pollingEnabled);
   const { data: profile } = useBattleProfileQuery();
   const mySubjectProfile = profile?.subjects.find((s) => s.subject === subject);
-  const myLeagueStyle = getLeagueStyle(mySubjectProfile?.league);
 
   // Once matched, the match's own WS connection is opened right here (not
   // only after navigating to match-session) so the "Ready" step can happen
@@ -320,14 +321,100 @@ export default function BattleQueueScreen() {
   }, [matchState?.status, subject, joinQueue, router]);
 
   const opponent = status?.opponent;
-  const league = getLeagueStyle(opponent?.league);
+  const { data: me } = useUserMeQuery();
+  const readiedUp = myReady || readyPending;
+
+  // Two phases once matched: while the auto-ready countdown is still
+  // running, Cancel Match is the only way out, so that's shown plainly
+  // here (matches the original pre-VersusIntro design). Only once readying
+  // up has actually fired -- Cancel Match no longer even makes sense at
+  // that point -- does the full VersusIntro reveal take over, right before
+  // this screen hands off to match-session.tsx.
+  if (isMatched && !readiedUp) {
+    return (
+      <LinearGradient colors={[ICON_COLORS.primary500, "#FF8F30"]} style={{ flex: 1 }}>
+        <SafeAreaView edges={["top", "bottom"]} className="flex-1">
+          <View className="flex-1 items-center justify-center px-8">
+            <View className="w-16 h-16 rounded-full bg-white/15 items-center justify-center mb-4">
+              <Swords size={28} color={ICON_COLORS.white} strokeWidth={2} />
+            </View>
+            <Text className="text-white text-2xl font-black mb-1">Opponent Found!</Text>
+
+            <Text className="text-white/70 text-sm text-center mt-6 mb-1">Readying up automatically…</Text>
+            <View className="w-full flex-row items-center justify-center gap-2 py-4">
+              <Text className="font-black text-3xl text-white">{autoReadyCountdown}</Text>
+            </View>
+
+            <TouchableOpacity
+              className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
+              activeOpacity={0.8}
+              disabled={isLeavingMatch}
+              onPress={() => setShowLeaveConfirm(true)}
+            >
+              <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
+              <Text className="text-white/80 font-bold text-sm">
+                {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ForfeitModal
+            visible={showLeaveConfirm}
+            onCancel={() => {
+              setShowLeaveConfirm(false);
+              pendingLeaveActionRef.current = null;
+            }}
+            onConfirm={handleLeaveMatchConfirm}
+            title="Cancel This Match?"
+            message="Your opponent will be notified and matched with someone else. No rating changes."
+            confirmLabel="Yes, Cancel Match"
+            cancelLabel="Stay In Match"
+          />
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  if (isMatched) {
+    return (
+      <View style={{ flex: 1 }}>
+        <VersusIntro
+          me={{
+            username: me?.username ?? "You",
+            rating: mySubjectProfile?.rating ?? null,
+            league: mySubjectProfile?.league ?? null,
+          }}
+          opponent={{
+            username: opponent?.username ?? (opponent ? `Player #${opponent.user_id}` : "Opponent"),
+            rating: opponent?.rating ?? null,
+            league: opponent?.league ?? null,
+          }}
+        />
+
+        {/* No Cancel Match button once readying-up has fired -- but
+            usePreventRemove above still guards this screen until BOTH
+            sides are ready, so a back gesture landing in this narrow
+            window still needs somewhere to resolve to. */}
+        <ForfeitModal
+          visible={showLeaveConfirm}
+          onCancel={() => {
+            setShowLeaveConfirm(false);
+            pendingLeaveActionRef.current = null;
+          }}
+          onConfirm={handleLeaveMatchConfirm}
+          title="Cancel This Match?"
+          message="Your opponent will be notified and matched with someone else. No rating changes."
+          confirmLabel="Yes, Cancel Match"
+          cancelLabel="Stay In Match"
+        />
+      </View>
+    );
+  }
 
   return (
     <LinearGradient colors={[ICON_COLORS.primary500, "#FF8F30"]} style={{ flex: 1 }}>
       <SafeAreaView edges={["top", "bottom"]} className="flex-1">
         <View className="flex-1 items-center justify-center px-8">
-        {!isMatched ? (
-          <>
             <Animated.View
               style={pulseStyle}
               className="w-28 h-28 rounded-full bg-white/15 items-center justify-center mb-6"
@@ -339,11 +426,7 @@ export default function BattleQueueScreen() {
             <Text className="text-white/70 text-sm text-center mb-3">{subject}</Text>
 
             <View className="flex-row items-center gap-2 bg-white/15 px-4 py-2 rounded-2xl mb-6">
-              <View className={`px-2 py-0.5 rounded-full ${myLeagueStyle.bg}`}>
-                <Text className={`text-[10px] font-bold ${myLeagueStyle.text}`}>
-                  {mySubjectProfile?.league ?? "Unranked"}
-                </Text>
-              </View>
+              <LeagueBadge league={mySubjectProfile?.league} />
               <Text className="text-white text-sm font-black">
                 {mySubjectProfile ? mySubjectProfile.rating : "New Player"}
               </Text>
@@ -377,63 +460,6 @@ export default function BattleQueueScreen() {
                 {isCancelling ? "Cancelling…" : "Cancel"}
               </Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <Animated.View entering={FadeIn.duration(300)} className="items-center w-full">
-            <View className="w-16 h-16 rounded-full bg-emerald-500 items-center justify-center mb-4">
-              <Swords size={28} color={ICON_COLORS.white} strokeWidth={2} />
-            </View>
-            <Text className="text-white text-2xl font-black mb-1">Opponent Found!</Text>
-
-            <View className="bg-white/15 rounded-2xl px-5 py-4 mt-4 w-full flex-row items-center gap-3">
-              <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center">
-                <User size={22} color={ICON_COLORS.white} strokeWidth={1.8} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-bold text-base" numberOfLines={1}>
-                  {opponent?.username ?? `Player #${opponent?.user_id}`}
-                </Text>
-                <View className="flex-row items-center gap-2 mt-1">
-                  <View className={`px-2 py-0.5 rounded-full ${league.bg}`}>
-                    <Text className={`text-[10px] font-bold ${league.text}`}>{opponent?.league}</Text>
-                  </View>
-                  <Text className="text-white/70 text-xs">Rating {opponent?.rating}</Text>
-                </View>
-              </View>
-            </View>
-
-            <Text className="text-white/70 text-sm text-center mt-6 mb-1">
-              {myReady || readyPending
-                ? "Waiting for opponent to ready up…"
-                : "Readying up automatically…"}
-            </Text>
-
-            <View className="w-full flex-row items-center justify-center gap-2 py-4">
-              {myReady || readyPending ? (
-                <>
-                  <CheckCircle2 size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
-                  <Text className="font-black text-base text-white">Ready!</Text>
-                </>
-              ) : (
-                <Text className="font-black text-3xl text-white">{autoReadyCountdown}</Text>
-              )}
-            </View>
-
-            {!myReady && !readyPending && (
-              <TouchableOpacity
-                className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
-                activeOpacity={0.8}
-                disabled={isLeavingMatch}
-                onPress={() => setShowLeaveConfirm(true)}
-              >
-                <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
-                <Text className="text-white/80 font-bold text-sm">
-                  {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </Animated.View>
-        )}
         </View>
 
         <ForfeitModal

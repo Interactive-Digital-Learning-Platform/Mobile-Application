@@ -4,10 +4,11 @@ import { useRouter } from "expo-router";
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Globe } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { SUBJECTS, ICON_COLORS } from "@/constants/quizStyles";
-import { BATTLE_RESULT_STYLES, BattleResultTheme, getLeagueStyle } from "@/constants/battleStyles";
+import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { useBattleAvailabilityQuery, useBattleHistoryQuery } from "@/hooks/use-battle";
 import { BattleHistoryEntry } from "@/types/battleModuleTypes";
 import BattleSubjectModal from "@/components/quiz-componets/BattleSubjectModal";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import Skeleton from "@/components/Skeleton";
 
 type ResultFilter = "All" | BattleResultTheme;
@@ -27,7 +28,6 @@ function formatDate(iso: string | null): string {
 function HistoryRow({ entry }: { entry: BattleHistoryEntry }) {
   const theme: BattleResultTheme = (entry.me.result as BattleResultTheme) ?? "draw";
   const style = BATTLE_RESULT_STYLES[theme];
-  const league = getLeagueStyle(entry.me.league);
   const delta = entry.me.rating_delta ?? 0;
 
   return (
@@ -47,8 +47,8 @@ function HistoryRow({ entry }: { entry: BattleHistoryEntry }) {
           vs {entry.opponent_username ?? `Player #${entry.opponent_user_id ?? "?"}`}
         </Text>
         {entry.me.league && (
-          <View className={`px-2 py-0.5 rounded-full mr-2 ${league.bg}`}>
-            <Text className={`text-[10px] font-bold ${league.text}`}>{entry.me.league}</Text>
+          <View className="mr-2">
+            <LeagueBadge league={entry.me.league} />
           </View>
         )}
       </View>
@@ -194,7 +194,26 @@ export default function OnlineList() {
   const [subject, setSubject] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [page, setPage] = useState(1);
-  const { data, isLoading, isFetching, isError, refetch } = useBattleHistoryQuery(subject, page);
+  const { data, isLoading, isError, refetch } = useBattleHistoryQuery(subject, page);
+
+  // Deliberately NOT wired to the query's own `isFetching` -- that flips
+  // true for ANY fetch against this query (changing the subject/result
+  // filter, paging, or even another screen invalidating this list after a
+  // match finishes), none of which the user triggered by pulling down. Once
+  // gesture-driven, it stuck this RefreshControl visually pulled down since
+  // the native control isn't expecting a "refreshing" state with no
+  // matching pull gesture. Tracking it explicitly, set only by this
+  // handler and always cleared once the refetch settles, ties it to
+  // nothing but an actual pull.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Watched from the moment this screen mounts (not just after a failed
   // join attempt) so the FAB can visibly reflect "you can't search yet"
@@ -312,7 +331,7 @@ export default function OnlineList() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 4, paddingBottom: 100 }}
           refreshControl={
-            <RefreshControl refreshing={isFetching && !isLoading} onRefresh={refetch} tintColor={ICON_COLORS.primary500} />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={ICON_COLORS.primary500} />
           }
           ListEmptyComponent={
             <View className="items-center py-16 px-8">

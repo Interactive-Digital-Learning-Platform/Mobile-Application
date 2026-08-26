@@ -14,9 +14,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, Crown, User } from "lucide-react-native";
 import { SUBJECTS, getSubjectIcon, ICON_COLORS } from "@/constants/quizStyles";
-import { getLeagueStyle } from "@/constants/battleStyles";
 import { useLeaderboardQuery } from "@/hooks/use-battle";
 import { LeaderboardEntry } from "@/types/battleModuleTypes";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import Skeleton from "@/components/Skeleton";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -33,7 +33,6 @@ function PodiumSlot({ rank, entry, isMe }: { rank: 1 | 2 | 3; entry?: Leaderboar
   if (!entry) return <View style={{ width: 104 }} />;
 
   const style = PODIUM_RANK_STYLE[rank];
-  const league = getLeagueStyle(entry.league);
 
   return (
     <View className="items-center" style={{ width: 104 }}>
@@ -52,8 +51,8 @@ function PodiumSlot({ rank, entry, isMe }: { rank: 1 | 2 | 3; entry?: Leaderboar
       <Text className="mt-1.5 font-black text-slate-800 text-xs text-center" numberOfLines={1} style={{ width: 96 }}>
         {entry.username ?? "Player"}
       </Text>
-      <View className={`mt-1 px-2 py-0.5 rounded-full ${league.bg}`}>
-        <Text className={`text-[9px] font-bold ${league.text}`}>{entry.league}</Text>
+      <View className="mt-1">
+        <LeagueBadge league={entry.league} />
       </View>
       <Text className="mt-1 font-black text-primary text-sm">{entry.rating}</Text>
     </View>
@@ -121,7 +120,6 @@ function LeaderboardListSkeleton() {
 }
 
 function LeaderboardRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolean }) {
-  const league = getLeagueStyle(entry.league);
   return (
     <View
       className={`flex-row items-center gap-3 mx-4 mb-2 px-4 py-3 rounded-2xl border ${
@@ -138,9 +136,7 @@ function LeaderboardRow({ entry, isMe }: { entry: LeaderboardEntry; isMe: boolea
           {entry.username ?? "Player"}
         </Text>
         <View className="flex-row items-center gap-1.5 mt-1">
-          <View className={`px-2 py-0.5 rounded-full ${league.bg}`}>
-            <Text className={`text-[10px] font-bold ${league.text}`}>{entry.league}</Text>
-          </View>
+          <LeagueBadge league={entry.league} />
           <Text className="text-[11px] text-slate-400">
             {entry.wins}W-{entry.losses}L
           </Text>

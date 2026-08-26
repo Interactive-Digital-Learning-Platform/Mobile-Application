@@ -2,10 +2,11 @@ import { Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpen, Home, TrendingDown, TrendingUp,ChevronsRight } from "lucide-react-native";
-import { BATTLE_RESULT_STYLES, BattleResultTheme, getLeagueStyle } from "@/constants/battleStyles";
+import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { filterTestSubjectNames } from "@/constants/quizHelpers";
 import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import { BattleParticipantResult } from "@/types/battleModuleTypes";
 
 // Best-effort "weakest subject" pick for the Practice Weak Topic action --
@@ -178,9 +179,7 @@ export default function BattleResultsScreen() {
             {me.league && (
               <View className="items-center">
                 <Text className="text-slate-400 text-xs font-medium mb-1">League</Text>
-                <View className={`px-2.5 py-1 rounded-full ${getLeagueStyle(me.league).bg}`}>
-                  <Text className={`text-xs font-bold ${getLeagueStyle(me.league).text}`}>{me.league}</Text>
-                </View>
+                <LeagueBadge league={me.league} size="md" />
               </View>
             )}
           </View>

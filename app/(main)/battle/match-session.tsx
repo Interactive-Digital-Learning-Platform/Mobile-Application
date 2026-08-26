@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Brain, Clock, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
-import { getLeagueStyle } from "@/constants/battleStyles";
 import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
+import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
 import { useBattleMatch } from "@/hooks/use-battle-match";
-import { useBattleProfileQuery, useForfeitMatchMutation } from "@/hooks/use-battle";
+import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/hooks/use-battle";
 
 const GENERATING_STEPS: QuizStatusStep[] = [
   { icon: Swords, text: "Entering the arena…" },
@@ -23,6 +24,7 @@ const GENERATING_STEPS: QuizStatusStep[] = [
 
 export default function BattleMatchSessionScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { matchId: matchIdStr } = useLocalSearchParams<{ matchId: string }>();
   const matchId = matchIdStr ? parseInt(matchIdStr, 10) : null;
 
@@ -99,6 +101,13 @@ export default function BattleMatchSessionScreen() {
 
   useEffect(() => {
     if (matchState?.status === "completed" && finalResult) {
+      // Covers both a natural finish and a forfeit -- forfeit doesn't
+      // navigate on its own (see handleForfeitConfirm below), it just waits
+      // for this same WS-driven "completed" transition. Invalidating here
+      // means the history list behind this screen is stale until it's next
+      // read, not stale until its 30s staleTime window happens to expire.
+      queryClient.invalidateQueries({ queryKey: [...battleKeys.all, "history"] });
+      queryClient.invalidateQueries({ queryKey: battleKeys.profile });
       router.replace({
         pathname: "/(main)/battle/battle-results",
         params: {
@@ -220,8 +229,6 @@ export default function BattleMatchSessionScreen() {
   // is just narrowing the type for everything below.
   if (!matchState) return null;
 
-  const leagueStyle = getLeagueStyle(myLeague);
-
   // Set once, synchronously during render (not in an effect, which would
   // land a whole tick late and let the "active" branch flash first): the
   // very first render after generatingDone flips true is exactly when this
@@ -256,8 +263,8 @@ export default function BattleMatchSessionScreen() {
         <View className="items-center">
           <Text className="text-md font-black text-slate-800">{matchState.subject}</Text>
           {!!myLeague && (
-            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${leagueStyle.bg}`}>
-              <Text className={`text-[11px] font-bold ${leagueStyle.text}`}>{myLeague}</Text>
+            <View className="self-center mt-0.5">
+              <LeagueBadge league={myLeague} />
             </View>
           )}
         </View>
