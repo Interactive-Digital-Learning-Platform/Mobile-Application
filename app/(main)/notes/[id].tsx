@@ -32,6 +32,7 @@ import {
   Sparkles,
   Clock,
   Minimize2,
+  Info,
 } from "lucide-react-native";
 import Svg, { Circle } from "react-native-svg";
 import { materialsApi, notesApi } from "@/api/notesAPI";
@@ -486,6 +487,7 @@ export default function NoteDetail() {
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [gapsExpanded, setGapsExpanded] = useState(false);
   const [priorityGapExplainerOpen, setPriorityGapExplainerOpen] = useState(false);
+  const [coverageExpanded, setCoverageExpanded] = useState(false);
   const [expandedGapIndices, setExpandedGapIndices] = useState<Record<number, boolean>>({});
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
@@ -986,7 +988,7 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 3. Learning Gaps (progressive disclosure + explainability) ── */}
+            {/* ── 3. Learning Gaps ── */}
             {note.analysis.learningGaps.length > 0 && (
               <View
                 style={styles.section}
@@ -994,22 +996,29 @@ export default function NoteDetail() {
                   gapsSectionY.current = e.nativeEvent.layout.y;
                 }}
               >
-                <View style={[styles.sectionTitleRow, { marginBottom: 4 }]}>
-                  <Target size={17} color="#DC2626" />
-                  <Text style={[styles.sectionTitle, { color: "#DC2626" }]}>Learning Gaps</Text>
+                {/* Section Header */}
+                <View style={styles.gapsSectionHeader}>
+                  <View style={styles.gapsSectionTitleWrap}>
+                    <AlertCircle size={16} color={colors.primary} />
+                    <Text style={styles.gapsSectionTitle}>Learning Gaps</Text>
+                  </View>
+                  <View style={styles.gapCountPill}>
+                    <Text style={styles.gapCountPillText}>{note.analysis.learningGaps.length}</Text>
+                  </View>
                 </View>
+
                 <Text style={styles.sectionSubtitle}>
-                  {note.analysis.learningGaps.length} curriculum concept{note.analysis.learningGaps.length !== 1 ? "s" : ""}{" "}
-                  need{note.analysis.learningGaps.length === 1 ? "s" : ""} your attention
+                  Concepts from the official curriculum not adequately covered in your notes
                 </Text>
+
+                <View style={styles.gapsList}>
                 {(gapsExpanded
                   ? note.analysis.learningGaps
                   : note.analysis.learningGaps.slice(0, 3)
                 ).map((gap, i) => {
                   const isCardExpanded = !!expandedGapIndices[i];
                   const isHigh = gap.severity === "high";
-                  const isMedium = gap.severity === "medium";
-                  const severityAccentColor = isHigh ? "#DC2626" : isMedium ? "#D97706" : "#2563EB";
+                  const borderColor = isHigh ? colors.primary : colors.borderColorLight;
 
                   const matchedExplainable =
                     note?.analysis?.explainableGaps?.find(
@@ -1033,91 +1042,105 @@ export default function NoteDetail() {
                       : "Partially Achieved";
 
                   return (
-                    <View key={i} style={[styles.gapCard, { borderLeftColor: severityAccentColor }]}>
-                      {/* Header Row */}
+                    <View key={i} style={[styles.gapCard, { borderLeftColor: borderColor }]}>
+
+                      {/* Card Header: title + priority badge */}
                       <View style={styles.gapCardHeader}>
-                        <Text style={styles.gapConcept}>
+                        <Text style={styles.gapConcept} numberOfLines={2}>
                           {matchedExplainable?.outcomeDescription || gap.concept}
                         </Text>
                         <SeverityBadge severity={gap.severity} />
                       </View>
 
-                      {/* Collapsed Meta / Sub-row */}
-                      <View style={styles.gapSummaryRow}>
-                        <View style={styles.gapMissingCountBadge}>
-                          <Text style={styles.gapMissingCountText}>
-                            {missingList.length} concept{missingList.length !== 1 ? "s" : ""} missing
+                      {/* Missing concepts — inline text list */}
+                      {missingList.length > 0 && (
+                        <View style={styles.gapMissingRow}>
+                          <Text style={styles.gapMissingLabel}>Not covered: </Text>
+                          <Text style={styles.gapMissingValue} numberOfLines={2}>
+                            {missingList.join(" · ")}
                           </Text>
                         </View>
+                      )}
 
+                      {/* Divider + footer: status + toggle */}
+                      <View style={styles.gapCardDivider} />
+                      <View style={styles.gapCardFooterRow}>
+                        <Text style={styles.gapStatusText}>{statusText}</Text>
                         <TouchableOpacity
-                          style={styles.gapToggleBtn}
                           onPress={() => toggleGapExpand(i)}
+                          style={styles.gapToggleBtn}
                           activeOpacity={0.7}
                         >
+                          {isCardExpanded
+                            ? <ChevronUp size={16} color={colors.primary} />
+                            : <ChevronDown size={16} color={colors.primary} />
+                          }
                           <Text style={styles.gapToggleBtnText}>
-                            {isCardExpanded ? "Hide details ▲" : "Why was this detected? ▼"}
+                            {isCardExpanded ? "Less" : "Details"}
                           </Text>
                         </TouchableOpacity>
                       </View>
 
-                      {/* Expanded Explainability Drawer */}
+                      {/* Expandable details */}
                       {isCardExpanded && (
                         <View style={styles.gapDetailsDrawer}>
-                          {/* Required Concepts Checklist */}
-                          {missingList.length > 0 && (
-                            <View style={styles.gapSectionBlock}>
-                              <Text style={styles.gapSectionSubhead}>Missing concepts:</Text>
-                              <View style={styles.gapConceptsChecklist}>
-                                {missingList.map((cName, cIdx) => (
-                                  <View key={cIdx} style={styles.gapCheckItem}>
-                                    <View style={styles.gapCrossCircle}>
-                                      <Text style={styles.gapCrossCircleText}>✕</Text>
-                                    </View>
-                                    <Text style={styles.gapCheckItemText}>{cName}</Text>
-                                  </View>
-                                ))}
-                              </View>
-                            </View>
-                          )}
 
-                          {/* Evidence Quote if available */}
+                          {/* Evidence from note */}
                           {matchedExplainable?.evidence ? (
-                            <View style={styles.gapSectionBlock}>
-                              <Text style={styles.gapSectionSubhead}>Evidence found in note:</Text>
+                            <View style={styles.gapDetailBlock}>
+                              <View style={styles.gapDetailLabelRow}>
+                                <FileText size={12} color="#64748B" />
+                                <Text style={styles.gapDetailLabel}>Found in your notes</Text>
+                              </View>
                               <View style={styles.gapEvidenceQuote}>
-                                <Text style={styles.gapEvidenceQuoteText}>"{matchedExplainable.evidence}"</Text>
+                                <Text style={styles.gapEvidenceQuoteText}>{matchedExplainable.evidence}</Text>
                               </View>
                             </View>
                           ) : null}
 
-                          {/* Recommendation */}
-                          <View style={styles.gapSectionBlock}>
-                            <Text style={styles.gapSectionSubhead}>Study recommendation:</Text>
+                          {/* Missing concepts — numbered */}
+                          {missingList.length > 0 && (
+                            <View style={styles.gapDetailBlock}>
+                              <View style={styles.gapDetailLabelRow}>
+                                <AlertCircle size={12} color="#64748B" />
+                                <Text style={styles.gapDetailLabel}>Concepts not covered</Text>
+                              </View>
+                              {missingList.map((cName, cIdx) => (
+                                <View key={cIdx} style={styles.gapMissingItem}>
+                                  <Text style={styles.gapMissingItemNum}>{cIdx + 1}.</Text>
+                                  <Text style={styles.gapMissingItemText}>{cName}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Study recommendation */}
+                          <View style={styles.gapDetailBlock}>
+                            <View style={styles.gapDetailLabelRow}>
+                              <BookOpen size={12} color="#64748B" />
+                              <Text style={styles.gapDetailLabel}>What to study</Text>
+                            </View>
                             <Text style={styles.gapRecommendationText}>
                               {matchedExplainable?.recommendation || gap.suggestion}
                             </Text>
                           </View>
 
-                          {/* Outcome Status & Action */}
-                          <View style={styles.gapDrawerFooter}>
-                            <View style={styles.gapStatusBadge}>
-                              <Text style={styles.gapStatusBadgeText}>Status: {statusText}</Text>
-                            </View>
-
-                            <TouchableOpacity
-                              style={styles.gapStudyBtn}
-                              onPress={() => navigateToMaterial("structured_notes")}
-                              activeOpacity={0.85}
-                            >
-                              <Text style={styles.gapStudyBtnText}>Start Reviewing →</Text>
-                            </TouchableOpacity>
-                          </View>
+                          {/* Review CTA */}
+                          <TouchableOpacity
+                            style={styles.gapStudyBtn}
+                            onPress={() => navigateToMaterial("structured_notes")}
+                            activeOpacity={0.85}
+                          >
+                            <Text style={styles.gapStudyBtnText}>Start Reviewing</Text>
+                            <ChevronRight size={15} color="#FFFFFF" />
+                          </TouchableOpacity>
                         </View>
                       )}
                     </View>
                   );
                 })}
+                </View>
+
                 {note.analysis.learningGaps.length > 3 && (
                   <TouchableOpacity
                     style={styles.viewAllGapsBtn}
@@ -1127,58 +1150,213 @@ export default function NoteDetail() {
                     <Text style={styles.viewAllGapsText}>
                       {gapsExpanded
                         ? "Show less"
-                        : `View all ${note.analysis.learningGaps.length} learning gaps →`}
+                        : `View all ${note.analysis.learningGaps.length} gaps`}
                     </Text>
+                    {gapsExpanded
+                      ? <ChevronUp size={14} color={colors.primary} />
+                      : <ChevronDown size={14} color={colors.primary} />
+                    }
                   </TouchableOpacity>
                 )}
+
+                {/* ── Educational Disclaimer / About this analysis (Improvement 13) ── */}
+                <View style={styles.gapDisclaimerBox}>
+                  <View style={styles.gapDisclaimerHeader}>
+                    <Info size={13} color="#64748B" />
+                    <Text style={styles.gapDisclaimerTitle}>About this analysis</Text>
+                  </View>
+                  <Text style={styles.gapDisclaimerText}>
+                    Gaps are estimated by comparing your uploaded notes with curriculum standards. Gaps highlight concepts not sufficiently evidenced in your notes and do not necessarily indicate a lack of understanding.
+                  </Text>
+                </View>
               </View>
             )}
 
-            {/* ── 4. What You Did Well ── */}
-            {note.analysis.strengthAreas.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <TrendingUp size={17} color="#16A34A" />
-                  <Text style={[styles.sectionTitle, { color: "#16A34A" }]}>What You Did Well</Text>
+            {/* ── 4. What You Covered Well (Strengths - Improvement 6) ── */}
+            {((note.analysis.strengthAreas && note.analysis.strengthAreas.length > 0) ||
+              (note.analysis.keyConcepts && note.analysis.keyConcepts.length > 0)) && (() => {
+              const strengths =
+                note.analysis.strengthAreas && note.analysis.strengthAreas.length > 0
+                  ? note.analysis.strengthAreas
+                  : note.analysis.keyConcepts.slice(0, 4);
+
+              return (
+                <View style={styles.section}>
+                  <View style={styles.sectionTitleRow}>
+                    <TrendingUp size={17} color="#16A34A" />
+                    <Text style={[styles.sectionTitle, { color: "#16A34A" }]}>What You Covered Well</Text>
+                  </View>
+                  <Text style={styles.sectionSubtitle}>
+                    {strengths.length} concept{strengths.length !== 1 ? "s" : ""} adequately covered in your handwritten notes
+                  </Text>
+                  <View style={styles.strengthList}>
+                    {strengths.map((area, i) => (
+                      <View key={i} style={styles.strengthCard}>
+                        <View style={styles.strengthHeaderRow}>
+                          <View style={styles.strengthIconWrap}>
+                            <CheckCircle2 size={16} color="#16A34A" />
+                          </View>
+                          <Text style={styles.strengthTitle}>{area}</Text>
+                        </View>
+
+                        {/* Verified Status Badges */}
+                        <View style={styles.strengthBadgesWrap}>
+                          <View style={styles.strengthBadgeItem}>
+                            <Text style={styles.strengthBadgeText}>✓ Concept adequately covered</Text>
+                          </View>
+                          <View style={styles.strengthBadgeItem}>
+                            <Text style={styles.strengthBadgeText}>✓ Learning outcome verified</Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
                 </View>
-                <View style={styles.strengthList}>
-                  {note.analysis.strengthAreas.map((area, i) => (
-                    <View key={i} style={styles.strengthCard}>
-                      <CheckCircle2 size={15} color="#16A34A" style={{ flexShrink: 0, marginTop: 1 }} />
-                      <Text style={styles.strengthText}>{area}</Text>
+              );
+            })()}
+
+            {/* ── 5. Curriculum Coverage & Visual Concept Map (Improvement 7 & 8) ── */}
+            {(note.analysis.keyConcepts.length > 0 || note.analysis.missingConcepts.length > 0) && (() => {
+              const coveredConcepts = note.analysis.keyConcepts || [];
+              const missingConcepts = note.analysis.missingConcepts || [];
+              const totalCount = coveredConcepts.length + missingConcepts.length;
+              const score = note.analysis.overallCompleteness;
+              const scoreColor = getCompletenessColor(score);
+              const coveredPct = totalCount > 0 ? Math.round((coveredConcepts.length / totalCount) * 100) : 0;
+              const missingPct = totalCount > 0 ? 100 - coveredPct : 0;
+
+              return (
+                <View style={styles.section}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionTitleRow}>
+                      <BookOpen size={17} color={colors.primaryBlack} />
+                      <Text style={styles.sectionTitle}>Curriculum Coverage</Text>
                     </View>
-                  ))}
-                </View>
-              </View>
-            )}
+                    <View style={[styles.coverageScoreBadge, { backgroundColor: `${scoreColor}15`, borderColor: `${scoreColor}40` }]}>
+                      <Text style={[styles.coverageScoreText, { color: scoreColor }]}>{score}%</Text>
+                    </View>
+                  </View>
 
-            {/* ── 5. Curriculum Coverage (Covered + Missing) ── */}
-            {(note.analysis.keyConcepts.length > 0 || note.analysis.missingConcepts.length > 0) && (
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <BookOpen size={17} color={colors.primaryBlack} />
-                  <Text style={styles.sectionTitle}>Curriculum Coverage</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    {totalCount} total concepts mapped to official curriculum standards
+                  </Text>
+
+                  {/* ── Multi-Segment Visual Concept Coverage Bar (Improvement 8) ── */}
+                  <View style={styles.coverageBarContainer}>
+                    <View style={styles.coverageBarTrack}>
+                      <View style={[styles.coverageBarCovered, { flex: coveredConcepts.length || 1 }]} />
+                      {missingConcepts.length > 0 && (
+                        <View style={[styles.coverageBarMissing, { flex: missingConcepts.length }]} />
+                      )}
+                    </View>
+                    <View style={styles.coverageBarLegendRow}>
+                      <View style={styles.coverageBarLegendItem}>
+                        <View style={styles.coverageLegendDotCovered} />
+                        <Text style={styles.coverageBarLegendText}>Covered: {coveredConcepts.length} ({coveredPct}%)</Text>
+                      </View>
+                      <View style={styles.coverageBarLegendItem}>
+                        <View style={styles.coverageLegendDotMissing} />
+                        <Text style={styles.coverageBarLegendText}>Missing: {missingConcepts.length} ({missingPct}%)</Text>
+                      </View>
+                    </View>
+                  </View>
+
+
+                  {/* Compact 3-Column Summary Tiles */}
+                  <View style={styles.coverageSummaryRow}>
+                    <View style={[styles.coverageSummaryTile, { borderColor: "#BBF7D0", backgroundColor: "#F0FDF4" }]}>
+                      <CheckCircle2 size={14} color="#16A34A" />
+                      <Text style={[styles.coverageSummaryNum, { color: "#16A34A" }]}>{coveredConcepts.length}</Text>
+                      <Text style={styles.coverageSummaryLabel}>Covered</Text>
+                    </View>
+
+                    <View style={[styles.coverageSummaryTile, { borderColor: "#FECACA", backgroundColor: "#FEF2F2" }]}>
+                      <AlertCircle size={14} color="#DC2626" />
+                      <Text style={[styles.coverageSummaryNum, { color: "#DC2626" }]}>{missingConcepts.length}</Text>
+                      <Text style={styles.coverageSummaryLabel}>Missing</Text>
+                    </View>
+
+                    <View style={[styles.coverageSummaryTile, { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" }]}>
+                      <Layers size={14} color="#64748B" />
+                      <Text style={[styles.coverageSummaryNum, { color: "#334155" }]}>{totalCount}</Text>
+                      <Text style={styles.coverageSummaryLabel}>Total</Text>
+                    </View>
+                  </View>
+
+                  {/* Expand / Collapse Toggle Button */}
+                  <TouchableOpacity
+                    style={styles.coverageToggleBtn}
+                    onPress={() => setCoverageExpanded(!coverageExpanded)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.coverageToggleBtnText}>
+                      {coverageExpanded ? "Hide Concept Breakdown ▲" : `View All ${totalCount} Concepts with Progress ▼`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Expanded Grouped Concept Sections with Progress Bars */}
+                  {coverageExpanded && (
+                    <View style={styles.coverageGroupedContainer}>
+                      {/* Covered Group */}
+                      {coveredConcepts.length > 0 && (
+                        <View style={styles.coverageGroupBlock}>
+                          <View style={styles.coverageGroupHeader}>
+                            <CheckCircle2 size={14} color="#16A34A" />
+                            <Text style={styles.coverageGroupTitle}>
+                              Covered in Notes ({coveredConcepts.length})
+                            </Text>
+                          </View>
+                          <View style={styles.coverageGroupList}>
+                            {coveredConcepts.map((concept, i) => (
+                              <View key={`cov-${i}`} style={styles.coverageItemCovered}>
+                                <View style={styles.coverageCheckCircle}>
+                                  <Text style={styles.coverageCheckCircleText}>✓</Text>
+                                </View>
+                                <Text style={styles.coverageConceptCoveredText}>{concept}</Text>
+                                <View style={styles.miniProgressBarWrap}>
+                                  <View style={[styles.miniProgressBarFill, { width: "100%", backgroundColor: "#16A34A" }]} />
+                                </View>
+                                <Text style={[styles.miniProgressPct, { color: "#16A34A" }]}>100%</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Missing Group */}
+                      {missingConcepts.length > 0 && (
+                        <View style={styles.coverageGroupBlock}>
+                          <View style={styles.coverageGroupHeader}>
+                            <AlertTriangle size={14} color="#DC2626" />
+                            <Text style={[styles.coverageGroupTitle, { color: "#DC2626" }]}>
+                              Missing from Notes ({missingConcepts.length})
+                            </Text>
+                          </View>
+                          <View style={styles.coverageGroupList}>
+                            {missingConcepts.map((concept, i) => (
+                              <View key={`mis-${i}`} style={styles.coverageItemMissing}>
+                                <View style={styles.coverageCrossCircle}>
+                                  <Text style={styles.coverageCrossCircleText}>✕</Text>
+                                </View>
+                                <Text style={styles.coverageConceptMissingText}>{concept}</Text>
+                                <View style={styles.miniProgressBarWrap}>
+                                  <View style={[styles.miniProgressBarFill, { width: "0%", backgroundColor: "#DC2626" }]} />
+                                </View>
+                                <Text style={[styles.miniProgressPct, { color: "#DC2626" }]}>0%</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      <Text style={styles.methodologyFootnote}>
+                        * Concept-level coverage is derived from deterministic keyword and semantic matching against official curriculum standards.
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.sectionSubtitle}>
-                  {note.analysis.keyConcepts.length} concept{note.analysis.keyConcepts.length !== 1 ? "s" : ""} identified in your notes
-                  {note.analysis.missingConcepts.length > 0
-                    ? ` · ${note.analysis.missingConcepts.length} missing`
-                    : ""}
-                </Text>
-                {note.analysis.keyConcepts.map((concept, i) => (
-                  <View key={`c-${i}`} style={styles.curriculumRow}>
-                    <CheckCircle2 size={16} color="#16A34A" style={{ flexShrink: 0 }} />
-                    <Text style={styles.curriculumConceptCovered}>{concept}</Text>
-                  </View>
-                ))}
-                {note.analysis.missingConcepts.map((concept, i) => (
-                  <View key={`m-${i}`} style={styles.curriculumRow}>
-                    <View style={styles.curriculumMissingDot} />
-                    <Text style={styles.curriculumConceptMissing}>{concept}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+              );
+            })()}
 
             {/* ── 6. Your Study Plan (Materials) ── */}
             <View style={styles.section}>
@@ -1990,179 +2168,238 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Strength cards
-  strengthList: { gap: 8, marginTop: 4 },
-  strengthCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+  // ── Strength cards (Improvement 6) ──────────────────────────────────────────
+  strengthList: {
     gap: 10,
-    backgroundColor: "#F0FDF4",
-    borderLeftWidth: 3,
-    borderLeftColor: "#16A34A",
-    borderRadius: 10,
-    padding: 12,
+    marginTop: 6,
   },
-  strengthText: {
-    fontSize: 14,
+  strengthCard: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    gap: 8,
+  },
+  strengthHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  strengthIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  strengthTitle: {
+    fontSize: 14.5,
+    fontWeight: "700",
     color: "#14532D",
-    fontWeight: "500",
     flex: 1,
     lineHeight: 20,
   },
+  strengthBadgesWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 2,
+  },
+  strengthBadgeItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  strengthBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#15803D",
+  },
 
-  // ── Gap cards (Improvement 3 & 4) ──────────────────────────────────────────
+  // ── Gap cards — redesigned from scratch ────────────────────────────────────
+  gapsSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  gapsSectionTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  gapsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.primaryBlack,
+  },
+  gapCountPill: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
+    minWidth: 26,
+    alignItems: "center",
+  },
+  gapCountPillText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  gapsList: {
+    gap: 10,
+    marginTop: 6,
+  },
+  // Each gap card: white, clean, left border indicates priority
   gapCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#EEF2F6",
-    borderLeftWidth: 4,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
+    borderColor: colors.borderColorLight,
+    borderLeftWidth: 3,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 1,
   },
   gapCardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 8,
-    gap: 8,
+    justifyContent: "space-between",
+    gap: 10,
   },
   gapConcept: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     color: colors.primaryBlack,
     flex: 1,
     lineHeight: 20,
   },
-  gapSummaryRow: {
+  // "Not covered: X · Y · Z" — quiet inline summary
+  gapMissingRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  gapMissingLabel: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  gapMissingValue: {
+    fontSize: 12.5,
+    fontWeight: "500",
+    color: "#334155",
+    flex: 1,
+  },
+  gapCardDivider: {
+    height: 1,
+    backgroundColor: colors.borderColorLight,
+  },
+  gapCardFooterRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 4,
   },
-  gapMissingCountBadge: {
-    backgroundColor: "#FEF2F2",
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-  },
-  gapMissingCountText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#DC2626",
+  gapStatusText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#64748B",
   },
   gapToggleBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
   },
   gapToggleBtnText: {
     fontSize: 12,
     fontWeight: "700",
     color: colors.primary,
   },
+  // Expandable drawer
   gapDetailsDrawer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    gap: 10,
+    gap: 14,
+    paddingTop: 4,
   },
-  gapSectionBlock: {
-    gap: 4,
+  gapDetailBlock: {
+    gap: 6,
   },
-  gapSectionSubhead: {
+  gapDetailLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  gapDetailLabel: {
     fontSize: 11,
     fontWeight: "700",
     color: "#64748B",
     textTransform: "uppercase",
-    letterSpacing: 0.3,
-  },
-  gapConceptsChecklist: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 10,
-    padding: 8,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-  },
-  gapCheckItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  gapCrossCircle: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  gapCrossCircleText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#DC2626",
-  },
-  gapCheckItemText: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#334155",
-    flex: 1,
+    letterSpacing: 0.4,
   },
   gapEvidenceQuote: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.backgroundLight,
     borderRadius: 8,
-    padding: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderLeftWidth: 3,
     borderLeftColor: colors.primary,
   },
   gapEvidenceQuoteText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontStyle: "italic",
     color: "#334155",
-    lineHeight: 17,
+    lineHeight: 19,
+  },
+  gapMissingItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColorLight,
+  },
+  gapMissingItemNum: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+    width: 18,
+  },
+  gapMissingItemText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: colors.primaryBlack,
+    flex: 1,
+    lineHeight: 19,
   },
   gapRecommendationText: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: "#475569",
-    lineHeight: 18,
-  },
-  gapDrawerFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 4,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#F1F5F9",
-    gap: 8,
-  },
-  gapStatusBadge: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  gapStatusBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#475569",
+    lineHeight: 20,
   },
   gapStudyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 11,
     borderRadius: 10,
   },
   gapStudyBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
     color: "#FFFFFF",
   },
@@ -2574,49 +2811,301 @@ const styles = StyleSheet.create({
 
   // ── View All Gaps Button ────────────────────────────────────────────────────
   viewAllGapsBtn: {
-    marginTop: 12,
-    paddingVertical: 13,
+    marginTop: 10,
+    paddingVertical: 11,
     paddingHorizontal: 16,
-    backgroundColor: "#FFF5F5",
+    backgroundColor: colors.backgroundLight,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.borderColorLight,
+  },
+  viewAllGapsText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+
+  // ── Educational Disclaimer (Improvement 13) ─────────────────────────────────
+  gapDisclaimerBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 4,
+  },
+  gapDisclaimerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  gapDisclaimerTitle: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#475569",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  gapDisclaimerText: {
+    fontSize: 11.5,
+    color: "#64748B",
+    lineHeight: 16.5,
+    fontWeight: "400",
+  },
+
+  // ── Curriculum Coverage Grouped & Collapsible (Improvement 7) ──────────────
+  coverageScoreBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  coverageScoreText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  coverageSummaryRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  coverageSummaryTile: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    gap: 3,
+  },
+  coverageSummaryNum: {
+    fontSize: 17,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  coverageSummaryLabel: {
+    fontSize: 10.5,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  coverageToggleBtn: {
+    backgroundColor: "#F8FAFC",
+    paddingVertical: 10,
     borderRadius: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#FECACA",
+    borderColor: "#E2E8F0",
   },
-  viewAllGapsText: {
-    fontSize: 13,
+  coverageToggleBtnText: {
+    fontSize: 12.5,
     fontWeight: "700",
-    color: "#DC2626",
+    color: colors.primary,
   },
-
-  // ── Curriculum Coverage Rows ────────────────────────────────────────────────
-  curriculumRow: {
+  coverageGroupedContainer: {
+    marginTop: 14,
+    gap: 14,
+  },
+  coverageGroupBlock: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  coverageGroupHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 2,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
+    gap: 6,
+    marginBottom: 8,
   },
-  curriculumConceptCovered: {
-    fontSize: 14,
-    fontWeight: "500",
+  coverageGroupTitle: {
+    fontSize: 13,
+    fontWeight: "700",
     color: "#166534",
-    flex: 1,
   },
-  curriculumConceptMissing: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#92400E",
-    flex: 1,
+  coverageGroupList: {
+    gap: 6,
   },
-  curriculumMissingDot: {
+  coverageItemCovered: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  coverageCheckCircle: {
     width: 16,
     height: 16,
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#D97706",
-    flexShrink: 0,
+    backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverageCheckCircleText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#16A34A",
+  },
+  coverageConceptCoveredText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+    flex: 1,
+  },
+  coverageItemMissing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  coverageCrossCircle: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverageCrossCircleText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  coverageConceptMissingText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#991B1B",
+    flex: 1,
+  },
+
+  // ── Visual Concept Map (Improvement 8) ────────────────────────────────────
+  coverageBarContainer: {
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  coverageBarTrack: {
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#F1F5F9",
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  coverageBarCovered: {
+    backgroundColor: "#16A34A",
+  },
+  coverageBarMissing: {
+    backgroundColor: "#EF4444",
+  },
+  coverageBarLegendRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  coverageBarLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  coverageLegendDotCovered: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#16A34A",
+  },
+  coverageLegendDotMissing: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#EF4444",
+  },
+  coverageBarLegendText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  conceptMapPillGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 10,
+  },
+  conceptMapPillCovered: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  conceptMapPillCoveredText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#15803D",
+  },
+  conceptMapPillMissing: {
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  conceptMapPillMissingText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  conceptMapPillMore: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+  },
+  conceptMapPillMoreText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  miniProgressBarWrap: {
+    width: 44,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#E2E8F0",
+    overflow: "hidden",
+    marginHorizontal: 6,
+  },
+  miniProgressBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  miniProgressPct: {
+    fontSize: 11,
+    fontWeight: "700",
+    width: 32,
+    textAlign: "right",
+  },
+  methodologyFootnote: {
+    fontSize: 10.5,
+    color: "#94A3B8",
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 8,
+    lineHeight: 15,
   },
 });
