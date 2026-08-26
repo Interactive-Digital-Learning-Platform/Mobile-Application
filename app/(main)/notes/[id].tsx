@@ -486,6 +486,7 @@ export default function NoteDetail() {
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [gapsExpanded, setGapsExpanded] = useState(false);
   const [priorityGapExplainerOpen, setPriorityGapExplainerOpen] = useState(false);
+  const [expandedGapIndices, setExpandedGapIndices] = useState<Record<number, boolean>>({});
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
 
@@ -493,6 +494,13 @@ export default function NoteDetail() {
   const isProcessing = status === "uploaded" || status === "processing";
   const isFailed = status === "failed";
   const isAnalyzed = status === "analyzed";
+
+  const toggleGapExpand = useCallback((index: number) => {
+    setExpandedGapIndices((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }));
+  }, []);
 
   const scrollToGaps = useCallback(() => {
     scrollViewRef.current?.scrollTo({
@@ -978,7 +986,7 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 3. Learning Gaps (progressive disclosure) ── */}
+            {/* ── 3. Learning Gaps (progressive disclosure + explainability) ── */}
             {note.analysis.learningGaps.length > 0 && (
               <View
                 style={styles.section}
@@ -998,17 +1006,115 @@ export default function NoteDetail() {
                   ? note.analysis.learningGaps
                   : note.analysis.learningGaps.slice(0, 3)
                 ).map((gap, i) => {
-                  const severityAccentColor = gap.severity === "high" ? "#DC2626" : gap.severity === "medium" ? "#B45309" : "#2563EB";
+                  const isCardExpanded = !!expandedGapIndices[i];
+                  const isHigh = gap.severity === "high";
+                  const isMedium = gap.severity === "medium";
+                  const severityAccentColor = isHigh ? "#DC2626" : isMedium ? "#D97706" : "#2563EB";
+
+                  const matchedExplainable =
+                    note?.analysis?.explainableGaps?.find(
+                      (eg) =>
+                        eg.outcomeDescription.toLowerCase() === gap.concept.toLowerCase() ||
+                        eg.missingConcepts.some((mc) => gap.concept.toLowerCase().includes(mc.name.toLowerCase()))
+                    ) || note?.analysis?.explainableGaps?.[i];
+
+                  const missingList =
+                    matchedExplainable && matchedExplainable.missingConcepts.length > 0
+                      ? matchedExplainable.missingConcepts.map((c) => c.name)
+                      : gap.concept.split(/[,/]/).map((s) => s.trim()).filter(Boolean);
+
+                  const statusText =
+                    matchedExplainable?.status === "not_achieved"
+                      ? "Not Achieved"
+                      : matchedExplainable?.status === "partially_achieved"
+                      ? "Partially Achieved"
+                      : isHigh
+                      ? "Not Achieved"
+                      : "Partially Achieved";
+
                   return (
                     <View key={i} style={[styles.gapCard, { borderLeftColor: severityAccentColor }]}>
+                      {/* Header Row */}
                       <View style={styles.gapCardHeader}>
-                        <Text style={styles.gapConcept}>{gap.concept}</Text>
+                        <Text style={styles.gapConcept}>
+                          {matchedExplainable?.outcomeDescription || gap.concept}
+                        </Text>
                         <SeverityBadge severity={gap.severity} />
                       </View>
-                      <View style={styles.gapSuggestionWrap}>
-                        <View style={[styles.gapSuggestionAccent, { backgroundColor: severityAccentColor }]} />
-                        <Text style={styles.gapSuggestion}>{gap.suggestion}</Text>
+
+                      {/* Collapsed Meta / Sub-row */}
+                      <View style={styles.gapSummaryRow}>
+                        <View style={styles.gapMissingCountBadge}>
+                          <Text style={styles.gapMissingCountText}>
+                            {missingList.length} concept{missingList.length !== 1 ? "s" : ""} missing
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.gapToggleBtn}
+                          onPress={() => toggleGapExpand(i)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.gapToggleBtnText}>
+                            {isCardExpanded ? "Hide details ▲" : "Why was this detected? ▼"}
+                          </Text>
+                        </TouchableOpacity>
                       </View>
+
+                      {/* Expanded Explainability Drawer */}
+                      {isCardExpanded && (
+                        <View style={styles.gapDetailsDrawer}>
+                          {/* Required Concepts Checklist */}
+                          {missingList.length > 0 && (
+                            <View style={styles.gapSectionBlock}>
+                              <Text style={styles.gapSectionSubhead}>Missing concepts:</Text>
+                              <View style={styles.gapConceptsChecklist}>
+                                {missingList.map((cName, cIdx) => (
+                                  <View key={cIdx} style={styles.gapCheckItem}>
+                                    <View style={styles.gapCrossCircle}>
+                                      <Text style={styles.gapCrossCircleText}>✕</Text>
+                                    </View>
+                                    <Text style={styles.gapCheckItemText}>{cName}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+
+                          {/* Evidence Quote if available */}
+                          {matchedExplainable?.evidence ? (
+                            <View style={styles.gapSectionBlock}>
+                              <Text style={styles.gapSectionSubhead}>Evidence found in note:</Text>
+                              <View style={styles.gapEvidenceQuote}>
+                                <Text style={styles.gapEvidenceQuoteText}>"{matchedExplainable.evidence}"</Text>
+                              </View>
+                            </View>
+                          ) : null}
+
+                          {/* Recommendation */}
+                          <View style={styles.gapSectionBlock}>
+                            <Text style={styles.gapSectionSubhead}>Study recommendation:</Text>
+                            <Text style={styles.gapRecommendationText}>
+                              {matchedExplainable?.recommendation || gap.suggestion}
+                            </Text>
+                          </View>
+
+                          {/* Outcome Status & Action */}
+                          <View style={styles.gapDrawerFooter}>
+                            <View style={styles.gapStatusBadge}>
+                              <Text style={styles.gapStatusBadgeText}>Status: {statusText}</Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={styles.gapStudyBtn}
+                              onPress={() => navigateToMaterial("structured_notes")}
+                              activeOpacity={0.85}
+                            >
+                              <Text style={styles.gapStudyBtnText}>Start Reviewing →</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -1904,22 +2010,26 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  // Gap cards
+  // ── Gap cards (Improvement 3 & 4) ──────────────────────────────────────────
   gapCard: {
-    backgroundColor: "#FFFBF7",
-    borderRadius: 14,
-    padding: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: "#FEE2C0",
+    borderColor: "#EEF2F6",
     borderLeftWidth: 4,
-    borderLeftColor: "#DC2626",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   gapCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 10,
+    marginBottom: 8,
     gap: 8,
   },
   gapConcept: {
@@ -1927,26 +2037,134 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.primaryBlack,
     flex: 1,
-  },
-  gapSuggestionWrap: {
-    flexDirection: "row",
-    gap: 0,
-    backgroundColor: "#F8F9FB",
-    borderRadius: 10,
-    overflow: "hidden",
-  },
-  gapSuggestionAccent: {
-    width: 4,
-    borderRadius: 0,
-    flexShrink: 0,
-  },
-  gapSuggestion: {
-    fontSize: 13,
-    color: "#475569",
-    fontWeight: "400",
     lineHeight: 20,
+  },
+  gapSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  gapMissingCountBadge: {
+    backgroundColor: "#FEF2F2",
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+  },
+  gapMissingCountText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  gapToggleBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  gapToggleBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  gapDetailsDrawer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    gap: 10,
+  },
+  gapSectionBlock: {
+    gap: 4,
+  },
+  gapSectionSubhead: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  gapConceptsChecklist: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  gapCheckItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  gapCrossCircle: {
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  gapCrossCircleText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#DC2626",
+  },
+  gapCheckItemText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#334155",
     flex: 1,
-    padding: 10,
+  },
+  gapEvidenceQuote: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 8,
+    padding: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  gapEvidenceQuoteText: {
+    fontSize: 12,
+    fontStyle: "italic",
+    color: "#334155",
+    lineHeight: 17,
+  },
+  gapRecommendationText: {
+    fontSize: 12.5,
+    color: "#475569",
+    lineHeight: 18,
+  },
+  gapDrawerFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    gap: 8,
+  },
+  gapStatusBadge: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  gapStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  gapStudyBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  gapStudyBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
   },
 
   // Missing concepts chips
