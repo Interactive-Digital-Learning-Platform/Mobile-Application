@@ -10,8 +10,8 @@ export const SERVICE_URLS = {
   notes: `${API_GATEWAY_URL}/api/notes`,
   quiz: `${API_GATEWAY_URL}/api/quiz`,
   pdf: `${API_GATEWAY_URL}/api/pdf`,
-  // Online 1v1 battle mode -- its own microservice (Quiz-online), reached
-  // through the gateway the same way as every other service.
+  // Online 1v1 battle mode -- its own microservice (Quiz-Battle-Service),
+  // reached through the gateway the same way as every other service.
   battle: `${API_GATEWAY_URL}/api/battle`,
 } as const;
 
@@ -131,9 +131,9 @@ function attachAuthInterceptors(client: ReturnType<typeof create>) {
 
 attachAuthInterceptors(quizClient);
 
-// Online 1v1 battle mode's own microservice (Quiz-online) -- shares the same
-// Clerk auth as quizClient (same users), reached through the gateway at
-// /api/battle instead of /api/quiz.
+// Online 1v1 battle mode's own microservice (Quiz-Battle-Service) -- shares
+// the same Clerk auth as quizClient (same users), reached through the
+// gateway at /api/battle instead of /api/quiz.
 export const battleClient = create({
   baseURL: `${SERVICE_URLS.battle}/api/v1`,
   headers: {

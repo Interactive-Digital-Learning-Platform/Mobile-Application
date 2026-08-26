@@ -64,8 +64,8 @@ export default function BattleQueueScreen() {
         // got a chance to finish server-side (app closed/crashed mid-match,
         // connection dropped) rather than something wrong with THIS join --
         // the backend self-heals it automatically within a few minutes (see
-        // Quiz-online's stale-match reaper), so say that instead of leaving
-        // the player thinking they're permanently stuck.
+        // Quiz-Battle-Service's stale-match reaper), so say that instead of
+        // leaving the player thinking they're permanently stuck.
         const isStaleActiveBattle = detail === "You're already in an active battle.";
         Toast.show({
           type: "error",
