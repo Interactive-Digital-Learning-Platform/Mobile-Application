@@ -62,14 +62,56 @@ interface LearningGap {
   suggestion: string;
 }
 
+interface CoverageScores {
+  simpleCoverage: number;
+  weightedCoverage: number;
+  totalConcepts: number;
+  foundConcepts: number;
+  missedConcepts: number;
+  maxWeightedScore: number;
+  achievedWeightedScore: number;
+}
+
+interface ExplainableGap {
+  outcomeId: string;
+  outcomeDescription: string;
+  status: "achieved" | "partially_achieved" | "not_achieved";
+  evidence: string;
+  missingConcepts: Array<{
+    id: string;
+    name: string;
+    weight: number;
+    severity: "high" | "medium" | "low";
+    category: string;
+  }>;
+  recommendation: string;
+}
+
+interface ExamReadiness {
+  rating: "Excellent" | "Good" | "Needs Work" | "At Risk";
+  highPriorityConceptsCoverage: number;
+  frequentlyExaminedMissing: string[];
+  revisionPriority: "Low" | "Medium" | "High" | "Critical";
+  estimatedScoreRange: string;
+}
+
 interface Analysis {
   subject: string;
   topic: string;
   gradeLevel: string;
+  unitNumber?: number;
+  lessonNumber?: number;
+  lessonId?: string;
   keyConcepts: string[];
   strengthAreas: string[];
   missingConcepts: string[];
   learningGaps: LearningGap[];
+  explainableGaps?: ExplainableGap[];
+  coverageScores?: CoverageScores;
+  examReadiness?: ExamReadiness;
+  ocrConfidence?: number;
+  ocrLowQualityWarning?: boolean;
+  textbookReference?: string;
   overallCompleteness: number;
   analyzedAt: string;
 }
@@ -432,6 +474,9 @@ export default function NoteDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
 
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const gapsSectionY = React.useRef<number>(0);
+
   const [note, setNote] = useState<Note | null>(null);
   const [materialsOverview, setMaterialsOverview] = useState<MaterialsOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -447,6 +492,13 @@ export default function NoteDetail() {
   const isProcessing = status === "uploaded" || status === "processing";
   const isFailed = status === "failed";
   const isAnalyzed = status === "analyzed";
+
+  const scrollToGaps = useCallback(() => {
+    scrollViewRef.current?.scrollTo({
+      y: Math.max(0, gapsSectionY.current - 16),
+      animated: true,
+    });
+  }, []);
 
   // ── Fetch note ──────────────────────────────────────────────────────────────
   const fetchNote = useCallback(async () => {
@@ -591,6 +643,7 @@ export default function NoteDetail() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -614,73 +667,155 @@ export default function NoteDetail() {
         {/* ── Analyzed State ── */}
         {isAnalyzed && note.analysis && (
           <>
-            {/* ── 1. Identity Card ── */}
-            <View style={styles.identityCard}>
-              <View style={styles.identityTopRow}>
-                <View style={styles.identityIconWrap}>
-                  <Brain size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.identitySubject}>{note.analysis.subject}</Text>
-                  <Text style={styles.identityTopic} numberOfLines={2}>{note.analysis.topic}</Text>
-                </View>
-                <View style={styles.identityGradeChip}>
-                  <Text style={styles.identityGradeText}>{note.analysis.gradeLevel}</Text>
-                </View>
-              </View>
+            {/* ── 1. Top Summary Card (Improvement 1) ── */}
+            {(() => {
+              const score = note.analysis.overallCompleteness;
+              const scoreColor = getCompletenessColor(score);
+              const totalConcepts =
+                note.analysis.coverageScores?.totalConcepts ||
+                (note.analysis.keyConcepts.length + note.analysis.missingConcepts.length);
+              const coveredCount =
+                note.analysis.coverageScores?.foundConcepts ?? note.analysis.keyConcepts.length;
+              const highPriorityGapsCount = note.analysis.learningGaps.filter(
+                (g) => g.severity === "high"
+              ).length;
+              const attentionCount =
+                note.analysis.missingConcepts.length || note.analysis.learningGaps.length;
 
-              {/* Score Ring + Metric Tiles */}
-              <View style={styles.scoreRow}>
-                <View style={styles.scoreRingWrap}>
-                  {(() => {
-                    const score = note.analysis.overallCompleteness;
-                    const scoreColor = getCompletenessColor(score);
-                    const ringR = 36;
-                    const ringC = 2 * Math.PI * ringR;
-                    const offset = ringC * (1 - score / 100);
-                    return (
-                      <>
-                        <Svg width={90} height={90}>
-                          <Circle cx={45} cy={45} r={ringR} stroke="#E2E8F0" strokeWidth={8} fill="transparent" />
-                          <Circle
-                            cx={45} cy={45} r={ringR}
-                            stroke={scoreColor}
-                            strokeWidth={8}
-                            fill="transparent"
-                            strokeDasharray={`${ringC} ${ringC}`}
-                            strokeDashoffset={offset}
-                            strokeLinecap="round"
-                            transform="rotate(-90, 45, 45)"
-                          />
-                        </Svg>
-                        <View style={styles.scoreRingInner}>
-                          <Text style={[styles.scoreRingPct, { color: scoreColor }]}>{score}%</Text>
-                          <Text style={styles.scoreRingLabel}>Coverage</Text>
+              const ringR = 40;
+              const ringC = 2 * Math.PI * ringR;
+              const offset = ringC * (1 - score / 100);
+
+              const lessonNum =
+                note.analysis.unitNumber ||
+                note.analysis.lessonNumber ||
+                (() => {
+                  const ref = note.analysis.textbookReference || "";
+                  const refMatch = ref.match(/(?:Unit|Lesson)\s*(\d+)/i);
+                  if (refMatch) return parseInt(refMatch[1], 10);
+
+                  const topic = note.analysis.topic || "";
+                  const topicMatch = topic.match(/^(?:Unit|Lesson)?\s*(\d+)[\.\:\-]/i);
+                  if (topicMatch) return parseInt(topicMatch[1], 10);
+
+                  const lessonId = note.analysis.lessonId || "";
+                  const idMatch = lessonId.match(/(?:u|unit|lesson)[-_]?0*(\d+)/i);
+                  if (idMatch) return parseInt(idMatch[1], 10);
+
+                  return null;
+                })();
+
+              const lessonBadgeText = lessonNum ? `Lesson ${lessonNum}` : null;
+
+              return (
+                <View style={styles.topSummaryCard}>
+                  {/* Subject, Grade & Lesson Header */}
+                  <View style={styles.summaryHeader}>
+                    <View style={styles.summaryHeaderTopRow}>
+                      <View style={styles.subjectPill}>
+                        <BookOpen size={12} color={colors.primary} />
+                        <Text style={styles.subjectPillText}>
+                          {note.analysis.subject} · {note.analysis.gradeLevel}
+                          {lessonNum ? ` · Lesson ${String(lessonNum).padStart(2, "0")}` : ""}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.summaryTopicTitle} numberOfLines={2}>
+                      {note.analysis.topic}
+                    </Text>
+                  </View>
+
+                  {/* Main Stats: Circle Ring on Left, Explicit Breakdown on Right */}
+                  <View style={styles.summaryBodyRow}>
+                    <View style={styles.heroScoreRingWrap}>
+                      <Svg width={100} height={100}>
+                        <Circle cx={50} cy={50} r={ringR} stroke="#F1F5F9" strokeWidth={9} fill="transparent" />
+                        <Circle
+                          cx={50}
+                          cy={50}
+                          r={ringR}
+                          stroke={scoreColor}
+                          strokeWidth={9}
+                          fill="transparent"
+                          strokeDasharray={`${ringC} ${ringC}`}
+                          strokeDashoffset={offset}
+                          strokeLinecap="round"
+                          transform="rotate(-90, 50, 50)"
+                        />
+                      </Svg>
+                      <View style={styles.heroScoreRingInner}>
+                        <Text style={[styles.heroScorePct, { color: scoreColor }]}>{score}%</Text>
+                        <Text style={styles.heroScoreLabel}>Curriculum</Text>
+                        <Text style={styles.heroScoreLabel}>Coverage</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.summaryStatsCol}>
+                      <View style={styles.statLineItem}>
+                        <View style={[styles.statDot, { backgroundColor: "#DCFCE7" }]}>
+                          <CheckCircle2 size={13} color="#16A34A" />
                         </View>
-                      </>
-                    );
-                  })()}
-                </View>
+                        <Text style={styles.statLineText}>
+                          <Text style={styles.statLineBold}>{coveredCount}/{totalConcepts}</Text> concepts covered
+                        </Text>
+                      </View>
 
-                <View style={styles.metricTilesCol}>
-                  <View style={[styles.metricTile, { borderColor: "#FECACA" }]}>
-                    <AlertTriangle size={14} color="#DC2626" />
-                    <Text style={[styles.metricTileNum, { color: "#DC2626" }]}>{note.analysis.learningGaps.length}</Text>
-                    <Text style={styles.metricTileLabel}>Gaps Found</Text>
+                      {attentionCount > 0 && (
+                        <View style={styles.statLineItem}>
+                          <View style={[styles.statDot, { backgroundColor: "#FEF3C7" }]}>
+                            <AlertTriangle size={13} color="#D97706" />
+                          </View>
+                          <Text style={styles.statLineText}>
+                            <Text style={styles.statLineBold}>{attentionCount}</Text> need{attentionCount === 1 ? "s" : ""} attention
+                          </Text>
+                        </View>
+                      )}
+
+                      {highPriorityGapsCount > 0 ? (
+                        <View style={styles.statLineItem}>
+                          <View style={[styles.statDot, { backgroundColor: "#FEE2E2" }]}>
+                            <Target size={13} color="#DC2626" />
+                          </View>
+                          <Text style={styles.statLineText}>
+                            <Text style={[styles.statLineBold, { color: "#DC2626" }]}>{highPriorityGapsCount}</Text> high-priority gap{highPriorityGapsCount > 1 ? "s" : ""}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.statLineItem}>
+                          <View style={[styles.statDot, { backgroundColor: "#DCFCE7" }]}>
+                            <Sparkles size={13} color="#16A34A" />
+                          </View>
+                          <Text style={styles.statLineText}>
+                            <Text style={styles.statLineBold}>0</Text> critical gaps
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <View style={[styles.metricTile, { borderColor: "#BBF7D0" }]}>
-                    <Sparkles size={14} color="#16A34A" />
-                    <Text style={[styles.metricTileNum, { color: "#16A34A" }]}>{note.analysis.keyConcepts.length}</Text>
-                    <Text style={styles.metricTileLabel}>Covered</Text>
-                  </View>
-                  <View style={[styles.metricTile, { borderColor: "#FDE68A" }]}>
-                    <Star size={14} color="#B45309" />
-                    <Text style={[styles.metricTileNum, { color: "#B45309" }]}>{note.analysis.strengthAreas.length}</Text>
-                    <Text style={styles.metricTileLabel}>Strengths</Text>
+
+                  {/* Quick Action CTAs */}
+                  <View style={styles.summaryActionsRow}>
+                    <TouchableOpacity
+                      style={styles.summarySecondaryBtn}
+                      onPress={scrollToGaps}
+                      activeOpacity={0.8}
+                    >
+                      <Target size={14} color="#475569" />
+                      <Text style={styles.summarySecondaryBtnText}>View Learning Gaps</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.summaryPrimaryBtn}
+                      onPress={() => navigateToMaterial("structured_notes")}
+                      activeOpacity={0.85}
+                    >
+                      <Zap size={14} color="#FFFFFF" />
+                      <Text style={styles.summaryPrimaryBtnText}>Start Revision</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-              </View>
-            </View>
+              );
+            })()}
 
             {/* ── 2. Biggest Learning Gap Spotlight ── */}
             {note.analysis.learningGaps.length > 0 && (() => {
@@ -717,7 +852,12 @@ export default function NoteDetail() {
 
             {/* ── 3. Learning Gaps (progressive disclosure) ── */}
             {note.analysis.learningGaps.length > 0 && (
-              <View style={styles.section}>
+              <View
+                style={styles.section}
+                onLayout={(e) => {
+                  gapsSectionY.current = e.nativeEvent.layout.y;
+                }}
+              >
                 <View style={[styles.sectionTitleRow, { marginBottom: 4 }]}>
                   <Target size={17} color="#DC2626" />
                   <Text style={[styles.sectionTitle, { color: "#DC2626" }]}>Learning Gaps</Text>
@@ -1320,111 +1460,175 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
-  // ── Identity Card (Subject / Topic / Score) ──────────────────────────────
-  identityCard: {
+  // ── Top Summary Card (Redesigned for Improvement 1) ──────────────────────
+  topSummaryCard: {
     marginHorizontal: 20,
     marginTop: 14,
-    backgroundColor: "#fff",
-    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
     padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: "#EEF2F6",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
     elevation: 3,
   },
-  identityTopRow: {
+  summaryHeader: {
+    marginBottom: 16,
+  },
+  summaryHeaderTopRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 20,
-  },
-  identityIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: `${colors.primary}12`,
-    justifyContent: "center",
     alignItems: "center",
-    flexShrink: 0,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
-  identitySubject: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.primaryBlack,
-    marginBottom: 3,
-  },
-  identityTopic: {
-    fontSize: 13,
-    color: "#64748B",
-    fontWeight: "500",
-    lineHeight: 18,
-  },
-  identityGradeChip: {
+  subjectPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: `${colors.primary}12`,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: "flex-start",
-    flexShrink: 0,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
-  identityGradeText: {
-    fontSize: 11,
+  subjectPillText: {
+    fontSize: 12,
     fontWeight: "700",
     color: colors.primary,
   },
-
-  // Score ring section
-  scoreRow: {
+  lessonPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
+    gap: 5,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  scoreRingWrap: {
-    width: 90,
-    height: 90,
+  lessonPillText: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#0369A1",
+  },
+  summaryTopicTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.primaryBlack,
+    lineHeight: 24,
+    letterSpacing: -0.3,
+  },
+  summaryBodyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 18,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  heroScoreRingWrap: {
+    width: 100,
+    height: 100,
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  scoreRingInner: {
+  heroScoreRingInner: {
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
   },
-  scoreRingPct: {
-    fontSize: 16,
-    fontWeight: "800",
+  heroScorePct: {
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 24,
   },
-  scoreRingLabel: {
+  heroScoreLabel: {
     fontSize: 9,
-    fontWeight: "500",
-    color: "#94A3B8",
-    marginTop: 1,
+    fontWeight: "600",
+    color: "#64748B",
+    lineHeight: 11,
   },
-  metricTilesCol: {
+  summaryStatsCol: {
     flex: 1,
+    gap: 8,
+    justifyContent: "center",
+  },
+  statLineItem: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  metricTile: {
-    flex: 1,
-    backgroundColor: "#F8F9FB",
-    borderRadius: 14,
-    paddingVertical: 10,
+  statDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: "center",
-    gap: 3,
-    borderWidth: 1.5,
+    justifyContent: "center",
+    flexShrink: 0,
   },
-  metricTileNum: {
-    fontSize: 18,
+  statLineText: {
+    fontSize: 12.5,
+    color: "#334155",
+    fontWeight: "500",
+    flexShrink: 1,
+  },
+  statLineBold: {
     fontWeight: "800",
-    lineHeight: 22,
+    color: "#0F172A",
   },
-  metricTileLabel: {
-    fontSize: 10,
-    color: "#94A3B8",
-    fontWeight: "600",
+  summaryActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 2,
+  },
+  summarySecondaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    borderRadius: 14,
+  },
+  summarySecondaryBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#334155",
+    letterSpacing: -0.2,
+  },
+  summaryPrimaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 13,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    borderRadius: 14,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  summaryPrimaryBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: -0.2,
   },
 
   // Failed state
