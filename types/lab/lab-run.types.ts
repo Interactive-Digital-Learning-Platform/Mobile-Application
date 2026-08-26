@@ -25,6 +25,32 @@ export type EquipmentInstanceType = {
   lastMeasurement?: LastMeasurementType;
 };
 
+// Mechanics-only bench instance (pendulum, spring, stopwatch, balance/measuring_cylinder reused
+// with category "physics") — parallel to EquipmentInstanceType, not an extension of it, since a
+// container-shaped instance (contents/temperature/isHeated) has no equivalent here. See
+// physicsInstanceSchema in LabRun.js for why these live in their own bench-state array.
+export type PhysicsInstanceType = {
+  instanceId: string;
+  equipmentType: string;
+  position: { x: number; y: number };
+  attachedMass: { value: number | null; unit: string };
+  length: { value: number | null; unit: string };
+  angle: { value: number | null; unit: string };
+  extension: { value: number | null; unit: string };
+  timerState: { running: boolean; startedAt: string | null; elapsedSeconds: number; oscillationCount: number };
+  measuredVolumeDisplacement: { initial: number | null; final: number | null };
+  // Electricity (Phase B) — unused by mechanics instances.
+  slotId?: string | null;
+  resistanceValue?: number | null;
+  role?: "resistor" | "ammeter" | "voltmeter" | "battery" | "wire_link" | null;
+  lastMeasurement: {
+    measurementType: "g" | "spring_constant" | "density" | "resistance" | "current" | "voltage" | null;
+    value: number | null;
+    targetId: string | null;
+    measuredAt: string | null;
+  } | null;
+};
+
 export type LabActionType = {
   actionType:
     | "create_equipment"
@@ -40,7 +66,19 @@ export type LabActionType = {
     | "pour"
     | "reset"
     | "probe_measure"
-    | "probe_detach";
+    | "probe_detach"
+    | "attach_mass"
+    | "set_pendulum_length"
+    | "set_length"
+    | "set_release_angle"
+    | "start_timer"
+    | "stop_timer"
+    | "record_oscillation"
+    | "read_measurement"
+    | "place_component"
+    | "remove_component"
+    | "set_component_value"
+    | "read_meter";
   equipment?: string | null;
   chemicalIds?: string[];
   quantity?: number | null;
@@ -54,14 +92,32 @@ export type LabActionType = {
 // Request payloads for POST /api/lab/runs/:id/action — discriminated by actionType so each
 // variant only allows the fields that endpoint actually reads (see labRun.controller.js).
 export type LogLabActionRequestType =
-  | { actionType: "create_equipment"; instanceId: string; equipmentType: string; position?: { x: number; y: number } }
+  | {
+      actionType: "create_equipment";
+      instanceId: string;
+      equipmentType: string;
+      position?: { x: number; y: number };
+      category?: "physics"; // omit for chemistry — see logLabAction's create_equipment case
+    }
   | { actionType: "move_equipment"; instanceId: string; position: { x: number; y: number } }
   | { actionType: "remove_equipment"; instanceId: string }
   | { actionType: "add_chemical"; instanceId: string; chemicalId: string; quantity?: number; unit?: string }
+  | { actionType: "pour"; instanceId: string; targetInstanceId: string }
   | { actionType: "reset"; instanceId: string }
   | { actionType: "heat"; instanceId: string; heated?: boolean; temperature?: number }
   | { actionType: "probe_measure"; instanceId: string; targetInstanceId: string }
-  | { actionType: "probe_detach"; instanceId: string };
+  | { actionType: "probe_detach"; instanceId: string }
+  | { actionType: "attach_mass"; instanceId: string; quantity: number }
+  | { actionType: "set_pendulum_length" | "set_length"; instanceId: string; quantity: number }
+  | { actionType: "set_release_angle"; instanceId: string; quantity: number }
+  | { actionType: "start_timer"; instanceId: string }
+  | { actionType: "record_oscillation"; instanceId: string }
+  | { actionType: "stop_timer"; instanceId: string }
+  | { actionType: "read_measurement"; instanceId: string; quantity: number; unit?: string; phase?: "initial" | "final" }
+  | { actionType: "place_component"; instanceId: string; slotId: string; boardId: string }
+  | { actionType: "remove_component"; instanceId: string }
+  | { actionType: "set_component_value"; instanceId: string; quantity: number }
+  | { actionType: "read_meter"; instanceId: string };
 
 export type LabRunType = {
   _id: string;
@@ -71,6 +127,10 @@ export type LabRunType = {
   startedAt: string;
   endedAt?: string | null;
   equipment: EquipmentInstanceType[];
+  physicsEquipment: PhysicsInstanceType[];
+  // Electricity (Phase B) only — which slot board is active and what's placed where. Absent/null
+  // boardId for a mechanics or chemistry LabRun.
+  circuitBoardState?: { boardId: string | null; filledSlots: { slotId: string; instanceId: string }[] };
   actions: LabActionType[];
   reactionsTriggered: string[];
   tutorConversation: { role: "user" | "assistant"; content: string; timestamp: string }[];
@@ -86,8 +146,12 @@ export type InterventionType = {
     | "heating_empty_container"
     | "repeated_mistake"
     | "equipment_hint"
-    | "chemical_hint";
+    | "chemical_hint"
+    | "circuit_hint";
   hint: string;
+  // Only set for equipment_hint/chemical_hint/circuit_hint (the step-level mismatch hints) — the
+  // escalating 1-3 level shown, mirrors requestHint's hintLevel. Used to gate the Help reveal button.
+  level?: number | null;
 } | null;
 
 // POST /api/lab/runs/:id/action now checks for a reaction continuously (add_chemical/heat), so

@@ -13,6 +13,24 @@ export type PracticalSummaryType = {
   thumbnailColor: string;
 };
 
+// A single "Current Task" within a Main Step — safe subset only. No expectedIntent/expected
+// equipment/expected chemicals/hints/exactAnswer here; those are answer-bearing and the backend
+// never sends them (see the field-exclusion selects in experiment.controller.js /
+// session.controller.js). studentPrompt is deliberately vague about the actual answer — see
+// workspace.tsx's "CURRENT TASK" block.
+export type PracticalMicroStepType = {
+  microStepId: number;
+  studentPrompt: string;
+  // Safe to expose — mirrors the already-public step-level `actionType: "mix"` one level down.
+  // Tells the workspace this task auto-completes the instant a reaction fires on the live bench
+  // (see LabWorkspace's continuous reaction check), not what to add to trigger it.
+  requiresReactionCheck?: boolean;
+  // Physics sibling of requiresReactionCheck — tells the workspace this task expects a typed-in
+  // calculated answer (e.g. "calculate g"), checked server-side against the bench's own reading
+  // (see mechanicsEngine.js). expectedMeasurement itself (the answer) stays server-only.
+  requiresMeasurementCheck?: boolean;
+};
+
 export type PracticalStepType = {
   stepId: number;
   title: string;
@@ -20,6 +38,12 @@ export type PracticalStepType = {
   actionType: "measure" | "add" | "observe" | "record" | "calculate" | "setup" | "mix" | "heat" | "filter" | "pour" | "stir";
   timeLimit: number;
   isOptional: boolean;
+  // Absent/empty for practicals not yet migrated to the micro-step workflow — the workspace then
+  // falls back to showing just the Main Step, exactly as it did before this feature existed.
+  microSteps?: PracticalMicroStepType[];
+  // Electricity (Phase B) only: when set, the workspace mounts CircuitBoard.tsx instead of the
+  // free-bench LabWorkspace for this step — see circuitBoards.constants.ts for the layout.
+  circuitBoardId?: string | null;
 };
 
 // Returned by GET /api/experiments/subject/:subject — grade-matched to the logged-in student and

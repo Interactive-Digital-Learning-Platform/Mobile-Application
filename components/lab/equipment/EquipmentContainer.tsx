@@ -9,6 +9,7 @@ import { useDraggableBenchItem } from "@/hooks/lab/use-draggable-bench-item";
 import BubbleEffect from "../effects/BubbleEffect";
 import SteamEffect from "../effects/SteamEffect";
 import PourAnimation from "../effects/PourAnimation";
+import WaveEffect from "../effects/WaveEffect";
 
 const EquipmentContainer = forwardRef<View, EquipmentContainerProps>(
   (
@@ -28,10 +29,31 @@ const EquipmentContainer = forwardRef<View, EquipmentContainerProps>(
       onPress,
       onInspect,
       registerLiquidRegion,
+      resolveDropTarget,
+      onPour,
     },
     ref
   ) => {
-    const { panGesture, animatedStyle } = useDraggableBenchItem({ id, position, onMove });
+    const hasLiquid = chemicals.length > 0;
+
+    // Only a container actually holding liquid can pour — an empty (or non-container) instance
+    // dropped onto another just falls back to a normal reposition. Target validity (must be a
+    // container-role instance) is checked upstream in workspace.tsx, which owns the equipment
+    // catalog this component doesn't have; a rejected drop still returns true here (the source
+    // still snaps back rather than landing on top of the target) and workspace.tsx no-ops it.
+    const handleDrop = (targetId: string): boolean => {
+      if (!hasLiquid || !onPour) return false;
+      onPour(id, targetId);
+      return true;
+    };
+
+    const { panGesture, animatedStyle } = useDraggableBenchItem({
+      id,
+      position,
+      onMove,
+      resolveDropTarget,
+      onDrop: handleDrop,
+    });
 
     const tap = Gesture.Tap().onEnd(() => {
       if (onPress) runOnJS(onPress)();
@@ -50,7 +72,6 @@ const EquipmentContainer = forwardRef<View, EquipmentContainerProps>(
     const gesture = Gesture.Race(panGesture, tap, longPress);
 
     const liquidColor = chemicals[chemicals.length - 1]?.color || "transparent";
-    const hasLiquid = chemicals.length > 0;
 
     // Total poured quantity (volume + mass treated as one rough "amount" proxy — this is a visual
     // fill indicator, not a scientific measure) normalized against the vessel's nominal capacity.
@@ -151,6 +172,10 @@ const EquipmentContainer = forwardRef<View, EquipmentContainerProps>(
                 style={{ position: "absolute", width: "100%", height: `${fillLevel * MAX_LIQUID_HEIGHT_PCT}%`, bottom: 0 }}
               >
                 <BubbleEffect active={heated} />
+                {/* A pour landing ripples the surface — a physical disturbance, not the thermal
+                    bubbling above (which stays tied to `heated` regardless of whether anything
+                    was just poured). */}
+                {isPouring && <WaveEffect />}
               </View>
             )}
             {heated && <SteamEffect />}

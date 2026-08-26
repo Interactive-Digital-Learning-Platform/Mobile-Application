@@ -1,6 +1,7 @@
 import { labClient } from "@/api/apiClients";
 import {
   EquipmentSelectionResultType,
+  HelpRevealType,
   HintResponseType,
   LabReportType,
   LogStepActionRequestType,
@@ -52,11 +53,24 @@ export const logStepAction = async (
   return response.data;
 };
 
+// microStepId is advisory only (see LogStepActionRequestType) — the server always hints/reveals
+// against session.currentMicroStep for stepId, never trusts a client-passed value to pick which
+// Current Task is "current." Passed through anyway so it's available for any client-side logging.
 export const requestStepHint = async (
   sessionId: string,
   stepId: number,
+  microStepId?: number | null,
 ): Promise<HintResponseType> => {
-  const response = await labClient.post(`/sessions/${sessionId}/hint`, { stepId });
+  const response = await labClient.post(`/sessions/${sessionId}/hint`, { stepId, microStepId });
+  return response.data.data;
+};
+
+export const requestStepHelp = async (
+  sessionId: string,
+  stepId: number,
+  microStepId?: number | null,
+): Promise<HelpRevealType> => {
+  const response = await labClient.post(`/sessions/${sessionId}/help`, { stepId, microStepId });
   return response.data.data;
 };
 

@@ -39,12 +39,25 @@ export type SessionStatsType = {
   lastCompletedPractical: SessionHistoryItemType | null;
 };
 
+// Computed, already-safe "what to show right now" block from GET /api/sessions/:id — spares the
+// frontend from locating the current Main Step/Current Task inside the (separately-fetched, more
+// heavily filtered) experiment doc itself. `task` is null for a Main Step with no microSteps
+// defined (unmigrated practicals) — the workspace then falls back to showing just the Main Step.
+export type CurrentTaskType = {
+  mainStep: { stepId: number; title: string; instruction: string; order: number; totalMainSteps: number };
+  task: { microStepId: number; prompt: string; order: number; totalMicroSteps: number } | null;
+} | null;
+
 export type SessionType = {
   _id: string;
   userId: string;
   experimentId: string;
   status: "in_progress" | "completed" | "abandoned";
   currentStep: number;
+  // Which Current Task within currentStep the student is on — server-authoritative, resets to 1
+  // whenever currentStep advances. Irrelevant/unused for a step with no microSteps.
+  currentMicroStep: number;
+  currentTask: CurrentTaskType;
   score: number;
   phase: "equipment_selection" | "chemical_selection" | "procedure" | "completed";
   equipmentSelection?: { selected: string[] };
@@ -81,6 +94,10 @@ export type EquipmentSelectionResultType = {
 
 export type LogStepActionRequestType = {
   stepId: number;
+  // Advisory only — the server always grades against session.currentMicroStep for this step
+  // (see resolveGradingTarget in session.controller.js), never trusts this value to pick which
+  // Current Task is "current." Included so it's echoed back in the logged Action for analytics.
+  microStepId?: number | null;
   actionType: "correct" | "incorrect" | "skipped" | "repeated";
   equipmentType?: string | null;
   chemicalIds?: string[];
@@ -100,14 +117,33 @@ export type HintNotificationType = {
   read: boolean;
 };
 
+// Physics sibling of ReactionResultType — the bench-computed answer for a measurement microStep
+// (period->g, spring constant, density...) compared against the student's submitted quantity. See
+// mechanicsEngine.js's resolvePhysicsMeasurement and its call site in session.controller.js's logAction.
+export type MeasurementResultType = {
+  metric: string | null;
+  expectedValue: number | null;
+  studentValue: number | null;
+  correct: boolean;
+  reason: string | null;
+} | null;
+
 export type LogStepActionResponseType = {
   data: { actionType: string };
   meta: {
     suggestHint: boolean;
     stepErrors: number;
     currentStep: number;
+    // Where the server put the student after this action — 1 the instant currentStep also
+    // advanced (a new Main Step always starts its Current Tasks over from 1).
+    currentMicroStep: number;
     reactionResult: ReactionResultType | null;
+    measurementResult: MeasurementResultType;
     intervention: InterventionType;
+    // True once this Current Task's highest shown hint level has reached 3 — gates the Help
+    // button in HintCenterPanel. See requestHelp in session.controller.js for the matching
+    // server-side check.
+    helpAvailable: boolean;
   };
 };
 
@@ -115,4 +151,16 @@ export type HintResponseType = {
   hintLevel: number;
   hintText: string;
   stepId: number;
+  microStepId: number | null;
+  helpAvailable: boolean;
+};
+
+// POST /api/sessions/:id/help — the answer reveal, only reachable after hint level 3. Chemicals
+// are plain {name, symbol} (not full ChemicalType) since that's all requestHelp populates.
+export type HelpRevealType = {
+  stepId: number;
+  microStepId: number | null;
+  equipment: string[];
+  chemicals: { name: string; symbol: string }[];
+  explanation: string;
 };

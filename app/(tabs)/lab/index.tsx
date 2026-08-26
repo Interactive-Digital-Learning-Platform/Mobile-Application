@@ -5,6 +5,7 @@ import { ArrowRight, BookOpen, ChevronRight, ClipboardList, FlaskConical, Target
 import { colors } from "@/constants/colors";
 import { LAB_SUBJECTS } from "@/constants/lab/experiment.constants";
 import { useExperimentsBySubject } from "@/hooks/lab/use-experiments";
+import { useBiologyVisualizations } from "@/hooks/lab/use-biology-visualizations";
 import { useSessionHistory, useSessionStats } from "@/hooks/lab/use-lab-session";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
@@ -16,9 +17,23 @@ export default function Lab() {
   const { data: inProgress } = useSessionHistory({ status: "in_progress", limit: 1 });
   const { data: recentHistory, isLoading: historyLoading } = useSessionHistory({ status: "completed", limit: 3 });
   const { data: chemistryPracticals, isLoading: chemistryLoading } = useExperimentsBySubject("Chemistry");
+  // Used purely to show an accurate "N practicals"/"N visualizations" line on each subject card
+  // below, distinct from chemistryPracticals above (which also drives the "Learn Before You
+  // Experiment" list, Chemistry-only by design). Biology has no equipment/chemical bench flow, so
+  // its count comes from the Concept Visualization catalog instead of useExperimentsBySubject.
+  const { data: physicsPracticals } = useExperimentsBySubject("Physics");
+  const { data: biologyVisualizations } = useBiologyVisualizations();
+  const practicalCountBySubject: Record<string, number | undefined> = {
+    Chemistry: chemistryPracticals?.length,
+    Physics: physicsPracticals?.length,
+    Biology: biologyVisualizations?.length,
+  };
 
   const continueItem = inProgress?.data?.[0] ?? stats?.lastCompletedPractical ?? null;
-  const continueExperiment = continueItem?.experimentId?.subject === "Chemistry" ? continueItem.experimentId : null;
+  // Not subject-gated — a student's most recent in-progress/completed session could be any
+  // available subject (Chemistry or Physics today), not just Chemistry.
+  const continueExperiment = continueItem?.experimentId ?? null;
+  const ContinueIcon = LAB_SUBJECTS.find((s) => s.key === continueExperiment?.subject)?.Icon || FlaskConical;
 
   return (
     <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
@@ -49,7 +64,7 @@ export default function Lab() {
                   className="w-12 h-12 rounded-full items-center justify-center"
                   style={{ backgroundColor: `${continueExperiment.thumbnailColor}22` }}
                 >
-                  <FlaskConical size={22} color={continueExperiment.thumbnailColor} />
+                  <ContinueIcon size={22} color={continueExperiment.thumbnailColor} />
                 </View>
                 <View className="flex-1">
                   <Text className="text-base font-amedium text-ink" numberOfLines={1}>
@@ -128,11 +143,20 @@ export default function Lab() {
         {/* Subject Cards */}
         <Text className="text-lg font-amedium text-ink mb-3">Subjects</Text>
         <View className="gap-4">
-          {LAB_SUBJECTS.map(({ key, label, Icon, color, available }) => (
+          {LAB_SUBJECTS.map(({ key, label, Icon, color, available, unitLabel }) => (
             <Card
               key={key}
               disabled={!available}
-              onPress={available ? () => router.push("/(tabs)/lab/practicals" as never) : undefined}
+              onPress={
+                available
+                  ? () =>
+                      router.push(
+                        (key === "Biology"
+                          ? "/(tabs)/lab/biology"
+                          : { pathname: "/(tabs)/lab/practicals", params: { subject: key } }) as never
+                      )
+                  : undefined
+              }
             >
               <View className="flex-row items-center gap-4">
                 <View className="w-14 h-14 rounded-full items-center justify-center" style={{ backgroundColor: `${color}22` }}>
@@ -142,7 +166,7 @@ export default function Lab() {
                   <Text className="text-lg font-amedium text-ink">{label}</Text>
                   {available ? (
                     <Text className="font-aregular text-sm text-muted mt-0.5">
-                      {chemistryPracticals?.length ?? 0} practicals · Grade 10–11
+                      {practicalCountBySubject[key] ?? 0} {unitLabel} · Grade 10–11
                     </Text>
                   ) : (
                     <View className="mt-1.5 self-start">

@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, useSegments } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform } from "react-native";
@@ -7,6 +7,11 @@ import icons from "@/constants/icons";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
+  // The practical flow (app/(tabs)/lab/[experimentId]/*: info, equipment, chemicals, workspace,
+  // report) is a focused, space-constrained activity — the bottom tab bar stays hidden there and
+  // reappears on the Lab tab's own list screens (home, Practicals, History).
+  const hideTabBar = (segments as string[]).includes("[experimentId]");
 
   return (
     <Tabs
@@ -15,22 +20,24 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarActiveTintColor: "#FC6E20",
         tabBarInactiveTintColor: "#d3d2d2ff",
-        tabBarStyle: {
-          height: Platform.select({
-            ios: 64 + insets.bottom,
-            android: 64 + insets.bottom,
-          }),
-          backgroundColor: "#f0f5fb",
-          elevation: 0,
-          boxShadow: "none",
-          paddingTop: 12,
-          paddingBottom: Platform.select({
-            ios: 8 + insets.bottom,
-            android: 8 + insets.bottom,
-          }),
-          borderTopWidth: 1,
-          borderColor: "#0000001A",
-        },
+        tabBarStyle: hideTabBar
+          ? { display: "none" }
+          : {
+              height: Platform.select({
+                ios: 64 + insets.bottom,
+                android: 64 + insets.bottom,
+              }),
+              backgroundColor: "#f0f5fb",
+              elevation: 0,
+              boxShadow: "none",
+              paddingTop: 12,
+              paddingBottom: Platform.select({
+                ios: 8 + insets.bottom,
+                android: 8 + insets.bottom,
+              }),
+              borderTopWidth: 1,
+              borderColor: "#0000001A",
+            },
       }}
     >
       <Tabs.Screen

@@ -4,4 +4,5 @@ export * from "./experiment.types";
 export * from "./session.types";
 export * from "./compound-builder.types";
 export * from "./tutor.types";
+export * from "./biology.types";
 export * from "./component.types";

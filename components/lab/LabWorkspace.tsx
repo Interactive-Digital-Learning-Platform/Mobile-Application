@@ -4,6 +4,7 @@ import { EquipmentRole, LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.
 import { LabWorkspaceProps, ProbeInstrumentProps } from "@/types/lab";
 import EquipmentContainer from "./equipment/EquipmentContainer";
 import PhMeterInstrument from "./equipment/PhMeterInstrument";
+import PhysicsInstrument from "./equipment/PhysicsInstrument";
 
 const catalogEntry = (equipmentType: string) => LAB_EQUIPMENT_CATALOG.find((e) => e.key === equipmentType);
 
@@ -27,9 +28,26 @@ export default function LabWorkspace({
   probeMeasure,
   probeDetach,
   hoveredEquipmentId,
+  resolveDropTarget,
+  onPour,
+  physicsEquipment,
+  physicsDispatch,
 }: LabWorkspaceProps) {
   return (
     <View style={{ flex: 1, position: "relative" }}>
+      {(physicsEquipment || []).map((instance) => {
+        const entry = catalogEntry(instance.equipmentType);
+        if (!physicsDispatch) return null;
+        return (
+          <PhysicsInstrument
+            key={instance.instanceId}
+            id={instance.instanceId}
+            label={entry?.label || instance.equipmentType}
+            instance={instance}
+            dispatch={physicsDispatch}
+          />
+        );
+      })}
       {equipment.map((instance) => {
         const entry = catalogEntry(instance.equipmentType);
         const label = entry?.label || instance.equipmentType;
@@ -74,6 +92,8 @@ export default function LabWorkspace({
             isDropTarget={hoveredEquipmentId === instance.instanceId}
             onMove={onMoveEquipment}
             registerLiquidRegion={registerLiquidRegion}
+            resolveDropTarget={resolveDropTarget}
+            onPour={onPour}
             // MVP simplification: tapping a container toggles "heated" directly, rather than
             // requiring the container to be spatially stacked on the burner equipment.
             onPress={role !== "heat_source" ? () => onToggleHeat(instance.instanceId) : undefined}

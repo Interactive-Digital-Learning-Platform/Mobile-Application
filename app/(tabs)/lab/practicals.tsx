@@ -1,16 +1,22 @@
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { BookOpen, Clock, FlaskConical } from "lucide-react-native";
 import { colors } from "@/constants/colors";
+import { LAB_SUBJECTS } from "@/constants/lab/experiment.constants";
 import { useExperiments } from "@/hooks/lab/use-experiments";
 import { PracticalSummaryType } from "@/types/lab";
 import Card from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 
-export default function ChemistryPracticals() {
-  const { data: practicals, isLoading, isError, refetch } = useExperiments("Chemistry");
+export default function SubjectPracticals() {
+  // Defaults to Chemistry so a stale/missing param (or a link written before this screen took a
+  // subject) doesn't silently 404 — every LAB_SUBJECTS card now passes its own key explicitly.
+  const { subject: subjectParam } = useLocalSearchParams<{ subject?: string }>();
+  const subject = subjectParam || "Chemistry";
+  const subjectMeta = LAB_SUBJECTS.find((s) => s.key === subject);
+  const { data: practicals, isLoading, isError, refetch } = useExperiments(subject);
 
   if (isLoading) {
     return (
@@ -38,7 +44,7 @@ export default function ChemistryPracticals() {
     return (
       <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
         <FlaskConical size={32} color="#979797" />
-        <Text className="font-aregular text-muted text-center mt-3">No Chemistry practicals available yet.</Text>
+        <Text className="font-aregular text-muted text-center mt-3">No {subject} practicals available yet.</Text>
       </SafeAreaView>
     );
   }
@@ -49,6 +55,9 @@ export default function ChemistryPracticals() {
         data={practicals}
         keyExtractor={(item) => item._id}
         contentContainerStyle={{ padding: 16, gap: 12 }}
+        ListHeaderComponent={
+          <Text className="text-xl font-amedium text-ink mb-1">{subjectMeta?.label || `${subject} Laboratory`}</Text>
+        }
         renderItem={({ item }: { item: PracticalSummaryType }) => {
           const goToEquipment = () => router.push(`/(tabs)/lab/${item._id}/equipment` as never);
           return (

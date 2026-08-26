@@ -6,6 +6,7 @@ import {
   submitChemicalSelection,
   logStepAction,
   requestStepHint,
+  requestStepHelp,
   completeSession,
   fetchSessionReport,
   fetchSessionHistory,
@@ -45,7 +46,15 @@ export const useLogStepAction = (sessionId: string | undefined) => {
 
 export const useRequestStepHint = (sessionId: string | undefined) => {
   return useMutation({
-    mutationFn: (stepId: number) => requestStepHint(sessionId as string, stepId),
+    mutationFn: ({ stepId, microStepId }: { stepId: number; microStepId?: number | null }) =>
+      requestStepHint(sessionId as string, stepId, microStepId),
+  });
+};
+
+export const useRequestStepHelp = (sessionId: string | undefined) => {
+  return useMutation({
+    mutationFn: ({ stepId, microStepId }: { stepId: number; microStepId?: number | null }) =>
+      requestStepHelp(sessionId as string, stepId, microStepId),
   });
 };
 

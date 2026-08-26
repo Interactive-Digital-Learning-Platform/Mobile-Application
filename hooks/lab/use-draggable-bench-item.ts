@@ -9,6 +9,16 @@ type Args = {
   // (e.g. the pH meter) to re-check collision against liquid regions while dragging. Omit for
   // equipment that only needs to reposition itself (the common case).
   onDragChange?: () => void;
+  // Container-to-container pouring (see EquipmentContainer): resolves which other registered
+  // instance, if any, the item was released on top of. Reuses the same drop-target registry
+  // ChemicalBottle already hit-tests against, since every EquipmentContainer registers itself
+  // there too. Omit for items that only reposition (e.g. probe-role instruments).
+  resolveDropTarget?: (x: number, y: number) => Promise<string | null>;
+  // Called once a *different* instance is resolved under the release point; return true if that
+  // counts as a completed drop (the item snaps back to its pre-drag position instead of moving —
+  // pouring doesn't relocate the source) or false to fall back to a normal reposition (e.g. the
+  // source had nothing to pour).
+  onDrop?: (targetId: string) => boolean;
 };
 
 // Shared "draggable bench item body" behavior, extracted from EquipmentContainer so probe-role
@@ -16,13 +26,26 @@ type Args = {
 // Callers still compose their own tap/longPress gestures locally via Gesture.Race(panGesture, ...)
 // — this hook only owns the pan/reposition piece, matching how EquipmentShelfItem/ChemicalBottle
 // already compose gestures inline rather than sharing a wrapper component.
-export const useDraggableBenchItem = ({ id, position, onMove, onDragChange }: Args) => {
+export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, resolveDropTarget, onDrop }: Args) => {
   const translateX = useSharedValue(position.x);
   const translateY = useSharedValue(position.y);
   const lastCheckTs = useSharedValue(0);
   // Lift-and-shadow feedback while dragging — matches the scale-up already used by the shelf
   // spawners (EquipmentShelfItem/ChemicalBottle), which this hook's callers previously lacked.
   const dragScale = useSharedValue(1);
+
+  // Mirrors ChemicalBottle's own async handleDrop — resolveDropTarget/onDrop are plain JS
+  // functions (not worklets), so this runs on the JS thread via runOnJS below.
+  const handleDragEnd = async (absoluteX: number, absoluteY: number) => {
+    const targetId = resolveDropTarget ? await resolveDropTarget(absoluteX, absoluteY) : null;
+    const dropped = targetId && targetId !== id && onDrop ? onDrop(targetId) : false;
+    if (dropped) {
+      translateX.value = withSpring(position.x);
+      translateY.value = withSpring(position.y);
+    } else {
+      onMove(id, { x: translateX.value, y: translateY.value });
+    }
+  };
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
@@ -39,9 +62,13 @@ export const useDraggableBenchItem = ({ id, position, onMove, onDragChange }: Ar
         }
       }
     })
-    .onEnd(() => {
+    .onEnd((e) => {
       dragScale.value = withSpring(1);
-      runOnJS(onMove)(id, { x: translateX.value, y: translateY.value });
+      if (resolveDropTarget) {
+        runOnJS(handleDragEnd)(e.absoluteX, e.absoluteY);
+      } else {
+        runOnJS(onMove)(id, { x: translateX.value, y: translateY.value });
+      }
       if (onDragChange) runOnJS(onDragChange)();
     });
 
