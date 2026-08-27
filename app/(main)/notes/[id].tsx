@@ -163,6 +163,8 @@ const ConceptChip = ({
 const MaterialCard = ({
   icon,
   title,
+  subtitle,
+  badgeText,
   color,
   isReady,
   isGeneratingAll,
@@ -170,6 +172,8 @@ const MaterialCard = ({
 }: {
   icon: React.ReactNode;
   title: string;
+  subtitle?: string;
+  badgeText?: string;
   color: string;
   isReady: boolean;
   isGeneratingAll?: boolean;
@@ -188,9 +192,21 @@ const MaterialCard = ({
     </View>
     {/* Label + meta */}
     <View style={styles.materialListBody}>
-      <Text style={[styles.materialListLabel, !isReady && { color: "#94A3B8" }]} numberOfLines={1}>
-        {title}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 6 }}>
+        <Text style={[styles.materialListLabel, !isReady && { color: "#94A3B8" }]} numberOfLines={1}>
+          {title}
+        </Text>
+        {badgeText ? (
+          <View style={[styles.materialPillBadge, { backgroundColor: `${color}15` }]}>
+            <Text style={[styles.materialPillBadgeText, { color }]}>{badgeText}</Text>
+          </View>
+        ) : null}
+      </View>
+      {subtitle ? (
+        <Text style={styles.materialListSubtitle} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      ) : null}
       <Text style={[styles.materialListMeta, { color: isReady ? "#10B981" : (isGeneratingAll ? color : "#94A3B8") }]}>
         {isReady ? "Ready — tap to open" : isGeneratingAll ? "Generating…" : "Not yet generated"}
       </Text>
@@ -593,10 +609,15 @@ export default function NoteDetail() {
     return "#ef4444";
   };
 
-  const navigateToMaterial = (type: string) => {
+  const navigateToMaterial = (type: string, targetGapId?: string, targetConcept?: string) => {
     router.push({
       pathname: "/(main)/notes/material/[type]",
-      params: { id, type },
+      params: {
+        id,
+        type,
+        ...(targetGapId ? { targetGapId } : {}),
+        ...(targetConcept ? { targetConcept } : {}),
+      },
     });
   };
 
@@ -978,7 +999,13 @@ export default function NoteDetail() {
 
                     <TouchableOpacity
                       style={styles.priorityGapReviewBtn}
-                      onPress={() => navigateToMaterial("structured_notes")}
+                      onPress={() =>
+                        navigateToMaterial(
+                          "structured_notes",
+                          topExplainableGap?.outcomeId,
+                          missingList[0] || (topExplainableGap?.missingConcepts[0]?.name)
+                        )
+                      }
                       activeOpacity={0.85}
                     >
                       <Text style={styles.priorityGapReviewBtnText}>Start Reviewing →</Text>
@@ -1128,7 +1155,13 @@ export default function NoteDetail() {
                           {/* Review CTA */}
                           <TouchableOpacity
                             style={styles.gapStudyBtn}
-                            onPress={() => navigateToMaterial("structured_notes")}
+                            onPress={() =>
+                              navigateToMaterial(
+                                "structured_notes",
+                                matchedExplainable?.outcomeId,
+                                missingList[0]
+                              )
+                            }
                             activeOpacity={0.85}
                           >
                             <Text style={styles.gapStudyBtnText}>Start Reviewing</Text>
@@ -1358,12 +1391,12 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 6. Your Study Plan (Materials) ── */}
+            {/* ── 6. Personalized Study Materials ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <Sparkles size={17} color={colors.primaryBlack} />
-                  <Text style={styles.sectionTitle}>Your Study Plan</Text>
+                  <Text style={styles.sectionTitle}>Personalized Study Materials</Text>
                 </View>
                 {isGenerating || (!materialsOverview) || (materialsOverview.missingCount > 0 && materialsOverview.generatedTypes.length < 7) ? (
                   <View style={styles.generatingBadge}>
@@ -1387,42 +1420,89 @@ export default function NoteDetail() {
               </View>
 
               <Text style={[styles.sectionSubtitle, { marginTop: -8 }]}>
-                {note.analysis.learningGaps.length > 0
-                  ? `Personalized resources based on your ${note.analysis.learningGaps.length} learning gap${note.analysis.learningGaps.length !== 1 ? "s" : ""}`
-                  : "Personalized learning resources for your notes"}
+                Synthesized from your handwritten notes, official textbook passages, and identified learning gaps
               </Text>
 
               {(!materialsOverview || materialsOverview.missingCount > 0 || isGenerating) && (
                 <View style={styles.generatingInfoBanner}>
                   <Sparkles size={14} color={colors.primary} />
                   <Text style={styles.generatingInfoText}>
-                    AI is generating study materials in the background. Ready items can be opened immediately.
+                    AI is generating your personalized study materials. Ready items can be opened immediately.
                   </Text>
                 </View>
               )}
 
               <View style={styles.materialsList}>
-                <MaterialCard icon={<BookOpen size={20} color="#3B82F6" />} title="Structured Notes" color="#3B82F6"
+                <MaterialCard
+                  icon={<BookOpen size={20} color="#3B82F6" />}
+                  title="Structured Notes"
+                  badgeText="Complete Note"
+                  subtitle="Complete lesson note with your handwriting + official textbook knowledge & highlighted gap remediations"
+                  color="#3B82F6"
                   isReady={materialsOverview?.generatedTypes.includes("structured_notes") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("structured_notes")} />
-                <MaterialCard icon={<Layers size={20} color="#8B5CF6" />} title="Flashcards" color="#8B5CF6"
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("structured_notes")}
+                />
+                <MaterialCard
+                  icon={<Layers size={20} color="#8B5CF6" />}
+                  title="Flashcards"
+                  badgeText="Active Recall"
+                  subtitle="Practice cards prioritizing the concepts missing from your handwritten notes"
+                  color="#8B5CF6"
                   isReady={materialsOverview?.generatedTypes.includes("flashcards") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("flashcards")} />
-                <MaterialCard icon={<FileText size={20} color="#10B981" />} title="Revision Summary" color="#10B981"
-                  isReady={materialsOverview?.generatedTypes.includes("revision_summary") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("revision_summary")} />
-                <MaterialCard icon={<Target size={20} color="#EF4444" />} title="Learning Points" color="#EF4444"
-                  isReady={materialsOverview?.generatedTypes.includes("learning_points") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("learning_points")} />
-                <MaterialCard icon={<Play size={20} color="#F59E0B" />} title="Audio Lesson" color="#F59E0B"
-                  isReady={materialsOverview?.generatedTypes.includes("audio") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("audio")} />
-                <MaterialCard icon={<BookOpen size={20} color="#6366F1" />} title="Key Definitions" color="#6366F1"
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("flashcards")}
+                />
+                <MaterialCard
+                  icon={<BookOpen size={20} color="#6366F1" />}
+                  title="Key Definitions"
+                  badgeText="Core Terms"
+                  subtitle="Official curriculum-aligned definitions for all key terms in this lesson"
+                  color="#6366F1"
                   isReady={materialsOverview?.generatedTypes.includes("definitions") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("definitions")} />
-                <MaterialCard icon={<Layers size={20} color="#EC4899" />} title="Mind Map" color="#EC4899"
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("definitions")}
+                />
+                <MaterialCard
+                  icon={<Layers size={20} color="#EC4899" />}
+                  title="Mind Map"
+                  badgeText="Visual Map"
+                  subtitle="Hierarchical concept tree showing the complete lesson structure"
+                  color="#EC4899"
                   isReady={materialsOverview?.generatedTypes.includes("mindmap") ?? false}
-                  isGeneratingAll={isGenerating} onPress={() => navigateToMaterial("mindmap")} />
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("mindmap")}
+                />
+                <MaterialCard
+                  icon={<FileText size={20} color="#10B981" />}
+                  title="Revision Summary"
+                  badgeText="Exam Brief"
+                  subtitle="Compact exam-focused revision summary covering essential equations and facts"
+                  color="#10B981"
+                  isReady={materialsOverview?.generatedTypes.includes("revision_summary") ?? false}
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("revision_summary")}
+                />
+                <MaterialCard
+                  icon={<Target size={20} color="#EF4444" />}
+                  title="Learning Points"
+                  badgeText="Checklist"
+                  subtitle="Numbered learning checklist distinguishing what you covered vs gaps"
+                  color="#EF4444"
+                  isReady={materialsOverview?.generatedTypes.includes("learning_points") ?? false}
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("learning_points")}
+                />
+                <MaterialCard
+                  icon={<Play size={20} color="#F59E0B" />}
+                  title="Audio Lesson"
+                  badgeText="Audio"
+                  subtitle="Spoken podcast-style teacher explanation addressing your notes and explaining your gaps"
+                  color="#F59E0B"
+                  isReady={materialsOverview?.generatedTypes.includes("audio") ?? false}
+                  isGeneratingAll={isGenerating}
+                  onPress={() => navigateToMaterial("audio")}
+                />
               </View>
             </View>
 
@@ -2531,9 +2611,26 @@ const styles = StyleSheet.create({
   },
   materialListLabel: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.primaryBlack,
     marginBottom: 2,
+  },
+  materialPillBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  materialPillBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  materialListSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "400",
+    lineHeight: 16,
+    marginBottom: 4,
   },
   materialListMeta: {
     fontSize: 12,

@@ -21,6 +21,9 @@ import {
   Info,
   RotateCcw,
   CheckCircle2,
+  Target,
+  AlertCircle,
+  Sparkles,
 } from "lucide-react-native";
 
 import {
@@ -374,11 +377,177 @@ const AudioPlayerView = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// STRUCTURED NOTES VIEWER — with gap annotations & auto-scroll anchors
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface NoteSection {
+  id: number;
+  heading: string;
+  body: string;
+  isRemediatedGap: boolean;
+  isFromNotes: boolean;
+}
+
+const StructuredNotesViewer = ({
+  textContent,
+  targetGapId,
+  targetConcept,
+}: {
+  textContent: string;
+  targetGapId?: string;
+  targetConcept?: string;
+}) => {
+  const scrollRef = useRef<ScrollView>(null);
+  const [sectionLayouts, setSectionLayouts] = useState<Record<number, number>>({});
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+
+  // Parse sections by ## or ### headings
+  const sections: NoteSection[] = React.useMemo(() => {
+    const rawChunks = textContent.split(/(?=\n##\s+|\n###\s+)/g);
+    return rawChunks.map((chunk, idx) => {
+      const trimmed = chunk.trim();
+      const firstLine = trimmed.split("\n")[0] || "";
+      const isRemediatedGap =
+        trimmed.includes("Remediated Learning Gap") ||
+        trimmed.includes("Identified Learning Gap") ||
+        trimmed.includes("⚠️");
+      const isFromNotes = trimmed.includes("From Your Handwritten Notes");
+
+      return {
+        id: idx,
+        heading: firstLine.replace(/^[#\s]+/, ""),
+        body: trimmed,
+        isRemediatedGap,
+        isFromNotes,
+      };
+    });
+  }, [textContent]);
+
+  // Determine which section to jump to if target params exist
+  const targetSectionIndex = React.useMemo(() => {
+    if (!targetGapId && !targetConcept) return -1;
+    const lowerConcept = (targetConcept || "").toLowerCase();
+    const lowerGapId = (targetGapId || "").toLowerCase();
+
+    // 1. Try exact concept match
+    let matchIdx = sections.findIndex((s) => {
+      const lower = s.body.toLowerCase();
+      return (
+        (lowerConcept && lower.includes(lowerConcept)) ||
+        (lowerGapId && lower.includes(lowerGapId))
+      );
+    });
+
+    // 2. Fallback to first remediated gap section
+    if (matchIdx === -1) {
+      matchIdx = sections.findIndex((s) => s.isRemediatedGap);
+    }
+
+    return matchIdx;
+  }, [sections, targetGapId, targetConcept]);
+
+  // Auto-scroll when layout is ready
+  useEffect(() => {
+    if (targetSectionIndex >= 0 && sectionLayouts[targetSectionIndex] !== undefined) {
+      const targetY = sectionLayouts[targetSectionIndex];
+      setHighlightedIndex(targetSectionIndex);
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, targetY - 16),
+          animated: true,
+        });
+      }, 350);
+    }
+  }, [targetSectionIndex, sectionLayouts]);
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 80 }}
+    >
+      <View style={styles.contentPad}>
+        {/* Direct Gap Jump Notice */}
+        {(targetConcept || targetGapId) && (
+          <View style={styles.gapJumpBanner}>
+            <View style={styles.gapJumpIconWrap}>
+              <Target size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gapJumpTitle}>Targeted Gap Remediation</Text>
+              <Text style={styles.gapJumpSub}>
+                Auto-focused on:{" "}
+                <Text style={{ fontWeight: "700", color: "#B45309" }}>
+                  {targetConcept || targetGapId}
+                </Text>
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Legend / Visual Guide Bar */}
+        <View style={styles.snLegendRow}>
+          <View style={[styles.snLegendTag, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#16A34A" }]}>📝 From Your Notes</Text>
+          </View>
+          <View style={[styles.snLegendTag, { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#D97706" }]}>⚠️ Remediated Gap</Text>
+          </View>
+          <View style={[styles.snLegendTag, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#4F46E5" }]}>💡 Definitions & Theory</Text>
+          </View>
+        </View>
+
+        {/* Section Cards */}
+        {sections.map((sec, idx) => {
+          const isTargeted = highlightedIndex === idx;
+
+          return (
+            <View
+              key={sec.id}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                setSectionLayouts((prev) => ({ ...prev, [idx]: y }));
+              }}
+              style={[
+                styles.snSectionCard,
+                sec.isRemediatedGap && styles.snSectionCardGap,
+                isTargeted && styles.snSectionCardTargeted,
+              ]}
+            >
+              {sec.isRemediatedGap && (
+                <View style={styles.snGapTagBadge}>
+                  <Target size={12} color="#D97706" />
+                  <Text style={styles.snGapTagBadgeText}>Remediated Gap</Text>
+                </View>
+              )}
+              {isTargeted && (
+                <View style={styles.snTargetedBadge}>
+                  <Sparkles size={12} color="#fff" />
+                  <Text style={styles.snTargetedBadgeText}>Jumped to this section</Text>
+                </View>
+              )}
+              <Markdown style={markdownStyles}>{sec.body}</Markdown>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default function MaterialViewer() {
-  const { id, type } = useLocalSearchParams<{ id: string; type: string }>();
+  const { id, type, targetGapId, targetConcept } = useLocalSearchParams<{
+    id: string;
+    type: string;
+    targetGapId?: string;
+    targetConcept?: string;
+  }>();
   const router = useRouter();
 
   const [material, setMaterial] = useState<any>(null);
@@ -455,7 +624,7 @@ export default function MaterialViewer() {
             </View>
             <Text style={[styles.heroTitle, { color: headerColor }]}>Audio Lesson</Text>
             <Text style={styles.heroSub}>
-              A spoken explanation tailored to your handwritten notes
+              A spoken explanation tailored to your handwritten notes & gaps
             </Text>
           </View>
           <AudioPlayerView
@@ -485,7 +654,7 @@ export default function MaterialViewer() {
       return (
         <View style={styles.contentPad}>
           <View style={styles.materialHero}>
-            <Text style={styles.heroSub}>Visual concept map of your topic</Text>
+            <Text style={styles.heroSub}>Visual concept map of the complete lesson</Text>
           </View>
           <MindMapViewer mindMap={material.mindMap} />
         </View>
@@ -516,7 +685,18 @@ export default function MaterialViewer() {
       );
     }
 
-    // ── Markdown views (structured_notes, revision_summary, learning_points)
+    // ── Structured Notes (Specialized gap-annotated viewer) ─────────────────
+    if (type === "structured_notes" && material.textContent) {
+      return (
+        <StructuredNotesViewer
+          textContent={material.textContent}
+          targetGapId={targetGapId}
+          targetConcept={targetConcept}
+        />
+      );
+    }
+
+    // ── Other Markdown views (revision_summary, learning_points) ───────────
     if (material.textContent) {
       return (
         <View style={styles.contentPad}>
@@ -549,13 +729,18 @@ export default function MaterialViewer() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
-      >
-        {renderContent()}
-      </ScrollView>
+      {/* For structured_notes, StructuredNotesViewer manages its own scroll to support accurate section offsets */}
+      {type === "structured_notes" ? (
+        renderContent()
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 60 }}
+        >
+          {renderContent()}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -565,40 +750,50 @@ export default function MaterialViewer() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const markdownStyles = {
-  body: { fontSize: 16, color: "#374151", fontWeight: "400" as const, lineHeight: 26 },
+  body: { fontSize: 15, color: "#374151", fontWeight: "400" as const, lineHeight: 25 },
   heading1: {
-    fontSize: 24,
-    fontWeight: "700" as const,
+    fontSize: 22,
+    fontWeight: "800" as const,
     color: colors.primaryBlack,
-    marginTop: 8,
-    marginBottom: 14,
+    marginTop: 4,
+    marginBottom: 12,
   },
   heading2: {
-    fontSize: 20,
-    fontWeight: "600" as const,
-    color: colors.primaryBlack,
-    marginTop: 20,
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: "#1E293B",
+    marginTop: 14,
+    marginBottom: 8,
   },
   heading3: {
-    fontSize: 17,
-    fontWeight: "500" as const,
-    color: colors.primaryBlack,
-    marginTop: 16,
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#334155",
+    marginTop: 10,
     marginBottom: 6,
   },
-  paragraph: { marginBottom: 14 },
-  list_item: { marginBottom: 8, paddingLeft: 4 },
+  paragraph: { marginBottom: 10 },
+  list_item: { marginBottom: 6, paddingLeft: 4 },
   strong: { fontWeight: "700" as const, color: colors.primaryBlack },
   em: { fontStyle: "italic" as const, color: colors.primary },
-  bullet_list: { marginBottom: 14 },
-  ordered_list: { marginBottom: 14 },
+  bullet_list: { marginBottom: 10 },
+  ordered_list: { marginBottom: 10 },
   code_inline: {
     backgroundColor: "#F1F5F9",
     color: "#BE185D",
-    fontWeight: "500" as const,
+    fontWeight: "600" as const,
     paddingHorizontal: 4,
     borderRadius: 4,
+    fontSize: 13,
+  },
+  blockquote: {
+    backgroundColor: "#F8FAFC",
+    borderLeftColor: "#3B82F6",
+    borderLeftWidth: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 8,
   },
 };
 
@@ -934,6 +1129,117 @@ const styles = StyleSheet.create({
   defIndexText: { fontSize: 14, fontWeight: "700" },
   defTerm: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
   defDefinition: { fontSize: 14, fontWeight: "400", color: "#475569", lineHeight: 22 },
+
+  // ── Structured Notes Specialized Styles ──────────────────────────────────────
+
+  gapJumpBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FEF3C7",
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#F59E0B",
+  },
+  gapJumpIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FDE68A",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gapJumpTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400E",
+    marginBottom: 2,
+  },
+  gapJumpSub: {
+    fontSize: 12,
+    color: "#B45309",
+    fontWeight: "500",
+  },
+
+  snLegendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  snLegendTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  snLegendTagText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  snSectionCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  snSectionCardGap: {
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFCF5",
+  },
+  snSectionCardTargeted: {
+    borderColor: "#F59E0B",
+    borderWidth: 2,
+    backgroundColor: "#FFFDF8",
+    shadowColor: "#F59E0B",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  snGapTagBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  snGapTagBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  snTargetedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#D97706",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  snTargetedBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
 
   // ── Markdown ─────────────────────────────────────────────────────────────────
 
