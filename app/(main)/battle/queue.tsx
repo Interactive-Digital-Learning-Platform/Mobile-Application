@@ -7,7 +7,7 @@ import { useNavigation, usePreventRemove } from "@react-navigation/native";
 import { useQueryClient } from "@tanstack/react-query";
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import Toast from "react-native-toast-message";
-import { Swords, X } from "lucide-react-native";
+import { X } from "lucide-react-native";
 import { getSubjectIcon, ICON_COLORS } from "@/constants/quizStyles";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import {
@@ -18,14 +18,40 @@ import {
   useJoinQueueMutation,
   useQueueStatusQuery,
 } from "@/hooks/use-battle";
-import { useBattleMatch } from "@/hooks/use-battle-match";
+import { useBattleMatchContext } from "@/hooks/use-battle-match";
 import { useUserMeQuery } from "@/hooks/use-quiz";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import VersusIntro from "@/components/quiz-componets/VersusIntro";
 
 export default function BattleQueueScreen() {
   const router = useRouter();
-  const { subject } = useLocalSearchParams<{ subject: string }>();
+  const { subject: subjectParam } = useLocalSearchParams<{ subject: string }>();
+  const { matchState, readyUserIds, myUserId, sendReady, connectionStatus, setActiveMatchId } =
+    useBattleMatchContext();
+  // Confirmed via device testing: router.replace({pathname: "/(main)/battle/queue",
+  // params: {subject}}) from battle-results.tsx's "Next Match" button (unlike
+  // every OTHER params-carrying replace/push in this flow) arrives here with
+  // subject undefined, even though battle-results.tsx itself displays the
+  // correct value right before the tap. Rather than depend on nailing down
+  // that Expo Router quirk, fall back to the subject already sitting in the
+  // shared match connection (see BattleMatchProvider in _layout.tsx) -- a
+  // "Next Match" is by definition a rematch of the just-finished match's own
+  // subject, and that connection still holds its matchState (from the just-
+  // finished match) at the moment this screen first mounts.
+  //
+  // Captured into state rather than read live on every render: this same
+  // screen resets the shared connection's matchState back to null a moment
+  // after mount (see the setActiveMatchId(matchId) effect below, which fires
+  // with matchId=null before any real match is found) -- once resolved,
+  // `subject` must NOT go blank again just because that fallback source
+  // disappeared. The effect below still lets a late-arriving subjectParam
+  // (e.g. if it resolves a render after mount) override the fallback.
+  const [subject, setSubject] = useState<string | undefined>(
+    () => subjectParam ?? matchState?.subject ?? undefined
+  );
+  useEffect(() => {
+    if (subjectParam && subjectParam !== subject) setSubject(subjectParam);
+  }, [subjectParam, subject]);
   const SubjectIcon = getSubjectIcon(subject);
   const queryClient = useQueryClient();
 
@@ -33,6 +59,20 @@ export default function BattleQueueScreen() {
   const { mutate: cancelQueue, isPending: isCancelling } = useCancelQueueMutation();
   const joinTriggeredRef = useRef(false);
   const [pollingEnabled, setPollingEnabled] = useState(false);
+  // battleKeys.queueStatus is a single global cache key, not scoped per
+  // subject/session, and is never invalidated once matched (see
+  // useJoinQueueMutation) -- it still holds {status:"matched", match_id:
+  // <this now-completed match>} for as long as this same subject is requeued
+  // into (e.g. "Next Match" on battle-results.tsx). React Query returns that
+  // stale cached `data` on this screen's very FIRST render, before the mount
+  // effect below has had a chance to clear it -- staleQueueStatusCleared
+  // gates `status` to `undefined` until that happens, so nothing on this
+  // mount ever acts on a dead match's id (previously harmless, since a fresh
+  // useBattleMatch(oldMatchId) mount just self-corrected a moment later --
+  // now that the connection is a long-lived one shared via BattleMatchProvider,
+  // publishing that stale id into it would resurrect the dead match's
+  // terminal state instead of starting clean).
+  const [staleQueueStatusCleared, setStaleQueueStatusCleared] = useState(false);
 
   // Tracks whether we still hold an active queue slot that needs cancelling
   // if this screen unmounts without the user pressing Cancel explicitly
@@ -42,14 +82,8 @@ export default function BattleQueueScreen() {
   useEffect(() => {
     if (!subject || joinTriggeredRef.current) return;
     joinTriggeredRef.current = true;
-    // battleKeys.queueStatus is a single global cache key, not scoped per
-    // subject/session -- without clearing it, a fresh mount for a NEW
-    // subject would still read back whatever "matched"/old-match_id data
-    // was cached from the PREVIOUS session (React Query returns cached
-    // `data` immediately even while the query is disabled), and the
-    // "matched" effect below would immediately navigate to that old,
-    // already-completed match instead of ever searching for a new one.
     queryClient.removeQueries({ queryKey: battleKeys.queueStatus, exact: true });
+    setStaleQueueStatusCleared(true);
     joinQueue(subject, {
       onSuccess: () => {
         holdingQueueSlotRef.current = true;
@@ -90,7 +124,8 @@ export default function BattleQueueScreen() {
     };
   }, [cancelQueue]);
 
-  const { data: status } = useQueueStatusQuery(pollingEnabled);
+  const { data: rawStatus } = useQueueStatusQuery(pollingEnabled);
+  const status = staleQueueStatusCleared ? rawStatus : undefined;
   const { data: profile } = useBattleProfileQuery();
   const mySubjectProfile = profile?.subjects.find((s) => s.subject === subject);
 
@@ -104,9 +139,14 @@ export default function BattleQueueScreen() {
   const isMatched = status?.status === "matched";
   const matchId =
     status?.status === "matched" && status.subject === subject ? status.match_id ?? null : null;
-  const { matchState, readyUserIds, myUserId, sendReady, connectionStatus } = useBattleMatch(matchId);
+  // Publishes this screen's own matchId (derived from queue-status polling
+  // above) into the shared connection hosted by _layout.tsx -- see
+  // use-battle-match.tsx's BattleMatchProvider for why the connection lives
+  // there rather than being opened separately by this screen.
+  useEffect(() => {
+    setActiveMatchId(matchId);
+  }, [matchId, setActiveMatchId]);
   const { mutate: forfeitMatch, isPending: isLeavingMatch } = useForfeitMatchMutation();
-  const [readyPending, setReadyPending] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const matchStartedNavigatedRef = useRef(false);
   // Distinguishes "I cancelled" (handleLeaveMatchConfirm navigates away
@@ -137,32 +177,30 @@ export default function BattleQueueScreen() {
 
   const myReady = myUserId != null && readyUserIds.has(myUserId);
 
-  // No manual "I'm Ready" button -- readying up is automatic 5 seconds
-  // after a match is found, with Cancel Match (above/below) as the only way
-  // to back out before that fires. Counts down once per second; on a failed
-  // send (e.g. a brief reconnect) it resets to a short 2s retry instead of
-  // tightly looping, and stops entirely once readyPending/myReady is true.
-  const [autoReadyCountdown, setAutoReadyCountdown] = useState(5);
+  // No manual "I'm Ready" button and no visible countdown -- the match
+  // starts as soon as the opponent is found, so readying up happens the
+  // instant the socket is open, invisibly. `readyRetryTick` exists only to
+  // retry a failed send (e.g. a brief reconnect) roughly once a second,
+  // without any UI reflecting it.
+  const readySentRef = useRef(false);
+  const [readyRetryTick, setReadyRetryTick] = useState(0);
 
   useEffect(() => {
-    setReadyPending(false);
-    setAutoReadyCountdown(5);
+    readySentRef.current = false;
+    setReadyRetryTick(0);
     matchStartedNavigatedRef.current = false;
   }, [matchId]);
 
   useEffect(() => {
-    if (!isMatched || myReady || readyPending || connectionStatus !== "open") return;
-    if (autoReadyCountdown > 0) {
-      const timer = setTimeout(() => setAutoReadyCountdown((s) => s - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-    setReadyPending(true);
+    if (!isMatched || myReady || readySentRef.current || connectionStatus !== "open") return;
     const sent = sendReady();
-    if (!sent) {
-      setReadyPending(false);
-      setAutoReadyCountdown(2);
+    if (sent) {
+      readySentRef.current = true;
+      return;
     }
-  }, [isMatched, myReady, readyPending, connectionStatus, autoReadyCountdown, sendReady]);
+    const timer = setTimeout(() => setReadyRetryTick((n) => n + 1), 1000);
+    return () => clearTimeout(timer);
+  }, [isMatched, myReady, connectionStatus, sendReady, readyRetryTick]);
 
   // Not "matched" -> we're no longer holding a queue slot, so an unmount
   // from here on shouldn't cancel a queue entry that doesn't exist anymore.
@@ -172,21 +210,44 @@ export default function BattleQueueScreen() {
     }
   }, [status?.status]);
 
-  // Both players readying is the earliest signal the match is progressing
-  // past "waiting" -- the backend only starts selecting this match's
-  // questions once the second ready lands, so navigating here (rather than
-  // waiting for the "countdown" status to actually flip) is what lets
-  // match-session.tsx show a real "generating" loading step for that gap
-  // instead of skipping straight past it.
+  // VersusIntro plays for a fixed 5s regardless of how fast the backend
+  // readies/generates behind it (that work already started the instant both
+  // sides readied above, running in parallel) -- no popup or countdown of
+  // any kind covers the rest of that wait if it runs long, VersusIntro's own
+  // reveal just stays on screen until the match is ready. Only once this
+  // elapses AND both players have actually confirmed ready (readying up is
+  // automatic and near-instant, but this still shouldn't fire on a stale
+  // one-sided ready) does leaving VersusIntro even get considered.
+  const [versusIntroDone, setVersusIntroDone] = useState(false);
   useEffect(() => {
-    if (matchId !== null && readyUserIds.size >= 2 && !matchStartedNavigatedRef.current) {
+    setVersusIntroDone(false);
+    if (matchId === null) return;
+    const timer = setTimeout(() => setVersusIntroDone(true), 5000);
+    return () => clearTimeout(timer);
+  }, [matchId]);
+  const bothReady = readyUserIds.size >= 2;
+  const readyToLeaveVersusIntro = versusIntroDone && bothReady;
+  const matchStatus = matchState?.status;
+
+  // Hands straight off to match-session.tsx the instant question generation
+  // finishes (status leaves "waiting") -- no "Preparing Match" popup, no
+  // countdown, the real question is just already live by the time this
+  // screen changes.
+  useEffect(() => {
+    if (
+      matchId !== null &&
+      readyToLeaveVersusIntro &&
+      matchStatus != null &&
+      matchStatus !== "waiting" &&
+      !matchStartedNavigatedRef.current
+    ) {
       matchStartedNavigatedRef.current = true;
       router.replace({
         pathname: "/(main)/battle/match-session",
         params: { matchId: String(matchId) },
       } as any);
     }
-  }, [matchId, readyUserIds, router]);
+  }, [matchId, readyToLeaveVersusIntro, matchStatus, router]);
 
   const pulse = useSharedValue(1);
   useEffect(() => {
@@ -322,59 +383,14 @@ export default function BattleQueueScreen() {
 
   const opponent = status?.opponent;
   const { data: me } = useUserMeQuery();
-  const readiedUp = myReady || readyPending;
 
-  // Two phases once matched: while the auto-ready countdown is still
-  // running, Cancel Match is the only way out, so that's shown plainly
-  // here (matches the original pre-VersusIntro design). Only once readying
-  // up has actually fired -- Cancel Match no longer even makes sense at
-  // that point -- does the full VersusIntro reveal take over, right before
-  // this screen hands off to match-session.tsx.
-  if (isMatched && !readiedUp) {
-    return (
-      <LinearGradient colors={[ICON_COLORS.primary500, "#FF8F30"]} style={{ flex: 1 }}>
-        <SafeAreaView edges={["top", "bottom"]} className="flex-1">
-          <View className="flex-1 items-center justify-center px-8">
-            <View className="w-16 h-16 rounded-full bg-white/15 items-center justify-center mb-4">
-              <Swords size={28} color={ICON_COLORS.white} strokeWidth={2} />
-            </View>
-            <Text className="text-white text-2xl font-black mb-1">Opponent Found!</Text>
-
-            <Text className="text-white/70 text-sm text-center mt-6 mb-1">Readying up automatically…</Text>
-            <View className="w-full flex-row items-center justify-center gap-2 py-4">
-              <Text className="font-black text-3xl text-white">{autoReadyCountdown}</Text>
-            </View>
-
-            <TouchableOpacity
-              className="flex-row items-center gap-2 mt-4 px-6 py-3 rounded-2xl"
-              activeOpacity={0.8}
-              disabled={isLeavingMatch}
-              onPress={() => setShowLeaveConfirm(true)}
-            >
-              <X size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
-              <Text className="text-white/80 font-bold text-sm">
-                {isLeavingMatch ? "Cancelling…" : "Cancel Match"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <ForfeitModal
-            visible={showLeaveConfirm}
-            onCancel={() => {
-              setShowLeaveConfirm(false);
-              pendingLeaveActionRef.current = null;
-            }}
-            onConfirm={handleLeaveMatchConfirm}
-            title="Cancel This Match?"
-            message="Your opponent will be notified and matched with someone else. No rating changes."
-            confirmLabel="Yes, Cancel Match"
-            cancelLabel="Stay In Match"
-          />
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
+  // Straight to VersusIntro the instant a match is found -- no separate
+  // "Opponent Found!" screen and no visible ready-up countdown, since
+  // readying now happens automatically the moment the socket opens (see
+  // above). No Cancel Match button here either: usePreventRemove still
+  // guards this screen until both sides are ready, so a back gesture in
+  // this narrow window still has somewhere to resolve to (the same
+  // ForfeitModal), it's just not offered as an on-screen affordance anymore.
   if (isMatched) {
     return (
       <View style={{ flex: 1 }}>
@@ -389,12 +405,9 @@ export default function BattleQueueScreen() {
             rating: opponent?.rating ?? null,
             league: opponent?.league ?? null,
           }}
+          showPreparingPopup={readyToLeaveVersusIntro && matchStatus === "waiting"}
         />
 
-        {/* No Cancel Match button once readying-up has fired -- but
-            usePreventRemove above still guards this screen until BOTH
-            sides are ready, so a back gesture landing in this narrow
-            window still needs somewhere to resolve to. */}
         <ForfeitModal
           visible={showLeaveConfirm}
           onCancel={() => {

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Brain, Clock, Sparkles, Swords, WifiOff, X, XCircle, Zap } from "lucide-react-native";
+import { AlertTriangle, Clock, WifiOff, X, XCircle } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -11,24 +11,18 @@ import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
-import QuizStatusScreen, { type QuizStatusStep } from "@/components/loading/QuizStatusScreen";
-import { useBattleMatch } from "@/hooks/use-battle-match";
+import { useBattleMatchContext } from "@/hooks/use-battle-match";
 import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/hooks/use-battle";
-
-const GENERATING_STEPS: QuizStatusStep[] = [
-  { icon: Swords, text: "Entering the arena…" },
-  { icon: Brain,  text: "Selecting your questions…" },
-  { icon: Zap,    text: "Balancing the difficulty…" },
-  { icon: Sparkles, text: "Almost ready!" },
-];
 
 export default function BattleMatchSessionScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { matchId: matchIdStr } = useLocalSearchParams<{ matchId: string }>();
-  const matchId = matchIdStr ? parseInt(matchIdStr, 10) : null;
+  const matchIdFromParams = matchIdStr ? parseInt(matchIdStr, 10) : null;
 
   const {
+    activeMatchId,
+    setActiveMatchId,
     matchState,
     connectionStatus,
     disconnectInfo,
@@ -40,7 +34,19 @@ export default function BattleMatchSessionScreen() {
     opponentProgress,
     submitAnswer,
     manualRetry,
-  } = useBattleMatch(matchId);
+  } = useBattleMatchContext();
+
+  // The normal path (queue.tsx -> here) already has this set on the shared
+  // connection before this screen ever mounts -- this only matters for a
+  // cold start directly on this route (e.g. app relaunched mid-match and
+  // Expo Router restores the last URL), where the shared context hasn't
+  // seen a matchId yet and needs seeding from the route param instead.
+  useEffect(() => {
+    if (activeMatchId == null && matchIdFromParams != null) {
+      setActiveMatchId(matchIdFromParams);
+    }
+  }, [activeMatchId, matchIdFromParams, setActiveMatchId]);
+  const matchId = activeMatchId ?? matchIdFromParams;
 
   // REST, not the match WS's fire-and-forget sendForfeit -- same reliability
   // rationale as queue.tsx's forfeit flow (a plain request/response
@@ -58,24 +64,29 @@ export default function BattleMatchSessionScreen() {
   const [showForfeit, setShowForfeit] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [, forceTick] = useState(0);
-  // The ring-fill animation in QuizStatusScreen ("generating") needs to
-  // visibly finish even if the real match status flips to "countdown"
-  // before its animation would — same isSuccess/readyToShowQuiz split
-  // quiz-session.tsx uses, so the loading screen never gets cut off mid-fill.
-  const [generatingDone, setGeneratingDone] = useState(false);
 
   const questionDeadlineRef = useRef<number | null>(null);
-  const countdownDeadlineRef = useRef<number | null>(null);
-  // The server's real countdown budget (matchState.started_at) is computed
-  // BEFORE select_battle_questions runs (see _activate_countdown in
-  // battle_gameplay_service.py), which can itself take a couple of seconds
-  // (AI question generation) -- so by the time countdown_started even
-  // reaches this screen, that budget may already be mostly or fully spent,
-  // sometimes leaving zero real seconds to visibly count down. This floor
-  // guarantees a full "3, 2, 1, GO!" beat is always shown for at least 3
-  // real seconds after the generating screen finishes, regardless of how
-  // much of the server's own budget it already used.
-  const localCountdownFloorRef = useRef<number | null>(null);
+
+  // A "3,2,1,GO!" beat shown for as long as the match isn't "active" yet
+  // (the early return below) -- purely local/cosmetic, not synced to
+  // anything real, since queue.tsx already waits for a genuinely active
+  // match before ever navigating here and this only ever covers this
+  // instance's own brief initial fetch. Holds on "GO!" once it gets there --
+  // never loops back to 3 -- so a longer-than-usual gap just sits on "GO!"
+  // instead of visibly restarting the count.
+  const [countdownValue, setCountdownValue] = useState(3);
+
+  useEffect(() => {
+    setCountdownValue(3);
+  }, [matchId]);
+
+  useEffect(() => {
+    if (matchState?.status === "active" || countdownValue <= 0) return;
+    const timer = setTimeout(() => {
+      setCountdownValue((v) => v - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdownValue, matchState?.status]);
 
   useEffect(() => {
     setSelectedOption(null);
@@ -88,13 +99,7 @@ export default function BattleMatchSessionScreen() {
   }, [matchState?.question_index, matchState?.status]);
 
   useEffect(() => {
-    if (matchState?.status === "countdown" && matchState.started_at) {
-      countdownDeadlineRef.current = new Date(matchState.started_at).getTime();
-    }
-  }, [matchState?.status, matchState?.started_at]);
-
-  useEffect(() => {
-    if (matchState?.status !== "countdown" && matchState?.status !== "active") return;
+    if (matchState?.status !== "active") return;
     const id = setInterval(() => forceTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [matchState?.status]);
@@ -108,6 +113,16 @@ export default function BattleMatchSessionScreen() {
       // read, not stale until its 30s staleTime window happens to expire.
       queryClient.invalidateQueries({ queryKey: [...battleKeys.all, "history"] });
       queryClient.invalidateQueries({ queryKey: battleKeys.profile });
+      // battleKeys.queueStatus is a single GLOBAL cache key, not scoped to
+      // this screen -- left alone, it still holds {status:"matched",
+      // match_id: <this now-completed match>}. A fresh queue.tsx mounted
+      // later (tapping "Next Match") would read that stale entry on its very
+      // FIRST render, before its own mount effect gets a chance to clear it,
+      // briefly resolving matchId back to this dead match and reconnecting
+      // its WS -- see queue.tsx's handleLeaveMatchConfirm for the same fix
+      // on the self-forfeit path; this covers the natural-finish/opponent-
+      // forfeit path that one didn't.
+      queryClient.removeQueries({ queryKey: battleKeys.queueStatus, exact: true });
       router.replace({
         pathname: "/(main)/battle/battle-results",
         params: {
@@ -120,9 +135,9 @@ export default function BattleMatchSessionScreen() {
   }, [matchState?.status, finalResult]);
 
   const handleBack = () => {
-    // "waiting" can't reach this handler -- that status always renders the
-    // "generating" early return above instead of the header this button lives in.
-    if (matchState?.status === "countdown" || matchState?.status === "active") {
+    // Only "active" reaches this handler -- every other status renders one
+    // of the early returns above instead of the header this button lives in.
+    if (matchState?.status === "active") {
       setShowForfeit(true);
     } else {
       // dismissTo (not replace): this pops the whole battle/queue/match-session
@@ -136,7 +151,11 @@ export default function BattleMatchSessionScreen() {
 
   const handleForfeitConfirm = () => {
     if (matchId === null) return;
-    setShowForfeit(false);
+    // Modal stays open (isConfirming below covers the pending state in its
+    // own buttons) instead of closing immediately -- the screen behind it
+    // still shows the live question grid, so leaving the modal up avoids it
+    // being visibly interactive during a forfeit that's already in flight.
+    //
     // No onSuccess navigation here -- the REST response only confirms the
     // forfeit was recorded. The actual transition away from this screen is
     // still driven by the existing WS match_finished handling above (same
@@ -206,48 +225,35 @@ export default function BattleMatchSessionScreen() {
     );
   }
 
-  // Both players are already ready by the time this screen is reached (that's
-  // exactly what queue.tsx waits for before navigating here), so the real
-  // work left is the backend selecting this match's questions -- shown as
-  // the same "generating" loading screen practice mode uses, bridging the
-  // gap until the "countdown_started" WS event actually flips the status.
-  if (!generatingDone) {
+  // queue.tsx always runs all the way through to a genuinely "active" match
+  // before it ever navigates here, so in the ordinary case this covers only
+  // this instance's own brief initial fetch gap -- shown as the same
+  // "3,2,1,GO!" beat either way rather than a separate loading style, since
+  // there's no way to tell from in here which case it actually is.
+  //
+  // Also holds here until matchState.subject has actually arrived, not just
+  // status === "active": this connection was opened back while the match
+  // was still "waiting" (queue.tsx opens it the instant a match is found),
+  // and get_match_state() returns almost nothing for that status -- subject/
+  // difficulty/question_count only get backfilled by the countdown_started
+  // handler's own REST refetch (see hooks/use-battle-match.tsx). That
+  // refetch has the whole countdown phase to land before "active" ever
+  // arrives, but trusting timing alone previously showed a live match with
+  // a blank subject/league/progress bars if it landed late -- gating on the
+  // data itself, not just the status, means a slow refetch just holds the
+  // countdown a little longer instead.
+  if (!matchState || matchState.status !== "active" || matchState.subject == null) {
     return (
-      <QuizStatusScreen
-        title="Preparing Match"
-        steps={GENERATING_STEPS}
-        subject={matchState?.subject ?? "Battle"}
-        difficulty={matchState?.difficulty ?? "Adaptive"}
-        isComplete={!!matchState && matchState.status !== "waiting"}
-        onComplete={() => setGeneratingDone(true)}
-      />
+      <View className="flex-1 items-center justify-center bg-white">
+        <Text className="text-slate-400 font-bold text-lg uppercase tracking-widest mb-4">
+          {countdownValue > 0 ? "Starting In" : "Get Ready"}
+        </Text>
+        <Text className="text-primary text-9xl font-black">
+          {countdownValue > 0 ? countdownValue : "GO!"}
+        </Text>
+      </View>
     );
   }
-
-  // Unreachable in practice: generatingDone can only flip once isComplete
-  // above was true, which itself requires matchState to be non-null -- this
-  // is just narrowing the type for everything below.
-  if (!matchState) return null;
-
-  // Set once, synchronously during render (not in an effect, which would
-  // land a whole tick late and let the "active" branch flash first): the
-  // very first render after generatingDone flips true is exactly when this
-  // needs to already be in place for countdownEffectiveDeadline below.
-  if (localCountdownFloorRef.current === null) {
-    localCountdownFloorRef.current = Date.now() + 3000;
-  }
-
-  // Whichever deadline is later wins: the server's real one (when there was
-  // still budget left to show) or the local floor (when the server's
-  // budget was already spent by the time we got here) -- see
-  // localCountdownFloorRef's comment above for why the latter is needed.
-  const countdownEffectiveDeadline = Math.max(
-    countdownDeadlineRef.current ?? 0,
-    localCountdownFloorRef.current ?? 0
-  );
-  const isCountingDown =
-    (matchState.status === "countdown" || matchState.status === "active") &&
-    Date.now() < countdownEffectiveDeadline;
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-white">
@@ -301,30 +307,7 @@ export default function BattleMatchSessionScreen() {
         </View>
       )}
 
-      {isCountingDown && (() => {
-        const secondsLeft = Math.max(0, Math.ceil((countdownEffectiveDeadline - Date.now()) / 1000));
-        // The full deadline can be longer than 3 seconds, but the visible
-        // "3, 2, 1, GO!" only needs to cover the final stretch -- clamping
-        // here means the early part just holds on "3" instead of counting
-        // down from the real (larger) duration.
-        const display = Math.min(secondsLeft, 3);
-        return (
-          // Absolutely positioned over the whole screen (not just the flex
-          // space below the header) -- the header above takes up its own
-          // height, so a plain flex-1 centered View here would center
-          // itself within the remaining space, not the true screen center.
-          <View className="absolute inset-0 items-center justify-center bg-white">
-            <Text className="text-slate-400 font-bold text-lg uppercase tracking-widest mb-4">
-              {display > 0 ? "Starting In" : "Get Ready"}
-            </Text>
-            <Text className="text-primary text-9xl font-black">
-              {display > 0 ? display : "GO!"}
-            </Text>
-          </View>
-        );
-      })()}
-
-      {matchState.status === "active" && !isCountingDown && (
+      {matchState.status === "active" && (
         <View className="flex-1">
           <View className="mx-4 mt-2 flex-row items-center justify-between">
             <View className="flex-1">
@@ -424,19 +407,8 @@ export default function BattleMatchSessionScreen() {
         visible={showForfeit}
         onCancel={() => setShowForfeit(false)}
         onConfirm={handleForfeitConfirm}
+        isConfirming={isForfeiting}
       />
-
-      {isForfeiting && (
-        // Covers the whole screen (not just a modal) from the moment
-        // forfeit is confirmed until the WS match_finished handling above
-        // navigates away to battle-results -- the live question grid stays
-        // interactive/frozen mid-state underneath otherwise, which looks
-        // broken during that brief gap.
-        <View className="absolute inset-0 items-center justify-center bg-white">
-          <ActivityIndicator size="large" color={ICON_COLORS.primary500} style={{ marginBottom: 16 }} />
-          <Text className="text-slate-800 font-black text-lg">Ending Match…</Text>
-        </View>
-      )}
     </SafeAreaView>
   );
 }

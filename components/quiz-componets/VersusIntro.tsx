@@ -11,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { getLeagueStyle } from "@/constants/battleStyles";
+import MatchStartPopup from "@/components/quiz-componets/MatchStartPopup";
 import { League } from "@/types/battleModuleTypes";
 
 export type VersusPlayerInfo = {
@@ -129,10 +130,16 @@ export default function VersusIntro({
   me,
   opponent,
   children,
+  showPreparingPopup,
 }: {
   me: VersusPlayerInfo;
   opponent: VersusPlayerInfo;
   children?: React.ReactNode;
+  // Blurred "Preparing Match" overlay, composed here rather than as a
+  // sibling in the caller (queue.tsx) -- the caller still owns WHEN this
+  // should show (both players ready, VersusIntro's own reveal already
+  // finished, match still "waiting"), this just owns WHERE it renders.
+  showPreparingPopup?: boolean;
 }) {
   const { height: windowHeight } = useWindowDimensions();
   const halfHeight = windowHeight / 2;
@@ -267,6 +274,8 @@ export default function VersusIntro({
           S
         </Animated.Text>
       </View>
+
+      {showPreparingPopup && <MatchStartPopup />}
     </View>
   );
 }

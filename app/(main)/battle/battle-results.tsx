@@ -102,6 +102,14 @@ export default function BattleResultsScreen() {
   const theme: BattleResultTheme = (me.result as BattleResultTheme) ?? "draw";
   const style = BATTLE_RESULT_STYLES[theme];
   const totalQuestions = Math.max(me.correct_count ?? 0, opponent?.correct_count ?? 0, 1);
+  // me.result is only ever "forfeit" from MY OWN forfeiting -- a win earned
+  // because the OPPONENT forfeited still reports as a plain "win" here, so
+  // that reason previously only ever surfaced as a toast on match-session.tsx
+  // (now removed). Surfacing it here instead means it's still visible even
+  // if that toast was missed, and stays visible for as long as this screen
+  // is open rather than disappearing after a few seconds.
+  const opponentForfeited = opponent?.result === "forfeit";
+  const subtitle = opponentForfeited ? "Opponent forfeited the match" : style.sub;
 
   const { data: analytics } = useAnalyticsMeQuery();
   const weakSubject = pickWeakSubject(analytics);
@@ -122,7 +130,7 @@ export default function BattleResultsScreen() {
     <SafeAreaView edges={["top"]} className={`flex-1 ${style.bg}`}>
       <View className="px-5 pt-8 pb-8">
         <Text className="text-white text-3xl font-black text-center">{style.label}</Text>
-        <Text className="text-white/70 text-sm text-center mt-1">{style.sub}</Text>
+        <Text className="text-white/70 text-sm text-center mt-1">{subtitle}</Text>
 
         <View className="flex-row items-center justify-between mt-6 bg-white/15 rounded-2xl p-4">
           <View className="items-center flex-1">

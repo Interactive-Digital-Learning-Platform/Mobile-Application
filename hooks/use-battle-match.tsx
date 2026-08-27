@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import Toast from "react-native-toast-message";
 import { fetchMatchState } from "@/api/battleAPI";
@@ -101,16 +101,34 @@ export function useBattleMatch(matchId: number | null) {
           break;
         }
         case "player_ready": {
+          // No toast here anymore -- readying up is automatic for both
+          // sides the instant a match is found (see queue.tsx), so this
+          // fires within moments of every single match rather than
+          // signaling anything the player actually did.
           setReadyUserIds((prev) => new Set(prev).add(event.user_id));
-          if (event.user_id !== myUserId) {
-            Toast.show({ type: "info", text1: "Opponent is ready" });
-          }
           break;
         }
         case "countdown_started": {
           setMatchState((prev) =>
             prev ? { ...prev, status: "countdown", started_at: event.started_at } : prev
           );
+          // This connection was opened back while the match was still
+          // "waiting" (queue.tsx opens it the instant a match is found, so
+          // ready-up can happen there) -- get_match_state() deliberately
+          // returns almost nothing for that status (no subject/difficulty/
+          // question_count, see battle_gameplay_service.py), and neither
+          // this event nor match_started/question_started carry those
+          // fields either, so every status transition above was just
+          // spreading that gap forward via `...prev` forever. Refetch once,
+          // on this FIRST transition out of "waiting", to backfill them for
+          // the rest of the match.
+          if (matchId !== null) {
+            fetchMatchState(matchId)
+              .then((state) => {
+                if (!unmountedRef.current) setMatchState(state);
+              })
+              .catch(() => {});
+          }
           break;
         }
         case "match_started": {
@@ -216,9 +234,10 @@ export function useBattleMatch(matchId: number | null) {
           if (mine) {
             setFinalResult({ winner_user_id: event.winner_user_id, me: mine, opponent });
           }
-          if (opponent?.result === "forfeit") {
-            Toast.show({ type: "info", text1: "Opponent forfeited", text2: "You win this match!" });
-          }
+          // No toast for an opponent forfeit -- battle-results.tsx now shows
+          // "Opponent forfeited the match" directly as the result subtitle,
+          // visible for as long as that screen is open instead of a few
+          // seconds on this one.
           setMatchState((prev) => (prev ? { ...prev, status: "completed" } : prev));
           break;
         }
@@ -258,7 +277,7 @@ export function useBattleMatch(matchId: number | null) {
           break;
       }
     },
-    [myUserId]
+    [myUserId, matchId]
   );
 
   const clearReconnectTimer = useCallback(() => {
@@ -390,14 +409,25 @@ export function useBattleMatch(matchId: number | null) {
 
     if (matchId === null) return;
 
+    // Connects immediately, in parallel with the REST hydration below --
+    // sequencing them (REST then connect, as this used to) leaves a real
+    // network-round-trip-sized gap between the OLD screen's socket closing
+    // (e.g. queue.tsx unmounting on navigation here) and this one opening.
+    // Under any backend load that gap can exceed the server's same-device-
+    // reconnect debounce window (BATTLE_DISCONNECT_NOTICE_DEBOUNCE_SECONDS),
+    // which reads as a genuine disconnect and fires a spurious "Opponent
+    // disconnected/reconnected" toast pair for both players on every single
+    // queue -> match-session handoff instead of just an occasional slow one.
+    // The WS's own state_sync event delivers the same snapshot moments
+    // later regardless, so there's no data-freshness reason to wait.
+    connect();
     fetchMatchState(matchId)
       .then((state) => {
         if (!unmountedRef.current) setMatchState(state);
       })
       .catch(() => {
         if (!unmountedRef.current) setInitialLoadError(true);
-      })
-      .finally(() => connect());
+      });
 
     return () => {
       unmountedRef.current = true;
@@ -465,4 +495,45 @@ export function useBattleMatch(matchId: number | null) {
     forfeit,
     manualRetry,
   };
+}
+
+// Shares ONE useBattleMatch connection across the whole (main)/battle Stack
+// (see its _layout.tsx), instead of queue.tsx and match-session.tsx each
+// mounting their own useBattleMatch(matchId) for the exact same match+user.
+// That duplication was the actual root cause of a WS churn bug: React
+// Navigation keeps the outgoing screen mounted through router.replace's
+// transition animation, so for that whole window BOTH screens held a live
+// socket for the same match. The server force-closes whichever one loses
+// that race; the loser's onClose (still mounted, so not a "real" unmount)
+// treated that as a drop and auto-reconnected, which force-closed the
+// other one right back -- a loop that fired "Opponent
+// disconnected/reconnected" for both players on every single handoff. A
+// Stack layout, unlike its child screens, never unmounts while navigating
+// between siblings inside it, so hosting the one-and-only connection here
+// means the queue -> match-session transition never touches the socket at
+// all.
+const BattleMatchContext = createContext<
+  (ReturnType<typeof useBattleMatch> & {
+    activeMatchId: number | null;
+    setActiveMatchId: (matchId: number | null) => void;
+  })
+  | null
+>(null);
+
+export function BattleMatchProvider({ children }: { children: ReactNode }) {
+  const [activeMatchId, setActiveMatchId] = useState<number | null>(null);
+  const battleMatch = useBattleMatch(activeMatchId);
+  const value = useMemo(
+    () => ({ ...battleMatch, activeMatchId, setActiveMatchId }),
+    [battleMatch, activeMatchId, setActiveMatchId]
+  );
+  return <BattleMatchContext.Provider value={value}>{children}</BattleMatchContext.Provider>;
+}
+
+export function useBattleMatchContext() {
+  const ctx = useContext(BattleMatchContext);
+  if (!ctx) {
+    throw new Error("useBattleMatchContext must be used within a BattleMatchProvider");
+  }
+  return ctx;
 }
