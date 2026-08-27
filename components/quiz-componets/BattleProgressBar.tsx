@@ -15,7 +15,13 @@ type SegmentState = "correct" | "incorrect" | "skipped" | "current" | "pending";
 
 function segmentState(order: number, currentIndex: number, answers: BattleAnswerProgress[]): SegmentState {
   const answer = answers.find((a) => a.question_order === order);
-  if (answer) return answer.is_correct ? "correct" : "incorrect";
+  if (answer) {
+    // Every graded slot gets an entry now, including ones this participant
+    // never actually submitted anything for -- `answered` distinguishes
+    // that ("skipped", yellow) from an actual wrong answer ("incorrect", red).
+    if (!answer.answered) return "skipped";
+    return answer.is_correct ? "correct" : "incorrect";
+  }
   if (order < currentIndex) return "skipped";
   if (order === currentIndex) return "current";
   return "pending";

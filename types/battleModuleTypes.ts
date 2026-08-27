@@ -115,11 +115,29 @@ export interface BattleMatchResult {
 }
 
 export interface BattleAnswerProgress {
-  // One question slot's outcome for a participant's progress bar. Absence
-  // of an entry for a question_order that's already in the past means that
-  // participant never answered it before its window closed.
+  // One question slot's outcome for a participant's progress bar. Every
+  // GRADED slot gets an entry now (deferred-grading design), including ones
+  // this participant never actually submitted anything for -- `answered`
+  // distinguishes "answered wrong" from "never answered at all" (both grade
+  // is_correct=false) for the progress bar's yellow-vs-red coloring.
+  // Absence of an entry entirely just means this slot isn't graded yet.
   question_order: number;
   is_correct: boolean;
+  answered: boolean;
+}
+
+// One participant's graded outcome for one question, revealed to BOTH
+// players simultaneously at the reveal boundary (see the `question_result`
+// WS event). Deliberately no `selected_option` — never leaked to the
+// opponent, only correctness is shared.
+export interface ParticipantQuestionResult {
+  user_id: number;
+  answered: boolean;
+  is_correct: boolean;
+  base_score: number;
+  speed_bonus: number;
+  streak_bonus: number;
+  total_question_score: number;
 }
 
 // Polymorphic — populated fields vary by `status`, see battle_gameplay_service's
@@ -141,6 +159,10 @@ export interface BattleMatchStateResponse {
   // hydration on initial load/reconnect.
   my_answers?: BattleAnswerProgress[] | null;
   opponent_answers?: BattleAnswerProgress[] | null;
+  // Populated only once the CURRENT question has locked/been graded — null
+  // means it's still answerable. Lets a reconnecting client immediately
+  // show the locked/revealed state instead of a live answering UI.
+  current_question_results?: ParticipantQuestionResult[] | null;
   my_progress?: BattleParticipantProgress | null;
   opponent_progress?: BattleParticipantProgress | null;
   started_at?: string | null;
@@ -176,11 +198,10 @@ export interface SubmitBattleAnswerRequest {
 }
 
 export interface SubmitBattleAnswerResponse {
+  // Deliberately minimal — grading is deferred to the reveal boundary (see
+  // ParticipantQuestionResult / the `question_result` WS event), so
+  // submitting no longer reveals correctness. Just an ack that the
+  // (re)submission was accepted.
   question_id: number;
-  is_correct: boolean;
-  base_score: number;
-  speed_bonus: number;
-  streak_bonus: number;
-  total_question_score: number;
-  response_time_ms: number;
+  selected_option: string;
 }

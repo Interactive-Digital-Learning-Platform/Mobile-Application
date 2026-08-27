@@ -17,12 +17,17 @@ export interface DisconnectInfo {
 }
 
 export interface AnswerFeedback {
+  // False means this question locked with no submission in effect at all
+  // (never answered, or the pending pick expired/was lost) -- distinct from
+  // "answered but wrong" so the UI can say "Time's up" instead of the
+  // misleading "Incorrect" for a question the player never actually tapped
+  // an option on.
+  answered: boolean;
   isCorrect: boolean;
   baseScore: number;
   speedBonus: number;
   streakBonus: number;
   totalQuestionScore: number;
-  responseTimeMs: number;
 }
 
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
@@ -48,14 +53,21 @@ export function useBattleMatch(matchId: number | null) {
   // Per-question outcome for each side's progress bar (lockstep play: both
   // players share the same question_index, so these two arrays line up
   // segment-for-segment). Seeded from matchState.my_answers/opponent_answers
-  // on load/reconnect, appended to live as answer_acknowledged/
-  // opponent_answered events arrive.
+  // on load/reconnect, appended to live as one `question_result` event
+  // arrives for both sides together (grading is deferred to the reveal
+  // boundary now, not instant-per-submission).
   const [myProgress, setMyProgress] = useState<BattleAnswerProgress[]>([]);
   const [opponentProgress, setOpponentProgress] = useState<BattleAnswerProgress[]>([]);
+  // Which question_index has already locked/been graded -- null means the
+  // current question is still answerable (editable). Server-event-driven
+  // (set only by `question_result`), not predicted client-side from the
+  // countdown, so it's always exactly right regardless of clock drift.
+  const [revealedQuestionIndex, setRevealedQuestionIndex] = useState<number | null>(null);
 
   const socketRef = useRef<BattleSocketHandle | null>(null);
-  const answerGuardRef = useRef(false);
+  const revealedQuestionIndexRef = useRef<number | null>(null);
   const currentQuestionIndexRef = useRef<number | null>(null);
+  const subjectRef = useRef<string | null | undefined>(null);
   const unmountedRef = useRef(false);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,6 +79,33 @@ export function useBattleMatch(matchId: number | null) {
   useEffect(() => {
     currentQuestionIndexRef.current = matchState?.question_index ?? null;
   }, [matchState?.question_index]);
+
+  useEffect(() => {
+    revealedQuestionIndexRef.current = revealedQuestionIndex;
+  }, [revealedQuestionIndex]);
+
+  useEffect(() => {
+    subjectRef.current = matchState?.subject;
+  }, [matchState?.subject]);
+
+  // Self-healing fallback for the subject/difficulty/question_count backfill
+  // (see the "countdown_started" case below for why it's needed at all):
+  // that refetch is a ONE-SHOT reaction to a single WS event, which can be
+  // missed entirely (a genuine drop, or this connection attaching/replacing
+  // another one right around that moment) with no replay -- if that
+  // happens, subject stays null forever via every later status-only spread
+  // (match_started/question_started never set it themselves), permanently
+  // stranding match-session.tsx on its "waiting for subject" gate even
+  // though the match is genuinely active and progressing server-side.
+  // Calling this from those same later events closes that gap.
+  const backfillSubjectIfMissing = useCallback(() => {
+    if (matchId === null || subjectRef.current != null) return;
+    fetchMatchState(matchId)
+      .then((state) => {
+        if (!unmountedRef.current) setMatchState(state);
+      })
+      .catch(() => {});
+  }, [matchId]);
 
   useEffect(() => {
     if (matchState?.my_answers) setMyProgress(matchState.my_answers);
@@ -97,6 +136,28 @@ export function useBattleMatch(matchId: number | null) {
           setMatchState(event.state);
           if (event.state.status === "completed" && event.state.result) {
             setFinalResult(event.state.result);
+          }
+          // Reconnect correctness: the current question may have already
+          // locked/been graded while this client was disconnected -- hydrate
+          // the same "revealed" state a live question_result would have set,
+          // so the UI shows the locked/graded question instead of a live
+          // answering one for something that's already over.
+          if (event.state.current_question_results && event.state.question_index != null) {
+            setRevealedQuestionIndex(event.state.question_index);
+            const mine = event.state.current_question_results.find((r) => r.user_id === myUserId);
+            if (mine) {
+              setLastAnswerFeedback({
+                answered: mine.answered,
+                isCorrect: mine.is_correct,
+                baseScore: mine.base_score,
+                speedBonus: mine.speed_bonus,
+                streakBonus: mine.streak_bonus,
+                totalQuestionScore: mine.total_question_score,
+              });
+            }
+          } else {
+            setRevealedQuestionIndex(null);
+            setLastAnswerFeedback(null);
           }
           break;
         }
@@ -135,6 +196,7 @@ export function useBattleMatch(matchId: number | null) {
           setMatchState((prev) =>
             prev ? { ...prev, status: "active", started_at: event.started_at, question: null } : prev
           );
+          backfillSubjectIfMissing();
           break;
         }
         case "question_started": {
@@ -151,55 +213,79 @@ export function useBattleMatch(matchId: number | null) {
               : prev
           );
           setLastAnswerFeedback(null);
-          answerGuardRef.current = false;
+          setRevealedQuestionIndex(null);
+          backfillSubjectIfMissing();
           break;
         }
         case "answer_acknowledged": {
-          setLastAnswerFeedback({
-            isCorrect: event.is_correct,
-            baseScore: event.base_score,
-            speedBonus: event.speed_bonus,
-            streakBonus: event.streak_bonus,
-            totalQuestionScore: event.total_question_score,
-            responseTimeMs: event.response_time_ms,
-          });
-          setOwnScore((prev) => prev + event.total_question_score);
-          setMatchState((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  has_answered_current_question: true,
-                  my_progress: prev.my_progress
-                    ? { ...prev.my_progress, answered_count: prev.my_progress.answered_count + 1 }
-                    : prev.my_progress,
-                }
-              : prev
-          );
-          const order = currentQuestionIndexRef.current;
-          if (order !== null) {
-            setMyProgress((prev) =>
-              prev.some((p) => p.question_order === order)
-                ? prev
-                : [...prev, { question_order: order, is_correct: event.is_correct }]
-            );
-          }
+          // Grading is deferred to the reveal boundary now (see
+          // "question_result" below) -- this ack no longer carries
+          // correctness, it's just confirmation the (re)submission landed.
+          // Nothing to do here; the UI's optimistic `selectedOption` (set
+          // synchronously on tap, before this ack even arrives) already
+          // covers the "what did I pick" display.
           break;
         }
-        case "opponent_answered": {
-          if (event.user_id === myUserId) break;
-          setMatchState((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  opponent_progress: { user_id: event.user_id, answered_count: event.answered_count },
-                }
-              : prev
-          );
-          setOpponentProgress((prev) =>
-            prev.some((p) => p.question_order === event.question_order)
-              ? prev
-              : [...prev, { question_order: event.question_order, is_correct: event.is_correct }]
-          );
+        case "question_result": {
+          setRevealedQuestionIndex(event.question_order);
+          const mine = event.results.find((r) => r.user_id === myUserId);
+          const opponent = event.results.find((r) => r.user_id !== myUserId);
+          if (mine) {
+            setLastAnswerFeedback({
+              answered: mine.answered,
+              isCorrect: mine.is_correct,
+              baseScore: mine.base_score,
+              speedBonus: mine.speed_bonus,
+              streakBonus: mine.streak_bonus,
+              totalQuestionScore: mine.total_question_score,
+            });
+            setOwnScore((prev) => prev + mine.total_question_score);
+            setMatchState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    has_answered_current_question: true,
+                    my_progress:
+                      prev.my_progress && mine.answered
+                        ? { ...prev.my_progress, answered_count: prev.my_progress.answered_count + 1 }
+                        : prev.my_progress,
+                  }
+                : prev
+            );
+            setMyProgress((prev) =>
+              prev.some((p) => p.question_order === event.question_order)
+                ? prev
+                : [
+                    ...prev,
+                    { question_order: event.question_order, is_correct: mine.is_correct, answered: mine.answered },
+                  ]
+            );
+          }
+          if (opponent) {
+            setMatchState((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    opponent_progress:
+                      prev.opponent_progress && opponent.answered
+                        ? { ...prev.opponent_progress, answered_count: prev.opponent_progress.answered_count + 1 }
+                        : prev.opponent_progress,
+                  }
+                : prev
+            );
+            setOpponentProgress((prev) =>
+              prev.some((p) => p.question_order === event.question_order)
+                ? prev
+                : [
+                    ...prev,
+                    {
+                      question_order: event.question_order,
+                      is_correct: opponent.is_correct,
+                      answered: opponent.answered,
+                    },
+                  ]
+            );
+          }
           break;
         }
         case "player_disconnected": {
@@ -277,7 +363,7 @@ export function useBattleMatch(matchId: number | null) {
           break;
       }
     },
-    [myUserId, matchId]
+    [myUserId, matchId, backfillSubjectIfMissing]
   );
 
   const clearReconnectTimer = useCallback(() => {
@@ -406,6 +492,8 @@ export function useBattleMatch(matchId: number | null) {
     setOwnScore(0);
     setMyProgress([]);
     setOpponentProgress([]);
+    setRevealedQuestionIndex(null);
+    setLastAnswerFeedback(null);
 
     if (matchId === null) return;
 
@@ -468,9 +556,13 @@ export function useBattleMatch(matchId: number | null) {
     return socketRef.current?.sendReady() ?? false;
   }, []);
 
+  // Editable answers: no one-shot guard -- callers may invoke this
+  // repeatedly as the player changes their selection, right up until the
+  // question locks (revealedQuestionIndex catches up to the current one via
+  // a "question_result" event), after which further sends are just dropped
+  // client-side rather than round-tripping to a guaranteed 409.
   const submitAnswer = useCallback((questionId: number, selectedOption: string) => {
-    if (answerGuardRef.current) return;
-    answerGuardRef.current = true;
+    if (revealedQuestionIndexRef.current === currentQuestionIndexRef.current) return;
     socketRef.current?.sendAnswer(questionId, selectedOption);
   }, []);
 
@@ -489,6 +581,7 @@ export function useBattleMatch(matchId: number | null) {
     ownScore,
     myProgress,
     opponentProgress,
+    revealedQuestionIndex,
     myUserId,
     sendReady,
     submitAnswer,

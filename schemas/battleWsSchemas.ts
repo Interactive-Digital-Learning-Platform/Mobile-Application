@@ -15,6 +15,17 @@ const battleQuestionPublicSchema = z.object({
 const battleAnswerProgressSchema = z.object({
   question_order: z.number(),
   is_correct: z.boolean(),
+  answered: z.boolean(),
+});
+
+const participantQuestionResultSchema = z.object({
+  user_id: z.number(),
+  answered: z.boolean(),
+  is_correct: z.boolean(),
+  base_score: z.number(),
+  speed_bonus: z.number(),
+  streak_bonus: z.number(),
+  total_question_score: z.number(),
 });
 
 const battleParticipantProgressSchema = z.object({
@@ -57,6 +68,7 @@ const battleMatchStateSchema = z.object({
   has_answered_current_question: z.boolean().nullable().optional(),
   my_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
   opponent_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
+  current_question_results: z.array(participantQuestionResultSchema).nullable().optional(),
   my_progress: battleParticipantProgressSchema.nullable().optional(),
   opponent_progress: battleParticipantProgressSchema.nullable().optional(),
   started_at: z.string().nullable().optional(),
@@ -101,20 +113,13 @@ const questionStartedEventSchema = z.object({
 const answerAcknowledgedEventSchema = z.object({
   type: z.literal("answer_acknowledged"),
   question_id: z.number(),
-  is_correct: z.boolean(),
-  base_score: z.number(),
-  speed_bonus: z.number(),
-  streak_bonus: z.number(),
-  total_question_score: z.number(),
-  response_time_ms: z.number(),
+  selected_option: z.string(),
 });
 
-const opponentAnsweredEventSchema = z.object({
-  type: z.literal("opponent_answered"),
-  user_id: z.number(),
-  answered_count: z.number(),
+const questionResultEventSchema = z.object({
+  type: z.literal("question_result"),
   question_order: z.number(),
-  is_correct: z.boolean(),
+  results: z.array(participantQuestionResultSchema),
 });
 
 const playerDisconnectedEventSchema = z.object({
@@ -155,7 +160,7 @@ export const battleWsInboundEventSchema = z.discriminatedUnion("type", [
   matchStartedEventSchema,
   questionStartedEventSchema,
   answerAcknowledgedEventSchema,
-  opponentAnsweredEventSchema,
+  questionResultEventSchema,
   playerDisconnectedEventSchema,
   playerReconnectedEventSchema,
   matchFinishedEventSchema,

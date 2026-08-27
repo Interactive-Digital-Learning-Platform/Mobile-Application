@@ -229,25 +229,28 @@ export default function BattleQueueScreen() {
   const readyToLeaveVersusIntro = versusIntroDone && bothReady;
   const matchStatus = matchState?.status;
 
-  // Hands straight off to match-session.tsx the instant question generation
-  // finishes (status leaves "waiting") -- no "Preparing Match" popup, no
-  // countdown, the real question is just already live by the time this
-  // screen changes.
+  // Hands off once VersusIntro's own reveal is done and both sides are
+  // ready: straight to match-session.tsx if question generation already
+  // finished (status left "waiting") -- the real question is just already
+  // live by the time this screen changes -- otherwise to the dedicated
+  // "preparing" screen, which owns waiting out the rest of that gap (see
+  // app/(main)/battle/preparing.tsx) and hands off to match-session.tsx
+  // itself once ready.
   useEffect(() => {
-    if (
-      matchId !== null &&
-      readyToLeaveVersusIntro &&
-      matchStatus != null &&
-      matchStatus !== "waiting" &&
-      !matchStartedNavigatedRef.current
-    ) {
-      matchStartedNavigatedRef.current = true;
+    if (matchId === null || !readyToLeaveVersusIntro || matchStartedNavigatedRef.current) return;
+    matchStartedNavigatedRef.current = true;
+    if (matchStatus != null && matchStatus !== "waiting") {
       router.replace({
         pathname: "/(main)/battle/match-session",
         params: { matchId: String(matchId) },
       } as any);
+    } else {
+      router.replace({
+        pathname: "/(main)/battle/preparing",
+        params: { matchId: String(matchId), subject: subject ?? "" },
+      } as any);
     }
-  }, [matchId, readyToLeaveVersusIntro, matchStatus, router]);
+  }, [matchId, readyToLeaveVersusIntro, matchStatus, subject, router]);
 
   const pulse = useSharedValue(1);
   useEffect(() => {
@@ -405,7 +408,6 @@ export default function BattleQueueScreen() {
             rating: opponent?.rating ?? null,
             league: opponent?.league ?? null,
           }}
-          showPreparingPopup={readyToLeaveVersusIntro && matchStatus === "waiting"}
         />
 
         <ForfeitModal

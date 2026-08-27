@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,6 +13,15 @@ import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import { useBattleMatchContext } from "@/hooks/use-battle-match";
 import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/hooks/use-battle";
+
+// Must match Quiz-Battle-Service's BATTLE_ANSWER_REVEAL_SECONDS (app/core/
+// config.py) -- the server stops accepting/overwriting answers this many
+// seconds before a question's window closes (see
+// battle_gameplay_service.submit_battle_answer's "already graded" 409).
+// Disabling the options client-side at the same instant, rather than only
+// once the server's "question_result" reveal actually arrives, avoids a
+// last-second tap that's guaranteed to be rejected.
+const ANSWER_REVEAL_SECONDS = 7;
 
 export default function BattleMatchSessionScreen() {
   const router = useRouter();
@@ -32,9 +41,16 @@ export default function BattleMatchSessionScreen() {
     ownScore,
     myProgress,
     opponentProgress,
+    revealedQuestionIndex,
     submitAnswer,
     manualRetry,
   } = useBattleMatchContext();
+
+  // Locked once the current question's reveal boundary has fired (server-
+  // event-driven, see hooks/use-battle-match.tsx's "question_result"
+  // handler) -- not tied to has_answered_current_question anymore, since
+  // editable answers mean a selection alone no longer locks anything.
+  const isLocked = revealedQuestionIndex === matchState?.question_index;
 
   // The normal path (queue.tsx -> here) already has this set on the shared
   // connection before this screen ever mounts -- this only matters for a
@@ -47,6 +63,27 @@ export default function BattleMatchSessionScreen() {
     }
   }, [activeMatchId, matchIdFromParams, setActiveMatchId]);
   const matchId = activeMatchId ?? matchIdFromParams;
+
+  // No loading state rendered here at all -- if the match isn't fully ready
+  // yet (status "active" AND subject already backfilled -- see preparing.tsx's
+  // own comment for why both are required), bounce to preparing.tsx instead
+  // and let IT own showing "Preparing Match" until it is, then send us back.
+  // The normal path (queue.tsx -> preparing.tsx -> here) never actually hits
+  // this -- it only fires for a cold start directly on this route (app
+  // relaunched mid-match, Expo Router restores the last URL) where the
+  // shared connection hasn't caught up yet. Skipped entirely once either of
+  // the two dedicated terminal branches below (load error / cancelled) are
+  // showing -- those own their own UI, not a bounce to preparing.tsx.
+  useEffect(() => {
+    if (matchId === null) return;
+    if (initialLoadError || matchState?.status === "cancelled") return;
+    if (!matchState || matchState.status !== "active" || matchState.subject == null) {
+      router.replace({
+        pathname: "/(main)/battle/preparing",
+        params: { matchId: String(matchId), subject: matchState?.subject ?? "" },
+      } as any);
+    }
+  }, [matchId, matchState, initialLoadError, router]);
 
   // REST, not the match WS's fire-and-forget sendForfeit -- same reliability
   // rationale as queue.tsx's forfeit flow (a plain request/response
@@ -67,27 +104,6 @@ export default function BattleMatchSessionScreen() {
 
   const questionDeadlineRef = useRef<number | null>(null);
 
-  // A "3,2,1,GO!" beat shown for as long as the match isn't "active" yet
-  // (the early return below) -- purely local/cosmetic, not synced to
-  // anything real, since queue.tsx already waits for a genuinely active
-  // match before ever navigating here and this only ever covers this
-  // instance's own brief initial fetch. Holds on "GO!" once it gets there --
-  // never loops back to 3 -- so a longer-than-usual gap just sits on "GO!"
-  // instead of visibly restarting the count.
-  const [countdownValue, setCountdownValue] = useState(3);
-
-  useEffect(() => {
-    setCountdownValue(3);
-  }, [matchId]);
-
-  useEffect(() => {
-    if (matchState?.status === "active" || countdownValue <= 0) return;
-    const timer = setTimeout(() => {
-      setCountdownValue((v) => v - 1);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [countdownValue, matchState?.status]);
-
   useEffect(() => {
     setSelectedOption(null);
   }, [matchState?.question_index]);
@@ -103,6 +119,18 @@ export default function BattleMatchSessionScreen() {
     const id = setInterval(() => forceTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [matchState?.status]);
+
+  // Recomputed on every render -- the forceTick interval above re-renders
+  // this component once a second while active, so this always reflects the
+  // current countdown without needing its own effect/state. Disabling
+  // options here (client-predicted) rather than only once the server's
+  // "question_result" reveal actually arrives avoids a last-second tap
+  // that's guaranteed to be rejected with a 409.
+  const secondsRemaining = Math.max(
+    0,
+    Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
+  );
+  const optionsDisabled = isLocked || secondsRemaining <= ANSWER_REVEAL_SECONDS;
 
   useEffect(() => {
     if (matchState?.status === "completed" && finalResult) {
@@ -225,34 +253,11 @@ export default function BattleMatchSessionScreen() {
     );
   }
 
-  // queue.tsx always runs all the way through to a genuinely "active" match
-  // before it ever navigates here, so in the ordinary case this covers only
-  // this instance's own brief initial fetch gap -- shown as the same
-  // "3,2,1,GO!" beat either way rather than a separate loading style, since
-  // there's no way to tell from in here which case it actually is.
-  //
-  // Also holds here until matchState.subject has actually arrived, not just
-  // status === "active": this connection was opened back while the match
-  // was still "waiting" (queue.tsx opens it the instant a match is found),
-  // and get_match_state() returns almost nothing for that status -- subject/
-  // difficulty/question_count only get backfilled by the countdown_started
-  // handler's own REST refetch (see hooks/use-battle-match.tsx). That
-  // refetch has the whole countdown phase to land before "active" ever
-  // arrives, but trusting timing alone previously showed a live match with
-  // a blank subject/league/progress bars if it landed late -- gating on the
-  // data itself, not just the status, means a slow refetch just holds the
-  // countdown a little longer instead.
+  // Nothing rendered here -- the redirect effect above already sent us to
+  // preparing.tsx the instant this was true, so this is just the one-frame
+  // gap before that navigation actually lands.
   if (!matchState || matchState.status !== "active" || matchState.subject == null) {
-    return (
-      <View className="flex-1 items-center justify-center bg-white">
-        <Text className="text-slate-400 font-bold text-lg uppercase tracking-widest mb-4">
-          {countdownValue > 0 ? "Starting In" : "Get Ready"}
-        </Text>
-        <Text className="text-primary text-9xl font-black">
-          {countdownValue > 0 ? countdownValue : "GO!"}
-        </Text>
-      </View>
-    );
+    return null;
   }
 
   return (
@@ -323,13 +328,7 @@ export default function BattleMatchSessionScreen() {
             </View>
             <View className="flex-1 flex-row items-center justify-end gap-1">
               <Clock size={13} color={ICON_COLORS.primary500} strokeWidth={3} />
-              <Text className="text-sm font-black text-primary">
-                {Math.max(
-                  0,
-                  Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
-                )}
-                s
-              </Text>
+              <Text className="text-sm font-black text-primary">{secondsRemaining}s</Text>
             </View>
           </View>
 
@@ -361,40 +360,53 @@ export default function BattleMatchSessionScreen() {
           <View className="flex-1">
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
               <View className="px-4 gap-2.5">
-                {(matchState.question?.options ?? []).map((opt, i) => {
-                  const isLocked = !!matchState.has_answered_current_question;
-                  return (
-                    <QuizOptionButton
-                      key={i}
-                      label={OPTION_LABELS[i]}
-                      optionText={opt}
-                      isSelected={selectedOption === opt}
-                      disabled={isLocked}
-                      onPress={() => {
-                        setSelectedOption(opt);
-                        if (matchState.question) {
-                          submitAnswer(matchState.question.question_id, opt);
-                        }
-                      }}
-                    />
-                  );
-                })}
+                {(matchState.question?.options ?? []).map((opt, i) => (
+                  <QuizOptionButton
+                    key={i}
+                    label={OPTION_LABELS[i]}
+                    optionText={opt}
+                    isSelected={selectedOption === opt}
+                    disabled={optionsDisabled}
+                    onPress={() => {
+                      // Editable answers: tapping a different option before
+                      // the question locks just resubmits -- skip if it's
+                      // already the current selection to avoid a pointless
+                      // resubmit that would only push the response-time-for-
+                      // scoring later for no reason.
+                      if (opt === selectedOption) return;
+                      setSelectedOption(opt);
+                      if (matchState.question) {
+                        submitAnswer(matchState.question.question_id, opt);
+                      }
+                    }}
+                  />
+                ))}
               </View>
 
-              {lastAnswerFeedback && matchState.has_answered_current_question && (
+              {lastAnswerFeedback && isLocked && (
                 <View
                   className={`mx-4 mt-4 rounded-xl px-4 py-3 ${
-                    lastAnswerFeedback.isCorrect ? "bg-emerald-100" : "bg-rose-100"
+                    lastAnswerFeedback.isCorrect
+                      ? "bg-emerald-100"
+                      : lastAnswerFeedback.answered
+                        ? "bg-rose-100"
+                        : "bg-amber-100"
                   }`}
                 >
                   <Text
                     className={`font-black text-sm ${
-                      lastAnswerFeedback.isCorrect ? "text-emerald-700" : "text-rose-700"
+                      lastAnswerFeedback.isCorrect
+                        ? "text-emerald-700"
+                        : lastAnswerFeedback.answered
+                          ? "text-rose-700"
+                          : "text-amber-700"
                     }`}
                   >
                     {lastAnswerFeedback.isCorrect
                       ? `Correct! +${lastAnswerFeedback.totalQuestionScore} points`
-                      : "Incorrect"}
+                      : lastAnswerFeedback.answered
+                        ? "Incorrect"
+                        : "Time's up! You didn't answer"}
                   </Text>
                 </View>
               )}

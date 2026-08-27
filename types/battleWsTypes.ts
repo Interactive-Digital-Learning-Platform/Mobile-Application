@@ -10,6 +10,7 @@ import {
   BattleMatchStateResponse,
   BattleParticipantResult,
   BattleQuestionPublic,
+  ParticipantQuestionResult,
 } from "@/types/battleModuleTypes";
 
 export interface BattleWsConnectedEvent {
@@ -48,26 +49,24 @@ export interface BattleWsQuestionStartedEvent {
   time_remaining_seconds: number;
 }
 
+// Grading is deferred to the reveal boundary now (see
+// BattleWsQuestionResultEvent below) — this is just a lightweight
+// "your (re)submission was accepted" ack, never reveals correctness.
 export interface BattleWsAnswerAcknowledgedEvent {
   type: "answer_acknowledged";
   question_id: number;
-  is_correct: boolean;
-  base_score: number;
-  speed_bonus: number;
-  streak_bonus: number;
-  total_question_score: number;
-  response_time_ms: number;
+  selected_option: string;
 }
 
-export interface BattleWsOpponentAnsweredEvent {
-  type: "opponent_answered";
-  user_id: number;
-  answered_count: number;
-  // Which question slot this was for and whether it was correct — drives
-  // the opponent's live progress-bar segment. Never includes the selected
-  // option itself.
+// Pushed once per question, at the reveal boundary (last
+// BATTLE_ANSWER_REVEAL_SECONDS of its window) — both players receive the
+// SAME event (results for both participants), simultaneously, regardless of
+// who (if anyone) answered. Replaces the old instant-per-submission
+// answer_acknowledged(grading)/opponent_answered pair entirely.
+export interface BattleWsQuestionResultEvent {
+  type: "question_result";
   question_order: number;
-  is_correct: boolean;
+  results: ParticipantQuestionResult[];
 }
 
 export interface BattleWsPlayerDisconnectedEvent {
@@ -107,7 +106,7 @@ export type BattleWsInboundEvent =
   | BattleWsMatchStartedEvent
   | BattleWsQuestionStartedEvent
   | BattleWsAnswerAcknowledgedEvent
-  | BattleWsOpponentAnsweredEvent
+  | BattleWsQuestionResultEvent
   | BattleWsPlayerDisconnectedEvent
   | BattleWsPlayerReconnectedEvent
   | BattleWsMatchFinishedEvent
