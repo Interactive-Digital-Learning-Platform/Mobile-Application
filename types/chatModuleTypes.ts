@@ -33,6 +33,11 @@ export type signInFormValues = {
   password: string
 }
 
+export type OtpCodeFieldProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
 export type TabIconType = {
   icon : ImageSourcePropType,
   name : string,
