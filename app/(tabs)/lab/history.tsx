@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ClipboardList } from "lucide-react-native";
-import { colors } from "@/constants/colors";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import { useSessionHistory } from "@/hooks/lab/use-lab-session";
 import { PAGE_LIMIT } from "@/constants/lab/history.constants";
 import { SessionHistoryFilterType, SessionHistoryItemType } from "@/types/lab";
+import LabHeader from "@/components/lab/LabHeader";
 import PracticalHistoryFilterBar from "@/components/lab/PracticalHistoryFilterBar";
 import PracticalHistoryListItem from "@/components/lab/PracticalHistoryListItem";
-import Button from "@/components/ui/Button";
 
 export default function PracticalHistory() {
   const [filters, setFilters] = useState<SessionHistoryFilterType>({ status: "completed" });
@@ -34,35 +34,48 @@ export default function PracticalHistory() {
   const hasMore = data ? items.length < data.pagination.total : false;
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
+      <LabHeader title="Practical History" subtitle={data ? `${data.pagination.total} sessions` : undefined} />
       <PracticalHistoryFilterBar filters={filters} onChange={setFilters} />
 
       {isLoading && page === 1 ? (
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={ICON_COLORS.primary500} />
         </View>
       ) : isError ? (
-        <View className="flex-1 justify-center items-center px-8">
-          <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
-          <Text className="font-aregular text-muted text-center mt-2">Check your connection and try again.</Text>
+        <View className="flex-1 justify-center items-center px-8 pb-16">
+          <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
+            <ClipboardList size={28} color={ICON_COLORS.rose500} strokeWidth={1.8} />
+          </View>
+          <Text className="text-slate-800 font-black text-base text-center mb-1">Couldn&apos;t reach the server</Text>
+          <Text className="text-slate-400 text-sm text-center leading-5">Check your connection and try again.</Text>
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item: SessionHistoryItemType) => item._id}
           contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
           renderItem={({ item }) => <PracticalHistoryListItem item={item} />}
           ListEmptyComponent={
-            <View className="flex-1 justify-center items-center mt-16">
-              <ClipboardList size={32} color="#979797" />
-              <Text className="font-aregular text-muted text-center mt-3">No practicals match these filters.</Text>
+            <View className="flex-1 justify-center items-center px-8 mt-16">
+              <View className="w-16 h-16 rounded-full bg-primary/10 justify-center items-center mb-4">
+                <ClipboardList size={28} color={ICON_COLORS.primary500} strokeWidth={1.8} />
+              </View>
+              <Text className="text-slate-800 font-black text-base text-center mb-1">No matches</Text>
+              <Text className="text-slate-400 text-sm text-center leading-5">No practicals match these filters.</Text>
             </View>
           }
           ListFooterComponent={
             hasMore ? (
-              <View className="mt-1">
-                <Button label={isFetching ? "Loading..." : "Load more"} onPress={() => setPage((p) => p + 1)} variant="secondary" disabled={isFetching} />
-              </View>
+              <TouchableOpacity
+                className="py-3 rounded-xl items-center bg-slate-100"
+                activeOpacity={0.8}
+                disabled={isFetching}
+                onPress={() => setPage((p) => p + 1)}
+              >
+                <Text className="text-slate-700 text-sm font-bold">{isFetching ? "Loading…" : "Load more"}</Text>
+              </TouchableOpacity>
             ) : null
           }
         />

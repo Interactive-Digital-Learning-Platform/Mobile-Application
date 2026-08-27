@@ -12,7 +12,7 @@ export default function BiologyVisualizationScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
@@ -20,14 +20,14 @@ export default function BiologyVisualizationScreen() {
 
   if (isError || !visualization) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["top", "bottom"]}>
         <Text className="font-aregular text-muted text-center">Couldn&apos;t load this visualization.</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center gap-3 mb-4">
           <Pressable onPress={() => router.back()} hitSlop={8}>

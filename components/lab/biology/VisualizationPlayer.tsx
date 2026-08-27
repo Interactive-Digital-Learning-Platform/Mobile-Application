@@ -114,6 +114,8 @@ export default function VisualizationPlayer({ visualization }: VisualizationPlay
       <View className="bg-bg-soft rounded-3xl overflow-hidden" style={{ aspectRatio: 300 / 220 }}>
         <VisualizationCanvas
           animationKey={visualization.animationKey}
+          currentStage={currentStage}
+          currentStageIndex={currentStageIndex}
           timelinePosition={timelinePosition}
           activeComponentIds={currentStage?.componentIds ?? []}
           showLabels={showLabels}

@@ -7,6 +7,7 @@ export default function LabLayout() {
       <Stack.Screen name="history" options={{ headerShown: false }} />
       <Stack.Screen name="practicals" options={{ headerShown: false }} />
       <Stack.Screen name="biology/index" options={{ headerShown: false }} />
+      <Stack.Screen name="biology/generate" options={{ headerShown: false }} />
       <Stack.Screen name="biology/[visualizationId]" options={{ headerShown: false }} />
       <Stack.Screen name="[experimentId]/info" options={{ headerShown: false }} />
       <Stack.Screen name="[experimentId]/equipment" options={{ headerShown: false }} />

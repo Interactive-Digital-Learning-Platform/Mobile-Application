@@ -34,6 +34,11 @@ export type ChemicalType = {
   hazardInfo: string[];
   commonUses: string[];
   iconKey?: string | null;
+  // Remote artwork URL for the element/compound illustration. Populated by a later backend media
+  // phase; the material card and Observe sheet fall back to a symbol tile / reagent-bottle
+  // rendering until then. Storage-agnostic — the API returns a plain URL regardless of where the
+  // binary actually lives (MinIO now, S3/Cloudinary later).
+  imageUrl?: string | null;
 };
 
 export type ReactionEducationalInfo = {

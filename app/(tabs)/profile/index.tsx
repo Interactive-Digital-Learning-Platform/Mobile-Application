@@ -22,9 +22,11 @@ import {
   Lightbulb,
   Target,
   Heart,
+  LogOut,
 } from "lucide-react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useUser } from "@clerk/expo";
+import { router } from "expo-router";
+import { useAuth, useUser } from "@clerk/expo";
 import {
   useUserMeQuery,
   useAnalyticsMeQuery,
@@ -210,6 +212,13 @@ export default function Profile() {
 
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
+  const { signOut } = useAuth();
+
+  // TEMP: remove once logout lives in the integrated profile flow
+  const handleLogout = async () => {
+    await signOut();
+    router.replace("/(auth)/sign-in");
+  };
   const {
     data: analytics,
     isLoading: analyticsLoading,
@@ -254,8 +263,18 @@ export default function Profile() {
             </Text>
           )}
         </View>
-        <View className=" h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
-          <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+        <View className="items-center gap-2">
+          <View className="h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
+            <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
+          </View>
+          <TouchableOpacity
+            className="flex-row items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 border border-white/40"
+            activeOpacity={0.8}
+            onPress={handleLogout}
+          >
+            <LogOut size={11} color={ICON_COLORS.white} strokeWidth={2} />
+            <Text className="text-white text-[10px] font-bold">Logout</Text>
+          </TouchableOpacity>
         </View>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}

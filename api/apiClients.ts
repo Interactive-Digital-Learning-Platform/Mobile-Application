@@ -139,3 +139,12 @@ labClient.interceptors.request.use(async (config) => {
 export function getNotesResourceUrl(path: string): string {
   return `${SERVICE_URLS.notes}/${path.replace(/^\/+/, "")}`;
 }
+
+// Turns a lab-service media reference into a loadable absolute URL. The backend returns either an
+// already-absolute URL (S3/Cloudinary) — passed straight through — or a gateway-relative path
+// like "api/media/chemicals/<id>" that resolves against the lab service base. The app never needs
+// to know where the binary actually lives.
+export function getLabResourceUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${SERVICE_URLS.lab}/${pathOrUrl.replace(/^\/+/, "")}`;
+}

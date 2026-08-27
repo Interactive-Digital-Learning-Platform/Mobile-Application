@@ -11,6 +11,9 @@ export type PracticalSummaryType = {
   estimatedTime: number;
   description: string;
   thumbnailColor: string;
+  // Syllabus topic this practical sits under (e.g. "Acids, Bases and Salts") — GET /api/experiments
+  // returns it (it's not one of the answer-bearing excluded fields). May be "" for older docs.
+  lesson?: string;
 };
 
 // A single "Current Task" within a Main Step — safe subset only. No expectedIntent/expected

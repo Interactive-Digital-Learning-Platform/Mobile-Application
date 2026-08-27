@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleProp, View, ViewStyle } from "react-native";
+import * as Haptics from "expo-haptics";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 const PADDING_STYLES = {
@@ -18,6 +19,9 @@ type CardProps = {
   padding?: keyof typeof PADDING_STYLES;
   variant?: "default" | "outline";
   className?: string;
+  style?: StyleProp<ViewStyle>;
+  // Fires a soft selection haptic on press-in — same iOS-only pattern as components/haptic-tab.tsx.
+  haptic?: boolean;
 };
 
 export default function Card({
@@ -28,6 +32,8 @@ export default function Card({
   padding = "md",
   variant = "default",
   className = "",
+  style,
+  haptic = false,
 }: CardProps) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -37,7 +43,11 @@ export default function Card({
   } ${selected ? "border-2 border-emerald-500 shadow-emerald-500/30" : ""} ${disabled ? "opacity-50" : ""} ${className}`;
 
   if (!onPress) {
-    return <View className={base}>{children}</View>;
+    return (
+      <View className={base} style={style}>
+        {children}
+      </View>
+    );
   }
 
   return (
@@ -45,13 +55,16 @@ export default function Card({
       onPress={onPress}
       disabled={disabled}
       onPressIn={() => {
+        if (haptic && process.env.EXPO_OS === "ios") {
+          Haptics.selectionAsync();
+        }
         scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
       }}
       onPressOut={() => {
         scale.value = withSpring(1, { damping: 15, stiffness: 300 });
       }}
       className={base}
-      style={animatedStyle}
+      style={[animatedStyle, style]}
     >
       {children}
     </AnimatedPressable>

@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchBiologyVisualizationById, fetchBiologyVisualizations } from "@/api/lab";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { fetchBiologyVisualizationById, fetchBiologyVisualizations, generateBiologyVisualization } from "@/api/lab";
 
 export const useBiologyVisualizations = () => {
   return useQuery({
@@ -13,5 +13,11 @@ export const useBiologyVisualization = (id: string | undefined) => {
     queryKey: ["biologyVisualization", id],
     queryFn: () => fetchBiologyVisualizationById(id as string),
     enabled: !!id,
+  });
+};
+
+export const useGenerateBiologyVisualization = () => {
+  return useMutation({
+    mutationFn: generateBiologyVisualization,
   });
 };

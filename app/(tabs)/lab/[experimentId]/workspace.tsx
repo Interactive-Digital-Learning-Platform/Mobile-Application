@@ -355,7 +355,7 @@ export default function Workspace() {
 
   if (experimentError || sessionError) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["top", "bottom"]}>
         <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
         <View className="mt-4 self-stretch">
           <Button label="Retry" onPress={() => refetchSession()} variant="secondary" />
@@ -366,7 +366,7 @@ export default function Workspace() {
 
   if (experimentLoading || sessionLoading || currentStep === null) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
@@ -374,14 +374,14 @@ export default function Workspace() {
 
   if (!step) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
       {isCircuitStep ? (
         // Electricity (Phase B): a fixed slot-based board, sibling to (not a mode of) LabWorkspace
         // — it owns its own component shelf internally, unlike the chemistry/mechanics bench below.

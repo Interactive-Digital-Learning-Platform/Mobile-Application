@@ -9,9 +9,11 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
   // The practical flow (app/(tabs)/lab/[experimentId]/*: info, equipment, chemicals, workspace,
-  // report) is a focused, space-constrained activity — the bottom tab bar stays hidden there and
-  // reappears on the Lab tab's own list screens (home, Practicals, History).
-  const hideTabBar = (segments as string[]).includes("[experimentId]");
+  // report) is a focused, space-constrained activity — the bottom tab bar stays hidden there. The
+  // Chemistry/Physics practical catalog (app/(tabs)/lab/practicals) also hides it so its card CTAs
+  // never sit under the tab bar. It reappears on the Lab home and History screens.
+  const activeSegments = segments as string[];
+  const hideTabBar = activeSegments.includes("[experimentId]") || activeSegments.includes("practicals");
 
   return (
     <Tabs

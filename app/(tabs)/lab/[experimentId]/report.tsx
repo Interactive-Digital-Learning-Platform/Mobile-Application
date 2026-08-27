@@ -21,7 +21,7 @@ export default function Report() {
 
   if (isError) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["top", "bottom"]}>
         <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
         <View className="mt-4 self-stretch">
           <Button label="Retry" onPress={() => refetch()} variant="secondary" />
@@ -32,14 +32,14 @@ export default function Report() {
 
   if (isLoading || !report) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
       <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
         <View className="mt-4 p-4 rounded-2xl shadow-sm bg-bg-soft">
           <Text className="text-2xl font-amedium text-ink">{report.experimentName}</Text>

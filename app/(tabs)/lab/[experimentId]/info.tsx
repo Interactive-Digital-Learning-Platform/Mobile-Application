@@ -32,7 +32,7 @@ export default function PracticalInfo() {
 
   if (isLoading) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
@@ -40,7 +40,7 @@ export default function PracticalInfo() {
 
   if (isError || !info) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["bottom"]}>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["top", "bottom"]}>
         <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
         <Text className="font-aregular text-muted text-center mt-2">Check your connection and try again.</Text>
       </SafeAreaView>
@@ -48,7 +48,7 @@ export default function PracticalInfo() {
   }
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
       <ScrollView className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false}>
         <View className="flex-row items-center gap-3 mb-2">
           <View

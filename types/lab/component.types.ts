@@ -9,7 +9,9 @@ import {
   BiologyLearningQuestionType,
   BiologyVisualizationComponentType,
   BiologyVisualizationDetailType,
+  BiologyVisualizationStageType,
   BiologyVisualizationSummaryType,
+  GeneratedSceneElementType,
 } from "./biology.types";
 
 // --- Shared equipment-visual contract ---
@@ -32,14 +34,6 @@ export type EquipmentVisualProps = {
 };
 
 // --- Lab home / history ---
-
-export type LabStatCardProps = {
-  label: string;
-  value: string;
-  subValue?: string;
-  icon?: LucideIcon;
-  color?: string;
-};
 
 export type PracticalHistoryListItemProps = {
   item: SessionHistoryItemType;
@@ -357,4 +351,30 @@ export type VisualizationQuestionProps = {
   question: BiologyLearningQuestionType;
   onReplayStage: (stageId: number) => void;
   onDone: () => void;
+};
+
+// --- AI-generated scene rendering ---
+//
+// AnimatedSceneAsset generalizes AnimatedFlowArrow: instead of one hand-picked icon/direction per
+// call site, it derives x/y/opacity/scale/rotation from a data-driven `action` (see
+// GeneratedSceneActionType) so the same component can render any controlled-vocabulary element
+// the backend's AI pipeline produces.
+export type AnimatedSceneAssetProps = {
+  element: GeneratedSceneElementType;
+  timelinePosition: SharedValue<number>;
+  stageIndex: number;
+  active: boolean;
+  showLabel: boolean;
+  onPress: (elementId: string) => void;
+};
+
+// The generic canvas needs the current stage's own data (for its sceneElements), not just the
+// list of active component ids — that's the one respect in which it differs from the predefined
+// canvases' BiologyCanvasProps contract.
+export type GenericSceneCanvasProps = {
+  stage: BiologyVisualizationStageType | undefined;
+  stageIndex: number;
+  timelinePosition: SharedValue<number>;
+  showLabels: boolean;
+  onTapComponent: (componentId: string) => void;
 };
