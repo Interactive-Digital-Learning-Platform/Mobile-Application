@@ -243,7 +243,7 @@ export default function Profile() {
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
-      <View className="mt-5 px-[30px] bg-primary flex flex-row z-20 h-[160px] rounded-b-[40px] w-[100%] items-center justify-between absolute ">
+      <SafeAreaView className=" px-[30px] bg-primary flex flex-row z-20 rounded-b-[40px] w-[100%] items-center justify-between absolute ">
         <View >
           <Text className="text-white text-2xl  font-bold">
             Hi {displayName}
@@ -257,7 +257,7 @@ export default function Profile() {
         <View className=" h-[70px] w-[70px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
           <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
         </View>
-      </View>
+      </SafeAreaView>
       <ScrollView showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />} className="bg-white">
       
