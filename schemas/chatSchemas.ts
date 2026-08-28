@@ -25,12 +25,12 @@ const doneEventSchema = z.object({
   sources: z
     .array(
       z.object({
-        filename: z.string(),
-        page: z.number(),
-        score: z.number(),
+        filename: z.string().optional(),
+        page: z.number().nullish(),
+        score: z.number().nullish(),
       }),
     )
-    .optional()
+    .catch([])
     .default([]),
 });
 
@@ -54,6 +54,41 @@ export const sourceCitationSchema = z.object({
   score: z.number(),
 });
 
+export const attachmentStatusSchema = z.enum([
+  "uploaded",
+  "processing",
+  "ready_inline",
+  "indexed",
+  "failed",
+]);
+
+export type AttachmentStatusType = z.infer<typeof attachmentStatusSchema>;
+
+export const attachmentResponseSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  filename: z.string(),
+  content_type: z.string(),
+  byte_size: z.number(),
+  status: attachmentStatusSchema,
+  stage: z.string().nullable().optional(),
+  error_message: z.string().nullable().optional(),
+  created_at: z.string(),
+  preview_url: z.string().nullable().optional(),
+});
+
+export type AttachmentResponseType = z.infer<typeof attachmentResponseSchema>;
+
+export const messageAttachmentSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  content_type: z.string(),
+  status: attachmentStatusSchema,
+  preview_url: z.string().nullable().optional(),
+});
+
+export type MessageAttachmentType = z.infer<typeof messageAttachmentSchema>;
+
 export const conversationResponseSchema = z.object({
   conversation_id: z.uuid(),
   user_id: z.string(),
@@ -73,6 +108,7 @@ export const messageResponseSchema = z.object({
   content: z.string(),
   created_at: z.string(),
   sources: z.array(sourceCitationSchema).optional().default([]),
+  attachments: z.array(messageAttachmentSchema).optional().default([]),
 });
 
 export const messageHistoryResponseSchema = z.object({
