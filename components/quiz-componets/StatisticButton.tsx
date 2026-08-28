@@ -81,7 +81,7 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const topSubject = subjects.length > 0
     ? subjects.reduce((best, s) => (s.rating > best.rating ? s : best))
     : null;
-  const bestLeague = topSubject?.league ?? "Unranked";
+  const bestLeague = topSubject?.league ?? "-";
 
   const isLoading = mode === "practice" ? isAnalyticsLoading : isBattleLoading;
 

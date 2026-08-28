@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Clock, WifiOff, X, XCircle } from "lucide-react-native";
+import { AlertTriangle, Clock, Flame, WifiOff, X, XCircle } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { OPTION_LABELS } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
+import { LEAGUE_STYLES } from "@/constants/battleStyles";
 import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
+import BattleResultsPopup from "@/components/quiz-componets/BattleResultsPopup";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
@@ -21,7 +31,24 @@ import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/ho
 // Disabling the options client-side at the same instant, rather than only
 // once the server's "question_result" reveal actually arrives, avoids a
 // last-second tap that's guaranteed to be rejected.
-const ANSWER_REVEAL_SECONDS = 7;
+const ANSWER_REVEAL_SECONDS = 5;
+
+// Every non-"answering" state the question card can be in, unified into one
+// place -- each maps to a background/border + a small top-right tag,
+// exactly the treatment correct/incorrect/time's-up already used, now
+// extended to cover the "about to lock" and "locked, awaiting reveal"
+// states too instead of those living in separate banners elsewhere on
+// the screen.
+type QuestionCardState = "answering" | "hurryUp" | "lockedPending" | "correct" | "incorrect" | "timeUp";
+
+const QUESTION_CARD_STYLES: Record<QuestionCardState, { bg: string; border: string; tagBg: string }> = {
+  answering: { bg: "bg-white", border: "border-slate-100", tagBg: "" },
+  hurryUp: { bg: "bg-amber-100", border: "border-amber-300", tagBg: "bg-amber-500" },
+  lockedPending: { bg: "bg-slate-200", border: "border-slate-300", tagBg: "bg-slate-500" },
+  correct: { bg: "bg-emerald-100", border: "border-emerald-200", tagBg: "bg-emerald-500" },
+  incorrect: { bg: "bg-rose-100", border: "border-rose-200", tagBg: "bg-rose-500" },
+  timeUp: { bg: "bg-amber-100", border: "border-amber-200", tagBg: "bg-amber-500" },
+};
 
 export default function BattleMatchSessionScreen() {
   const router = useRouter();
@@ -52,6 +79,31 @@ export default function BattleMatchSessionScreen() {
   // editable answers mean a selection alone no longer locks anything.
   const isLocked = revealedQuestionIndex === matchState?.question_index;
 
+  // A forfeit (self or opponent) ends the match mid-question -- whatever
+  // question was live at that instant is simply abandoned, never graded,
+  // so no "question_result" is EVER coming for it. Without this check,
+  // finalAnswerRevealed below would wait forever for a reveal that will
+  // never arrive, and the results popup would never show at all for a
+  // forfeited match. me.result is only ever "forfeit" from MY OWN
+  // forfeiting; a win earned because the OPPONENT forfeited still reports
+  // as a plain "win" for me, hence checking both sides.
+  const matchEndedByForfeit =
+    finalResult?.me.result === "forfeit" || finalResult?.opponent?.result === "forfeit";
+
+  // Gates the results popup: either the match ended abruptly with nothing
+  // left to grade (matchEndedByForfeit), this connection never tracked a
+  // live question_index at all (a reconnect landing directly on an
+  // already-"completed" match -- see _build_completed_state, which never
+  // carries one to begin with, so there's nothing to wait for), or the
+  // live "question_result" for the match's actual FINAL question has
+  // already landed (isLocked). Without this, "completed" arriving a beat
+  // ahead of that last reveal (a rare event-ordering hiccup, not the
+  // normal case -- see _grade_and_reveal_question's timing) would let the
+  // popup cover up the final question's own correct/incorrect reveal
+  // before the player ever saw it.
+  const finalAnswerRevealed = matchEndedByForfeit || matchState?.question_index == null || isLocked;
+  const showResultsPopup = matchState?.status === "completed" && !!finalResult && finalAnswerRevealed;
+
   // The normal path (queue.tsx -> here) already has this set on the shared
   // connection before this screen ever mounts -- this only matters for a
   // cold start directly on this route (e.g. app relaunched mid-match and
@@ -63,6 +115,20 @@ export default function BattleMatchSessionScreen() {
     }
   }, [activeMatchId, matchIdFromParams, setActiveMatchId]);
   const matchId = activeMatchId ?? matchIdFromParams;
+
+  // Latches once this screen has genuinely rendered the live battle at
+  // least once -- after that, NOTHING bounces the player back to
+  // preparing.tsx, ever. Before this point, `matchState` briefly being
+  // null/non-active/subject-less is the legitimate cold-start gap (app
+  // relaunched mid-match, Expo Router restores this URL before the shared
+  // connection catches up); after it, the match is genuinely underway and a
+  // "Preparing Match" screen reappearing would be a bug, not recovery --
+  // e.g. this used to also fire on the natural "active" -> "completed"
+  // transition (only "cancelled" was excluded), racing the redirect below
+  // against the results popup that now shows on "completed" instead.
+  // Any post-start problem must be handled in place by THIS screen (see the
+  // connectionStatus banner further down) instead of navigating away.
+  const hasEnteredLiveMatchRef = useRef(false);
 
   // No loading state rendered here at all -- if the match isn't fully ready
   // yet (status "active" AND subject already backfilled -- see preparing.tsx's
@@ -76,6 +142,10 @@ export default function BattleMatchSessionScreen() {
   // showing -- those own their own UI, not a bounce to preparing.tsx.
   useEffect(() => {
     if (matchId === null) return;
+    if (matchState?.status === "active" && matchState.subject != null) {
+      hasEnteredLiveMatchRef.current = true;
+    }
+    if (hasEnteredLiveMatchRef.current) return;
     if (initialLoadError || matchState?.status === "cancelled") return;
     if (!matchState || matchState.status !== "active" || matchState.subject == null) {
       router.replace({
@@ -97,10 +167,27 @@ export default function BattleMatchSessionScreen() {
 
   const { data: battleProfile } = useBattleProfileQuery();
   const myLeague = battleProfile?.subjects.find((s) => s.subject === matchState?.subject)?.league;
+  // Lighter tint of the player's own league color, standing in for the
+  // question card's plain neutral ("answering") background -- falls back
+  // to white until the profile query resolves the league, rather than
+  // flashing a default league's color. The screen behind it stays plain
+  // white so the card keeps clear contrast against it.
+  const leagueBg = myLeague ? LEAGUE_STYLES[myLeague].bg : "bg-white";
 
   const [showForfeit, setShowForfeit] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [, forceTick] = useState(0);
+
+  // Nothing else ever closed this modal once the forfeit was confirmed --
+  // isForfeiting flips back to false as soon as the REST call settles, but
+  // showForfeit stayed true, leaving the forfeiting player stuck staring at
+  // "Forfeit Match?" with its own two buttons fighting the results popup
+  // (also a Modal) for the screen instead of ever seeing it. The match
+  // reaching "completed" -- via this forfeit or any other path -- is exactly
+  // the signal that this confirmation is no longer relevant.
+  useEffect(() => {
+    if (matchState?.status === "completed") setShowForfeit(false);
+  }, [matchState?.status]);
 
   const questionDeadlineRef = useRef<number | null>(null);
 
@@ -131,6 +218,100 @@ export default function BattleMatchSessionScreen() {
     Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
   );
   const optionsDisabled = isLocked || secondsRemaining <= ANSWER_REVEAL_SECONDS;
+  // 3, 2, 1 warning in the last 3 seconds before the lock -- 0 once the
+  // lock threshold itself is reached (options already disabled at that
+  // point, see optionsDisabled above).
+  const secondsUntilLock = Math.max(0, secondsRemaining - ANSWER_REVEAL_SECONDS);
+
+  const questionCardState: QuestionCardState =
+    isLocked && lastAnswerFeedback
+      ? lastAnswerFeedback.isCorrect
+        ? "correct"
+        : lastAnswerFeedback.answered
+          ? "incorrect"
+          : "timeUp"
+      : optionsDisabled
+        ? "lockedPending"
+        : secondsUntilLock > 0 && secondsUntilLock <= 3
+          ? "hurryUp"
+          : "answering";
+  const questionCardTagLabel =
+    questionCardState === "hurryUp"
+      ? `Locking in ${secondsUntilLock}…`
+      : questionCardState === "lockedPending"
+        ? "Locked in"
+        : questionCardState === "correct"
+          ? "Correct"
+          : questionCardState === "incorrect"
+            ? "Incorrect"
+            : questionCardState === "timeUp"
+              ? "Time's up"
+              : null;
+
+  // Blinks the question card only during the "about to lock" warning --
+  // every other state (including the plain locked-in gray) is a steady
+  // color, blinking is reserved for the one state that's actively urging a
+  // decision.
+  const cardBlinkOpacity = useSharedValue(1);
+  useEffect(() => {
+    if (questionCardState === "hurryUp") {
+      cardBlinkOpacity.value = withRepeat(
+        withSequence(withTiming(0.5, { duration: 350 }), withTiming(1, { duration: 350 })),
+        -1,
+        true
+      );
+    } else {
+      cardBlinkOpacity.value = withTiming(1, { duration: 200 });
+    }
+  }, [questionCardState, cardBlinkOpacity]);
+  const cardBlinkStyle = useAnimatedStyle(() => ({ opacity: cardBlinkOpacity.value }));
+
+  // "+N" floats up next to the score header exactly once per graded
+  // question -- keyed on revealedQuestionIndex (not lastAnswerFeedback
+  // itself) so a reconnect's state_sync hydration of the same already-
+  // graded question doesn't replay it. No popup at all for 0 points
+  // (wrong/time's-up), since there's nothing being "added" to show.
+  const [scoreGain, setScoreGain] = useState<number | null>(null);
+  const scoreGainOpacity = useSharedValue(0);
+  const scoreGainY = useSharedValue(0);
+  useEffect(() => {
+    if (revealedQuestionIndex == null || !lastAnswerFeedback || lastAnswerFeedback.totalQuestionScore <= 0) return;
+    setScoreGain(lastAnswerFeedback.totalQuestionScore);
+    scoreGainOpacity.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withDelay(1500, withTiming(0, { duration: 500 }))
+    );
+    scoreGainY.value = 0;
+    scoreGainY.value = withTiming(-22, { duration: 2000 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealedQuestionIndex]);
+  const scoreGainStyle = useAnimatedStyle(() => ({
+    opacity: scoreGainOpacity.value,
+    transform: [{ translateY: scoreGainY.value }],
+  }));
+
+  // Consecutive-correct count ending at the most recently graded question --
+  // scanning myProgress backward from its end mirrors the backend's own
+  // _streak_before logic exactly (same "stop at the first non-correct"
+  // rule), so this always matches what's actually earning the streak bonus
+  // server-side rather than an independent guess.
+  let currentStreak = 0;
+  for (let i = myProgress.length - 1; i >= 0; i--) {
+    if (!myProgress[i].is_correct) break;
+    currentStreak++;
+  }
+  // Matches BATTLE_STREAK_BONUS_TIER1_MIN_STREAK -- the streak badge only
+  // appears once it's actually earning a bonus, not for a single correct
+  // answer (which isn't a "streak" yet).
+  const onStreak = currentStreak >= 2;
+
+  const streakScale = useSharedValue(1);
+  useEffect(() => {
+    if (!onStreak) return;
+    streakScale.value = withSequence(withTiming(1.25, { duration: 150 }), withTiming(1, { duration: 200 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStreak]);
+  const streakStyle = useAnimatedStyle(() => ({ transform: [{ scale: streakScale.value }] }));
 
   useEffect(() => {
     if (matchState?.status === "completed" && finalResult) {
@@ -151,29 +332,34 @@ export default function BattleMatchSessionScreen() {
       // on the self-forfeit path; this covers the natural-finish/opponent-
       // forfeit path that one didn't.
       queryClient.removeQueries({ queryKey: battleKeys.queueStatus, exact: true });
-      router.replace({
-        pathname: "/(main)/battle/battle-results",
-        params: {
-          subject: matchState.subject ?? "",
-          meJson: JSON.stringify(finalResult.me),
-          opponentJson: finalResult.opponent ? JSON.stringify(finalResult.opponent) : "",
-        },
-      } as any);
+      // No navigation here anymore -- BattleResultsPopup renders as a Modal
+      // over this same screen (see the return below), gated on
+      // finalAnswerRevealed so it never covers the final question's own
+      // reveal. This screen simply never navigates away on match end.
     }
-  }, [matchState?.status, finalResult]);
+  }, [matchState?.status, finalResult, queryClient]);
+
+  const handleRematch = () => {
+    if (matchState?.subject) {
+      router.replace({ pathname: "/(main)/battle/queue", params: { subject: matchState.subject } } as any);
+    }
+  };
+
+  // dismissTo (not replace): this pops the whole battle/queue/match-session
+  // stack back to the existing quiz tab screen, instead of just swapping the
+  // visible screen and potentially leaving the battle stack mounted in the
+  // background -- a later re-entry into battle for a different subject
+  // could otherwise resume inside this same stale stack.
+  const handleResultsHome = () => router.dismissTo("/(tabs)/quiz");
 
   const handleBack = () => {
-    // Only "active" reaches this handler -- every other status renders one
-    // of the early returns above instead of the header this button lives in.
+    // "active" opens the forfeit confirmation; "completed" (behind the
+    // results popup) and "cancelled"/load-error (their own early-return
+    // screens above) all just leave via the same dismissTo path.
     if (matchState?.status === "active") {
       setShowForfeit(true);
     } else {
-      // dismissTo (not replace): this pops the whole battle/queue/match-session
-      // stack back to the existing quiz tab screen, instead of just swapping
-      // the visible screen and potentially leaving the battle stack mounted
-      // in the background -- see battle-results.tsx's Home button for the
-      // full rationale.
-      router.dismissTo("/(tabs)/quiz");
+      handleResultsHome();
     }
   };
 
@@ -188,9 +374,10 @@ export default function BattleMatchSessionScreen() {
     // forfeit was recorded. The actual transition away from this screen is
     // still driven by the existing WS match_finished handling above (same
     // socket this screen already listens on), which populates finalResult
-    // and flips matchState.status to "completed", triggering the effect
-    // that navigates to battle-results. This just makes SENDING the
-    // forfeit reliable, not the navigation that follows it.
+    // and flips matchState.status to "completed", triggering the
+    // BattleResultsPopup below (once the final question's own reveal has
+    // landed). This just makes SENDING the forfeit reliable, not the
+    // popup that follows it.
     forfeitMatchMutation(matchId, {
       onError: (error) => {
         Toast.show({
@@ -253,10 +440,14 @@ export default function BattleMatchSessionScreen() {
     );
   }
 
-  // Nothing rendered here -- the redirect effect above already sent us to
-  // preparing.tsx the instant this was true, so this is just the one-frame
-  // gap before that navigation actually lands.
-  if (!matchState || matchState.status !== "active" || matchState.subject == null) {
+  // "completed" stays here too now (not just "active") -- the results
+  // popup renders as a Modal in front of this same screen (see the return
+  // below) instead of navigating to a separate route, so this screen keeps
+  // rendering the board -- including the final question's own reveal --
+  // behind it rather than going blank. Anything else not-yet-"active" is
+  // still the one-frame gap before the redirect effect above sends us to
+  // preparing.tsx.
+  if (!matchState || (matchState.status !== "active" && matchState.status !== "completed") || matchState.subject == null) {
     return null;
   }
 
@@ -312,7 +503,7 @@ export default function BattleMatchSessionScreen() {
         </View>
       )}
 
-      {matchState.status === "active" && (
+      {(matchState.status === "active" || matchState.status === "completed") && matchState.question != null && (
         <View className="flex-1">
           <View className="mx-4 mt-2 flex-row items-center justify-between">
             <View className="flex-1">
@@ -321,7 +512,17 @@ export default function BattleMatchSessionScreen() {
               </Text>
             </View>
             <View className="flex-1 items-center">
-              <Text className="text-2xl font-black text-slate-800">{ownScore}</Text>
+              <View className="items-center">
+                <Text className="text-2xl font-black text-slate-800">{ownScore}</Text>
+                {scoreGain != null && (
+                  <Animated.View
+                    style={[scoreGainStyle, { position: "absolute", top: -4, alignSelf: "center" }]}
+                    pointerEvents="none"
+                  >
+                    <Text className="text-emerald-500 font-black text-sm">+{scoreGain}</Text>
+                  </Animated.View>
+                )}
+              </View>
               <Text className="text-[8px] font-bold text-slate-400 uppercase tracking-wide -mt-1">
                 Score
               </Text>
@@ -331,6 +532,16 @@ export default function BattleMatchSessionScreen() {
               <Text className="text-sm font-black text-primary">{secondsRemaining}s</Text>
             </View>
           </View>
+
+          {onStreak && (
+            <Animated.View
+              style={streakStyle}
+              className="mx-4 mt-1.5 flex-row items-center justify-center gap-1 self-center bg-amber-100 px-2.5 py-1 rounded-full"
+            >
+              <Flame size={13} color={ICON_COLORS.amber500} strokeWidth={2.5} />
+              <Text className="text-amber-600 font-black text-xs">{currentStreak} Streak!</Text>
+            </Animated.View>
+          )}
 
           <View className="mx-4 mt-3">
             <BattleProgressBar
@@ -351,11 +562,25 @@ export default function BattleMatchSessionScreen() {
             </View>
           </View>
 
-          <View className="bg-white rounded-2xl py-8 px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">
+          <Animated.View
+            style={cardBlinkStyle}
+            className={`rounded-2xl py-8 px-4 m-4 border shadow-sm shadow-black/5 relative ${
+              questionCardState === "answering" ? leagueBg : QUESTION_CARD_STYLES[questionCardState].bg
+            } ${QUESTION_CARD_STYLES[questionCardState].border}`}
+          >
+            {questionCardTagLabel && (
+              <View
+                className={`absolute -top-2.5 right-4 px-2.5 py-1 rounded-full ${
+                  QUESTION_CARD_STYLES[questionCardState].tagBg
+                }`}
+              >
+                <Text className="text-white text-[10px] font-black">{questionCardTagLabel}</Text>
+              </View>
+            )}
             <Text className="font-bold text-slate-800 leading-6 text-xl">
               {matchState.question?.question}
             </Text>
-          </View>
+          </Animated.View>
 
           <View className="flex-1">
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
@@ -367,6 +592,10 @@ export default function BattleMatchSessionScreen() {
                     optionText={opt}
                     isSelected={selectedOption === opt}
                     disabled={optionsDisabled}
+                    isCorrect={isLocked && lastAnswerFeedback?.correctAnswer === opt}
+                    isWrongSelected={
+                      isLocked && !lastAnswerFeedback?.isCorrect && selectedOption === opt
+                    }
                     onPress={() => {
                       // Editable answers: tapping a different option before
                       // the question locks just resubmits -- skip if it's
@@ -382,34 +611,6 @@ export default function BattleMatchSessionScreen() {
                   />
                 ))}
               </View>
-
-              {lastAnswerFeedback && isLocked && (
-                <View
-                  className={`mx-4 mt-4 rounded-xl px-4 py-3 ${
-                    lastAnswerFeedback.isCorrect
-                      ? "bg-emerald-100"
-                      : lastAnswerFeedback.answered
-                        ? "bg-rose-100"
-                        : "bg-amber-100"
-                  }`}
-                >
-                  <Text
-                    className={`font-black text-sm ${
-                      lastAnswerFeedback.isCorrect
-                        ? "text-emerald-700"
-                        : lastAnswerFeedback.answered
-                          ? "text-rose-700"
-                          : "text-amber-700"
-                    }`}
-                  >
-                    {lastAnswerFeedback.isCorrect
-                      ? `Correct! +${lastAnswerFeedback.totalQuestionScore} points`
-                      : lastAnswerFeedback.answered
-                        ? "Incorrect"
-                        : "Time's up! You didn't answer"}
-                  </Text>
-                </View>
-              )}
             </ScrollView>
           </View>
         </View>
@@ -421,6 +622,17 @@ export default function BattleMatchSessionScreen() {
         onConfirm={handleForfeitConfirm}
         isConfirming={isForfeiting}
       />
+
+      {finalResult && (
+        <BattleResultsPopup
+          visible={showResultsPopup}
+          subject={matchState.subject ?? ""}
+          me={finalResult.me}
+          opponent={finalResult.opponent}
+          onRematch={handleRematch}
+          onHome={handleResultsHome}
+        />
+      )}
     </SafeAreaView>
   );
 }

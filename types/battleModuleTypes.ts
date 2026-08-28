@@ -93,6 +93,10 @@ export interface BattleParticipantProgress {
 
 export interface BattleParticipantResult {
   user_id: number;
+  // Left null for "me" everywhere -- only ever populated for the other
+  // participant, so the client can show a real name instead of a generic
+  // "Opponent" label.
+  username: string | null;
   correct_count: number | null;
   wrong_count: number | null;
   final_score: number | null;
@@ -163,6 +167,7 @@ export interface BattleMatchStateResponse {
   // means it's still answerable. Lets a reconnecting client immediately
   // show the locked/revealed state instead of a live answering UI.
   current_question_results?: ParticipantQuestionResult[] | null;
+  current_question_correct_answer?: string | null;
   my_progress?: BattleParticipantProgress | null;
   opponent_progress?: BattleParticipantProgress | null;
   started_at?: string | null;

@@ -34,9 +34,17 @@ export interface BattleWsCountdownStartedEvent {
   duration_seconds: number;
 }
 
+// Carries subject/difficulty/question_count directly -- these used to only
+// arrive via a separate REST fetch that raced this exact transition (it
+// could resolve while the match was still "countdown" server-side, which
+// never had question_count to return), leaving question_count permanently
+// unset for the rest of the match on fast connections.
 export interface BattleWsMatchStartedEvent {
   type: "match_started";
   started_at: string;
+  subject: string;
+  difficulty: string;
+  question_count: number;
 }
 
 // Pushed once per question boundary (including the very first, right after
@@ -67,6 +75,7 @@ export interface BattleWsQuestionResultEvent {
   type: "question_result";
   question_order: number;
   results: ParticipantQuestionResult[];
+  correct_answer: string | null;
 }
 
 export interface BattleWsPlayerDisconnectedEvent {

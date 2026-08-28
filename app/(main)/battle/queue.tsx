@@ -29,9 +29,9 @@ export default function BattleQueueScreen() {
   const { matchState, readyUserIds, myUserId, sendReady, connectionStatus, setActiveMatchId } =
     useBattleMatchContext();
   // Confirmed via device testing: router.replace({pathname: "/(main)/battle/queue",
-  // params: {subject}}) from battle-results.tsx's "Next Match" button (unlike
+  // params: {subject}}) from BattleResultsPopup's "Next Match" button (unlike
   // every OTHER params-carrying replace/push in this flow) arrives here with
-  // subject undefined, even though battle-results.tsx itself displays the
+  // subject undefined, even though that popup itself displays the
   // correct value right before the tap. Rather than depend on nailing down
   // that Expo Router quirk, fall back to the subject already sitting in the
   // shared match connection (see BattleMatchProvider in _layout.tsx) -- a
@@ -63,7 +63,7 @@ export default function BattleQueueScreen() {
   // subject/session, and is never invalidated once matched (see
   // useJoinQueueMutation) -- it still holds {status:"matched", match_id:
   // <this now-completed match>} for as long as this same subject is requeued
-  // into (e.g. "Next Match" on battle-results.tsx). React Query returns that
+  // into (e.g. "Next Match" on the results popup). React Query returns that
   // stale cached `data` on this screen's very FIRST render, before the mount
   // effect below has had a chance to clear it -- staleQueueStatusCleared
   // gates `status` to `undefined` until that happens, so nothing on this

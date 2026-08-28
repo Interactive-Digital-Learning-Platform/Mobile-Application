@@ -28,6 +28,10 @@ export interface AnswerFeedback {
   speedBonus: number;
   streakBonus: number;
   totalQuestionScore: number;
+  // The actual right option, revealed alongside correctness now that the
+  // question is locked -- null only if the source question had no
+  // correct_answer recorded at all (shouldn't happen in practice).
+  correctAnswer: string | null;
 }
 
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
@@ -153,6 +157,7 @@ export function useBattleMatch(matchId: number | null) {
                 speedBonus: mine.speed_bonus,
                 streakBonus: mine.streak_bonus,
                 totalQuestionScore: mine.total_question_score,
+                correctAnswer: event.state.current_question_correct_answer ?? null,
               });
             }
           } else {
@@ -193,8 +198,25 @@ export function useBattleMatch(matchId: number | null) {
           break;
         }
         case "match_started": {
+          // subject/difficulty/question_count come straight off this event
+          // now, not from the racy REST backfill below (see
+          // BattleWsMatchStartedEvent) -- that fetch could resolve while the
+          // match was still "countdown" server-side, which never had
+          // question_count to return, permanently starving BattleProgressBar
+          // of it (count={matchState.question_count ?? 0} rendering zero
+          // segments) for the rest of the match on fast connections.
           setMatchState((prev) =>
-            prev ? { ...prev, status: "active", started_at: event.started_at, question: null } : prev
+            prev
+              ? {
+                  ...prev,
+                  status: "active",
+                  started_at: event.started_at,
+                  question: null,
+                  subject: event.subject,
+                  difficulty: event.difficulty,
+                  question_count: event.question_count,
+                }
+              : prev
           );
           backfillSubjectIfMissing();
           break;
@@ -238,6 +260,7 @@ export function useBattleMatch(matchId: number | null) {
               speedBonus: mine.speed_bonus,
               streakBonus: mine.streak_bonus,
               totalQuestionScore: mine.total_question_score,
+              correctAnswer: event.correct_answer,
             });
             setOwnScore((prev) => prev + mine.total_question_score);
             setMatchState((prev) =>
@@ -378,6 +401,16 @@ export function useBattleMatch(matchId: number | null) {
   // getClerkToken() returned null) — a failed token fetch should retry
   // exactly like a dropped socket, not silently give up with no state
   // change and no way for the UI to know anything went wrong.
+  //
+  // Never permanently gives up while the match isn't terminal: it climbs
+  // RECONNECT_DELAYS_MS then keeps retrying forever at the last (8s)
+  // interval, instead of stopping after 4 attempts. A hard stop meant a
+  // foreground network blip longer than ~15s left connectionStatus stuck on
+  // "closed" with nothing left to retry it -- even once connectivity came
+  // back, only an explicit manualRetry() (or an app background/foreground
+  // cycle) could recover, which screens like preparing.tsx never surfaced a
+  // way to trigger. "closed" is now reserved for isTerminalRef/manual-close,
+  // i.e. cases where retrying truly wouldn't help.
   const scheduleReconnect = useCallback(() => {
     if (unmountedRef.current || manualCloseRef.current) return;
     if (isTerminalRef.current) {
@@ -386,10 +419,7 @@ export function useBattleMatch(matchId: number | null) {
     }
 
     const attempt = reconnectAttemptRef.current;
-    if (attempt >= RECONNECT_DELAYS_MS.length) {
-      setConnectionStatus("closed");
-      return;
-    }
+    const delay = RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)];
 
     setConnectionStatus("reconnecting");
     if (!reconnectingToastShownRef.current) {
@@ -405,7 +435,7 @@ export function useBattleMatch(matchId: number | null) {
         })
         .catch(() => {})
         .finally(() => connectRef.current());
-    }, RECONNECT_DELAYS_MS[attempt]);
+    }, delay);
   }, [matchId]);
 
   const connect = useCallback(async () => {

@@ -35,6 +35,7 @@ const battleParticipantProgressSchema = z.object({
 
 const battleParticipantResultSchema = z.object({
   user_id: z.number(),
+  username: z.string().nullable(),
   correct_count: z.number().nullable(),
   wrong_count: z.number().nullable(),
   final_score: z.number().nullable(),
@@ -69,6 +70,7 @@ const battleMatchStateSchema = z.object({
   my_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
   opponent_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
   current_question_results: z.array(participantQuestionResultSchema).nullable().optional(),
+  current_question_correct_answer: z.string().nullable().optional(),
   my_progress: battleParticipantProgressSchema.nullable().optional(),
   opponent_progress: battleParticipantProgressSchema.nullable().optional(),
   started_at: z.string().nullable().optional(),
@@ -101,6 +103,9 @@ const countdownStartedEventSchema = z.object({
 const matchStartedEventSchema = z.object({
   type: z.literal("match_started"),
   started_at: z.string(),
+  subject: z.string(),
+  difficulty: z.string(),
+  question_count: z.number(),
 });
 
 const questionStartedEventSchema = z.object({
@@ -120,6 +125,7 @@ const questionResultEventSchema = z.object({
   type: z.literal("question_result"),
   question_order: z.number(),
   results: z.array(participantQuestionResultSchema),
+  correct_answer: z.string().nullable(),
 });
 
 const playerDisconnectedEventSchema = z.object({

@@ -8,7 +8,6 @@ export default function BattleFlowLayout() {
         <Stack.Screen name="queue" />
         <Stack.Screen name="preparing" />
         <Stack.Screen name="match-session" />
-        <Stack.Screen name="battle-results" />
         <Stack.Screen name="leaderboard" />
       </Stack>
     </BattleMatchProvider>
