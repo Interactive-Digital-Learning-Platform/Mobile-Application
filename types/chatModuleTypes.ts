@@ -58,6 +58,34 @@ export type CitationType = {
   content: string
 }
 
+export type AttachmentKind = "image" | "pdf";
+
+
+export type ChatAttachmentStatus = "uploading" | "processing" | "ready" | "failed";
+
+
+export type PickedFile = {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+};
+
+
+export type ChatAttachment = {
+  localID: string;
+  serverID?: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType: string;
+  size?: number;
+  localUri?: string;
+  previewUrl?: string;
+  status: ChatAttachmentStatus;
+  uploadProgress?: number;
+  error?: string;
+};
+
 export type MessageType = {
   id: string,
   localID: string,
@@ -69,7 +97,8 @@ export type MessageType = {
   isError? : boolean,
   type: string,
   citations? : CitationType[],
-  tokens?: number
+  tokens?: number,
+  attachments?: ChatAttachment[]
 }
 
 export type StreamCallbacks = {
@@ -129,16 +158,19 @@ export type UseChatReturn = {
   hasMoreHistory: boolean;
   isLoadingHistory: boolean;
   chatRef: RefObject<FlashListRef<MessageType> | null>;
-  sendMessage: (values: ChatInputValues) => Promise<void>;
+  sendMessage: (values: ChatInputValues, attachment?: ChatAttachment) => Promise<void>;
   loadMoreHistory: () => void;
   startNewConversation: () => void;
   openConversation: (conversationID: string) => void;
+  ensureConversation: () => Promise<string>;
+  stopStreaming: () => void;
 }
 
 export type StreamMessagePropType = {
   conversationID?: string;
   userID: string;
   message: string;
+  attachmentIds?: string[];
   callbacks: StreamCallbacks;
   signal?: AbortSignal;
 }
