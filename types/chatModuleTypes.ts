@@ -58,6 +58,8 @@ export type CitationType = {
   content: string
 }
 
+export type ChatLanguage = "English" | "Sinhala";
+
 export type AttachmentKind = "image" | "pdf";
 
 
@@ -98,13 +100,16 @@ export type MessageType = {
   type: string,
   citations? : CitationType[],
   tokens?: number,
-  attachments?: ChatAttachment[]
+  attachments?: ChatAttachment[],
+  translationFailed?: boolean,
+  isTranslated?: boolean,
+  translatedContent?: string
 }
 
 export type StreamCallbacks = {
   onConversationCreated?: (conversationID: string) => void,
   onToken: (token: string) => void;
-  onDone: (messageID: string) => void;
+  onDone: (messageID: string, meta?: { translationFailed?: boolean }) => void;
   onError: (error: string) => void;
 }
 
@@ -158,6 +163,8 @@ export type UseChatReturn = {
   hasMoreHistory: boolean;
   isLoadingHistory: boolean;
   chatRef: RefObject<FlashListRef<MessageType> | null>;
+  language: ChatLanguage;
+  setLanguage: (language: ChatLanguage) => void;
   sendMessage: (values: ChatInputValues, attachment?: ChatAttachment) => Promise<void>;
   loadMoreHistory: () => void;
   startNewConversation: () => void;
@@ -170,6 +177,7 @@ export type StreamMessagePropType = {
   conversationID?: string;
   userID: string;
   message: string;
+  language: ChatLanguage;
   attachmentIds?: string[];
   callbacks: StreamCallbacks;
   signal?: AbortSignal;

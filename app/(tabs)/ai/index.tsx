@@ -47,6 +47,7 @@ import AttachmentSourceModal from "@/components/chat/AttachmentSourceModal";
 import { Drawer } from "react-native-drawer-layout";
 import { useState } from "react";
 import ChatHistorySidebar from "@/components/chat/ChatHistorySidebar";
+import LanguageSelectorModal from "@/components/chat/LanguageSelectorModal";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
@@ -56,6 +57,8 @@ export default function AIChat() {
   const {
     messages,
     conversationID,
+    language,
+    setLanguage,
     sendMessage,
     isSending,
     chatRef,
@@ -69,6 +72,7 @@ export default function AIChat() {
   const upload = useAttachmentUpload(user?.id);
 
   const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [isLangModalOpen, setLangModalOpen] = useState<boolean>(false);
   const [cardSize, setCardSize] = useState<{
     width: number;
     height: number;
@@ -300,8 +304,14 @@ export default function AIChat() {
                         >
                           <Plus size={20} color="#6B7280" />
                         </Pressable>
-                        <Pressable className="w-9 h-9 rounded-full bg-white justify-center items-center">
+                        <Pressable
+                          onPress={() => setLangModalOpen(true)}
+                          className="h-9 px-2.5 rounded-full bg-white flex-row items-center gap-1.5"
+                        >
                           <SlidersHorizontal size={18} color="#6B7280" />
+                          <Text className="text-xs font-amedium text-[#6B7280]">
+                            {language === "Sinhala" ? "සිං" : "EN"}
+                          </Text>
                         </Pressable>
                       </View>
                       <View className="flex-row items-center gap-3">
@@ -379,6 +389,15 @@ export default function AIChat() {
           </SafeAreaView>
         </LinearGradient>
         <AttachmentSourceModal {...picker.modalProps} />
+        <LanguageSelectorModal
+          visible={isLangModalOpen}
+          selected={language}
+          onSelect={(next) => {
+            setLanguage(next);
+            setLangModalOpen(false);
+          }}
+          onClose={() => setLangModalOpen(false)}
+        />
       </>
     </Drawer>
   );

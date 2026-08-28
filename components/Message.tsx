@@ -13,6 +13,11 @@ export default function Message({ message }: { message: MessageType }) {
   const isUser = message.role === "user";
   const isTyping = !isUser && message.isLoading && !message.content;
 
+  const body =
+    message.isTranslated && message.translatedContent
+      ? message.translatedContent
+      : message.content;
+
   const timeLabel = message.createdAt
     ? message.createdAt.toLocaleTimeString([], {
         hour: "2-digit",
@@ -44,7 +49,7 @@ export default function Message({ message }: { message: MessageType }) {
               <MessageAttachment key={att.localID} attachment={att} onUserBubble />
             ))}
             <Text selectable className="text-md font-aregular text-white text-justify">
-              {message.content}
+              {body}
             </Text>
           </View>
         ) : (
@@ -71,15 +76,20 @@ export default function Message({ message }: { message: MessageType }) {
               <TypingIndicator />
             ) : message.isLoading ? (
               <Text selectable className="text-md font-aregular text-justify">
-                {message.content}
+                {body}
               </Text>
             ) : (
               <Markdown
                 markdownit={chatMarkdownItInstance}
                 style={chatMarkdownStyle}
               >
-                {message.content}
+                {body}
               </Markdown>
+            )}
+            {!isTyping && message.translationFailed && (
+              <Text className="text-xs font-alight text-[#8A8A8A]">
+                Shown in English — Sinhala translation unavailable.
+              </Text>
             )}
           </View>
         )}
