@@ -142,6 +142,7 @@ export const streamMessage = async ({
   conversationID,
   userID,
   message,
+  language,
   attachmentIds,
   callbacks,
   signal,
@@ -169,6 +170,7 @@ export const streamMessage = async ({
           user_id: userID,
           conversation_id: conversationID,
           attachment_ids: attachmentIds ?? [],
+          language,
         }),
         pollingInterval: 0,
       },
@@ -191,7 +193,9 @@ export const streamMessage = async ({
         else if (parsed.type === "token") {
           callbacks.onToken(parsed.token);
         } else if (parsed.type === "done") {
-          callbacks.onDone(parsed.message_id);
+          callbacks.onDone(parsed.message_id, {
+            translationFailed: parsed.translation_failed,
+          });
           es.close();
           complete(() => resolve());
         } else if (parsed.type === "error") {
@@ -213,7 +217,7 @@ export const streamMessage = async ({
           if (rawType === "error") {
             callbacks.onError("The assistant ran into an error.");
           } else {
-            callbacks.onDone("");
+            callbacks.onDone("", {});
           }
           es.close();
           complete(() => resolve());

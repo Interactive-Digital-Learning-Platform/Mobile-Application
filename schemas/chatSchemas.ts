@@ -22,6 +22,7 @@ const tokenEventSchema = z.object({
 const doneEventSchema = z.object({
   type: z.literal("done"),
   message_id: z.string(),
+  translation_failed: z.boolean().optional().default(false),
   sources: z
     .array(
       z.object({
@@ -107,6 +108,8 @@ export const messageResponseSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: z.string(),
   created_at: z.string(),
+  is_translated: z.boolean().optional().default(false),
+  translated_content: z.string().nullable().optional(),
   sources: z.array(sourceCitationSchema).optional().default([]),
   attachments: z.array(messageAttachmentSchema).optional().default([]),
 });

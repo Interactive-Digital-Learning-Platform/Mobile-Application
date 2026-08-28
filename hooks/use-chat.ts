@@ -12,7 +12,12 @@ import {
   mapServerAttachmentStatus,
 } from "@/constants/attachments";
 import { ChatInputValues } from "@/schemas/chatSchemas";
-import { ChatAttachment, MessageType, UseChatReturn } from "@/types/chatModuleTypes";
+import {
+  ChatAttachment,
+  ChatLanguage,
+  MessageType,
+  UseChatReturn,
+} from "@/types/chatModuleTypes";
 import { useUser } from "@clerk/expo";
 import { FlashListRef } from "@shopify/flash-list";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,6 +43,7 @@ export function useChat(): UseChatReturn {
 
   const conversationIDRef = useRef<string | null>(null);
   const [conversationID, setConversationID] = useState<string | null>(null);
+  const [language, setLanguage] = useState<ChatLanguage>("English");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [beforeCursor, setBeforeCursor] = useState<string | undefined>(
     undefined,
@@ -95,6 +101,8 @@ export function useChat(): UseChatReturn {
       createdAt: new Date(message.created_at),
       type: "text" as const,
       sources: message.sources,
+      isTranslated: message.is_translated,
+      translatedContent: message.translated_content ?? undefined,
       attachments: message.attachments?.length
         ? message.attachments.map(
             (a): ChatAttachment => ({
@@ -275,6 +283,7 @@ export function useChat(): UseChatReturn {
           conversationID: activeConversationID ?? undefined,
           userID: user?.id,
           message: trimmed,
+          language,
           attachmentIds: sendableAttachment?.serverID
             ? [sendableAttachment.serverID]
             : undefined,
@@ -302,11 +311,12 @@ export function useChat(): UseChatReturn {
 
               scrollToLatestMessage();
             },
-            onDone: (serverMessageID) => {
+            onDone: (serverMessageID, meta) => {
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
                 serverID: serverMessageID || msg.serverID,
                 isLoading: false,
+                translationFailed: meta?.translationFailed ?? false,
               }));
 
               hasPendingMessagesRef.current = false;
@@ -340,6 +350,7 @@ export function useChat(): UseChatReturn {
     },
     [
       user?.id,
+      language,
       updateMessage,
       setConversationIDSync,
       scrollToLatestMessage,
@@ -399,6 +410,8 @@ export function useChat(): UseChatReturn {
     hasMoreHistory: messageHistory?.has_more ?? false,
     isLoadingHistory,
     chatRef,
+    language,
+    setLanguage,
     sendMessage,
     loadMoreHistory,
     startNewConversation,
