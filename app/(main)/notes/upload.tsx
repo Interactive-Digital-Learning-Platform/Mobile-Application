@@ -12,7 +12,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { X, Upload, Camera, Image as ImageIcon, Plus, Trash2, Layers } from "lucide-react-native";
+import {
+  X,
+  Upload,
+  Camera,
+  Image as ImageIcon,
+  Plus,
+  Trash2,
+  Layers,
+  Sparkles,
+  Info,
+} from "lucide-react-native";
 import { useAuth } from "@clerk/expo";
 import { notesApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
@@ -33,7 +43,7 @@ export default function UploadNote() {
       Toast.show({
         type: "error",
         text1: "Permission needed",
-        text2: "Gallery access is required.",
+        text2: "Gallery access is required to select handwritten note photos.",
       });
       return;
     }
@@ -42,7 +52,7 @@ export default function UploadNote() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
       selectionLimit: 20,
-      quality: 0.8,
+      quality: 0.85,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -57,13 +67,13 @@ export default function UploadNote() {
       Toast.show({
         type: "error",
         text1: "Permission needed",
-        text2: "Camera access is required.",
+        text2: "Camera access is required to photograph your handwritten notes.",
       });
       return;
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
+      quality: 0.85,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -79,16 +89,16 @@ export default function UploadNote() {
     if (images.length === 0) {
       Toast.show({
         type: "error",
-        text1: "No Images",
-        text2: "Please select or take photos of your note pages.",
+        text1: "No Images Added",
+        text2: "Please take a photo or select note pages from your gallery.",
       });
       return;
     }
     if (!title.trim()) {
       Toast.show({
         type: "error",
-        text1: "Missing Title",
-        text2: "Please give your notes a title.",
+        text1: "Missing Note Title",
+        text2: "Please provide a descriptive title for your note.",
       });
       return;
     }
@@ -100,8 +110,8 @@ export default function UploadNote() {
       if (response.success) {
         Toast.show({
           type: "success",
-          text1: "Success",
-          text2: `Uploaded ${images.length} page(s) and started processing!`,
+          text1: "Upload Complete",
+          text2: `Uploaded ${images.length} page(s). AI analysis started!`,
         });
         router.replace(`/(main)/notes/${response.data.noteId}` as any);
       } else {
@@ -112,140 +122,190 @@ export default function UploadNote() {
       Toast.show({
         type: "error",
         text1: "Upload Failed",
-        text2: error.message || "Could not upload note. Please try again.",
+        text2: error.message || "Could not upload note. Please check connection and try again.",
       });
       setIsUploading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.container}>
       <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
+
+      {/* ── Top Header ── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Upload Multi-Page Note</Text>
+        <View style={styles.headerTextGroup}>
+          <Text style={styles.headerTitle}>Upload Note</Text>
+          <Text style={styles.headerSubtitle}>AI-Powered Handwritten Note Analysis</Text>
+        </View>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.closeButton}
           disabled={isUploading}
+          activeOpacity={0.7}
         >
-          <X size={24} color={colors.primaryBlack} />
+          <X size={20} color="#475569" strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.sectionTitle}>Note Details</Text>
-        <InputField
-          title="Title"
-          placeHolder="e.g. Science - Photosynthesis (Ch. 1)"
-          value={title}
-          handleChange={setTitle}
-          keyboardType="default"
-        />
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Section 1: Note Details ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionHeaderLabel}>NOTE DETAILS</Text>
+        </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>
-            Note Pages ({images.length})
+        <View style={styles.inputCard}>
+          <InputField
+            title="Note Title"
+            placeHolder="e.g. Science - Photosynthesis & Respiration"
+            value={title}
+            handleChange={setTitle}
+            keyboardType="default"
+          />
+        </View>
+
+        {/* ── Section 2: Note Pages ── */}
+        <View style={styles.sectionHeaderBetween}>
+          <Text style={styles.sectionHeaderLabel}>
+            NOTE PAGES ({images.length}/20)
           </Text>
           {images.length > 0 && (
-            <Text style={styles.pageHelperText}>
-              Tap to add more pages
+            <Text style={styles.sectionHelperText}>
+              {images.length === 1 ? "1 page added" : `${images.length} pages added`}
             </Text>
           )}
         </View>
 
         {images.length === 0 ? (
-          <View style={styles.imagePlaceholder}>
-            <View style={styles.placeholderIconContainer}>
-              <Layers size={44} color={colors.primary} />
+          /* Empty / Initial Upload Box */
+          <View style={styles.emptyUploadBox}>
+            <View style={styles.iconCircle}>
+              <Layers size={36} color={colors.primary} strokeWidth={1.8} />
             </View>
-            <Text style={styles.placeholderTitle}>No pages added yet</Text>
-            <Text style={styles.placeholderSub}>
-              You can upload multi-page handwritten notes (1 to 20 pages)
+            <Text style={styles.emptyTitle}>Capture or Choose Note Pages</Text>
+            <Text style={styles.emptySubtitle}>
+              Upload multi-page handwritten notes (up to 20 pages) for syllabus gap detection and study material generation.
             </Text>
 
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.actionBtn} onPress={takePhoto}>
-                <Camera size={20} color="#fff" />
-                <Text style={styles.actionBtnText}>Take Photo</Text>
+            <View style={styles.pickerRow}>
+              <TouchableOpacity
+                style={styles.pickerBtnPrimary}
+                onPress={takePhoto}
+                activeOpacity={0.85}
+              >
+                <Camera size={19} color="#fff" strokeWidth={2} />
+                <Text style={styles.pickerBtnPrimaryText}>Take Photo</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnOutline]}
+                style={styles.pickerBtnSecondary}
                 onPress={pickImages}
+                activeOpacity={0.85}
               >
-                <ImageIcon size={20} color={colors.primaryBlack} />
-                <Text style={styles.actionBtnOutlineText}>Select Gallery</Text>
+                <ImageIcon size={19} color="#1E293B" strokeWidth={2} />
+                <Text style={styles.pickerBtnSecondaryText}>Choose Gallery</Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : (
-          <View style={styles.pagesSection}>
+          /* Page Thumbnails Reel */
+          <View style={styles.pagesContainer}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pagesList}
+              contentContainerStyle={styles.pagesReel}
             >
               {images.map((uri, index) => (
-                <View key={`${uri}-${index}`} style={styles.pageCard}>
-                  <Image source={{ uri }} style={styles.pageThumbnail} />
-                  <View style={styles.pageBadge}>
-                    <Text style={styles.pageBadgeText}>Page {index + 1}</Text>
+                <View key={`${uri}-${index}`} style={styles.pageThumbCard}>
+                  <Image source={{ uri }} style={styles.thumbImage} resizeMode="cover" />
+                  
+                  {/* Frosted Page Badge */}
+                  <View style={styles.thumbBadge}>
+                    <Text style={styles.thumbBadgeText}>Page {index + 1}</Text>
                   </View>
+
+                  {/* Delete Badge */}
                   <TouchableOpacity
-                    style={styles.deletePageBtn}
+                    style={styles.deleteThumbBtn}
                     onPress={() => removeImage(index)}
                     disabled={isUploading}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    <Trash2 size={16} color="#fff" />
+                    <Trash2 size={13} color="#fff" strokeWidth={2.4} />
                   </TouchableOpacity>
                 </View>
               ))}
 
+              {/* Add More Slot */}
               {images.length < 20 && (
                 <View style={styles.addMoreCard}>
                   <TouchableOpacity
-                    style={styles.addMoreBtn}
+                    style={styles.addMoreAction}
                     onPress={takePhoto}
                     disabled={isUploading}
+                    activeOpacity={0.8}
                   >
-                    <Camera size={22} color={colors.primary} />
-                    <Text style={styles.addMoreText}>Camera</Text>
+                    <Camera size={20} color={colors.primary} strokeWidth={2} />
+                    <Text style={styles.addMoreActionText}>Camera</Text>
                   </TouchableOpacity>
+
+                  <View style={styles.addMoreDivider} />
+
                   <TouchableOpacity
-                    style={[styles.addMoreBtn, { marginTop: 8 }]}
+                    style={styles.addMoreAction}
                     onPress={pickImages}
                     disabled={isUploading}
+                    activeOpacity={0.8}
                   >
-                    <Plus size={22} color={colors.primaryBlack} />
-                    <Text style={[styles.addMoreText, { color: colors.primaryBlack }]}>Gallery</Text>
+                    <Plus size={20} color="#475569" strokeWidth={2} />
+                    <Text style={[styles.addMoreActionText, { color: "#475569" }]}>Gallery</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </ScrollView>
 
-            <View style={styles.addPagesBar}>
+            {/* Quick Action Bottom Bar */}
+            <View style={styles.quickAddBar}>
               <TouchableOpacity
-                style={styles.addBarBtn}
+                style={styles.quickAddBtn}
                 onPress={takePhoto}
                 disabled={isUploading}
+                activeOpacity={0.85}
               >
-                <Camera size={18} color="#fff" />
-                <Text style={styles.addBarBtnText}>+ Add Page (Camera)</Text>
+                <Camera size={16} color="#fff" strokeWidth={2} />
+                <Text style={styles.quickAddBtnText}>Add Page via Camera</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.addBarBtn, styles.addBarBtnOutline]}
+                style={styles.quickAddBtnOutline}
                 onPress={pickImages}
                 disabled={isUploading}
+                activeOpacity={0.85}
               >
-                <ImageIcon size={18} color={colors.primaryBlack} />
-                <Text style={styles.addBarBtnOutlineText}>+ Add Pages (Gallery)</Text>
+                <ImageIcon size={16} color="#1E293B" strokeWidth={2} />
+                <Text style={styles.quickAddBtnOutlineText}>Add via Gallery</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* Tip Box */}
+        <View style={styles.tipBox}>
+          <Sparkles size={16} color={colors.primary} strokeWidth={2} style={{ marginTop: 2 }} />
+          <Text style={styles.tipText}>
+            <Text style={{ fontWeight: "700", color: "#1E293B" }}>AI Tip: </Text>
+            Ensure good lighting and capture all pages in reading order for highest OCR accuracy.
+          </Text>
+        </View>
       </ScrollView>
 
+      {/* ── Bottom Sticky Action Footer ── */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[
@@ -255,17 +315,23 @@ export default function UploadNote() {
           ]}
           onPress={handleUpload}
           disabled={images.length === 0 || !title.trim() || isUploading}
+          activeOpacity={0.85}
         >
           {isUploading ? (
-            <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />
+            <>
+              <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />
+              <Text style={styles.uploadButtonText}>
+                Uploading & Analyzing {images.length} Page(s)…
+              </Text>
+            </>
           ) : (
-            <Upload size={20} color="#fff" style={{ marginRight: 10 }} />
+            <>
+              <Sparkles size={20} color="#fff" strokeWidth={2.2} style={{ marginRight: 8 }} />
+              <Text style={styles.uploadButtonText}>
+                Upload & Analyze Notes {images.length > 0 ? `(${images.length} Pages)` : ""}
+              </Text>
+            </>
           )}
-          <Text style={styles.uploadButtonText}>
-            {isUploading
-              ? `Processing ${images.length} Page(s)...`
-              : `Upload & Analyze ${images.length > 0 ? `(${images.length} Pages)` : ""}`}
-          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -275,237 +341,330 @@ export default function UploadNote() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#F8FAFC",
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: "#F1F5F9",
+  },
+  headerTextGroup: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: colors.primaryBlack,
+    color: "#0F172A",
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "400",
   },
   closeButton: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     flex: 1,
-    padding: 20,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: colors.primaryBlack,
-    marginBottom: 12,
+  contentContainer: {
+    padding: 18,
+    paddingBottom: 40,
   },
-  sectionHeaderRow: {
+  sectionHeader: {
+    marginBottom: 8,
+  },
+  sectionHeaderBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 20,
+    marginBottom: 8,
   },
-  pageHelperText: {
-    fontSize: 13,
-    color: "#6b7280",
-    fontWeight: "400",
+  sectionHeaderLabel: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.6,
   },
-  imagePlaceholder: {
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-    borderStyle: "dashed",
+  sectionHelperText: {
+    fontSize: 11.5,
+    color: "#94A3B8",
+    fontWeight: "500",
+  },
+  inputCard: {
+    backgroundColor: "#ffffff",
     borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  emptyUploadBox: {
+    backgroundColor: "#ffffff",
+    borderWidth: 2,
+    borderColor: "#CBD5E1",
+    borderStyle: "dashed",
+    borderRadius: 20,
     padding: 24,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f9fafb",
-    marginTop: 8,
+    marginTop: 4,
   },
-  placeholderIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#fff",
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 14,
   },
-  placeholderTitle: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: colors.primaryBlack,
-    marginBottom: 4,
-  },
-  placeholderSub: {
-    fontSize: 14,
-    color: "#6b7280",
-    fontWeight: "400",
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#0F172A",
+    marginBottom: 6,
     textAlign: "center",
-    marginBottom: 24,
   },
-  actionButtons: {
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 20,
+    paddingHorizontal: 12,
+  },
+  pickerRow: {
     flexDirection: "row",
     gap: 12,
     width: "100%",
   },
-  actionBtn: {
+  pickerBtnPrimary: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: colors.primaryBlack,
-    paddingVertical: 14,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingVertical: 13,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pickerBtnPrimaryText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  pickerBtnSecondary: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingVertical: 13,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
   },
-  actionBtnText: {
-    color: "#fff",
-    fontWeight: "500",
-    fontSize: 15,
+  pickerBtnSecondaryText: {
+    color: "#1E293B",
+    fontWeight: "700",
+    fontSize: 14,
   },
-  actionBtnOutline: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: colors.borderColorLight,
-  },
-  actionBtnOutlineText: {
-    color: colors.primaryBlack,
-    fontWeight: "500",
-    fontSize: 15,
-  },
-  pagesSection: {
+  pagesContainer: {
     marginTop: 4,
   },
-  pagesList: {
-    paddingVertical: 8,
+  pagesReel: {
+    paddingVertical: 6,
     gap: 12,
   },
-  pageCard: {
+  pageThumbCard: {
     width: 140,
     height: 190,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F1F5F9",
     position: "relative",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  pageThumbnail: {
+  thumbImage: {
     width: "100%",
     height: "100%",
   },
-  pageBadge: {
+  thumbBadge: {
     position: "absolute",
     top: 8,
     left: 8,
-    backgroundColor: "rgba(0,0,0,0.75)",
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3.5,
     borderRadius: 8,
   },
-  pageBadgeText: {
-    color: "#fff",
+  thumbBadgeText: {
+    color: "#ffffff",
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
   },
-  deletePageBtn: {
+  deleteThumbBtn: {
     position: "absolute",
     top: 8,
     right: 8,
-    backgroundColor: "rgba(220, 38, 38, 0.85)",
+    backgroundColor: "#EF4444",
     width: 28,
     height: 28,
     borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   addMoreCard: {
-    width: 140,
+    width: 130,
     height: 190,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: "#d1d5db",
+    borderColor: "#CBD5E1",
     borderStyle: "dashed",
+    backgroundColor: "#ffffff",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f9fafb",
-    padding: 8,
+    padding: 10,
+    gap: 8,
   },
-  addMoreBtn: {
-    flexDirection: "row",
+  addMoreAction: {
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#fff",
-    elevation: 1,
+    width: "100%",
+    borderRadius: 10,
+    backgroundColor: "#F8FAFC",
   },
-  addMoreText: {
-    fontSize: 13,
-    fontWeight: "500",
+  addMoreActionText: {
+    fontSize: 11.5,
+    fontWeight: "700",
     color: colors.primary,
+    marginTop: 4,
   },
-  addPagesBar: {
+  addMoreDivider: {
+    width: "60%",
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  quickAddBar: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 16,
+    marginTop: 14,
   },
-  addBarBtn: {
+  quickAddBtn: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: colors.primaryBlack,
+    backgroundColor: "#0F172A",
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     gap: 6,
   },
-  addBarBtnText: {
-    color: "#fff",
-    fontWeight: "500",
-    fontSize: 13,
+  quickAddBtnText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 12.5,
   },
-  addBarBtnOutline: {
-    backgroundColor: "transparent",
+  quickAddBtnOutline: {
+    flex: 1,
+    flexDirection: "row",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: colors.borderColorLight,
+    borderColor: "#E2E8F0",
+    paddingVertical: 12,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
   },
-  addBarBtnOutlineText: {
-    color: colors.primaryBlack,
-    fontWeight: "500",
-    fontSize: 13,
+  quickAddBtnOutlineText: {
+    color: "#0F172A",
+    fontWeight: "600",
+    fontSize: 12.5,
+  },
+  tipBox: {
+    flexDirection: "row",
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 20,
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  tipText: {
+    fontSize: 12.5,
+    color: "#9A3412",
+    lineHeight: 18,
+    flex: 1,
   },
   footer: {
-    padding: 20,
-    paddingBottom: 30,
+    padding: 16,
+    paddingBottom: 24,
+    backgroundColor: "#ffffff",
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6",
+    borderTopColor: "#F1F5F9",
   },
   uploadButton: {
     backgroundColor: colors.primary,
     flexDirection: "row",
-    height: 56,
+    height: 54,
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   uploadButtonDisabled: {
-    backgroundColor: "#fed7aa",
+    backgroundColor: "#FED7AA",
+    shadowOpacity: 0,
+    elevation: 0,
   },
   uploadButtonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "600",
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });
+

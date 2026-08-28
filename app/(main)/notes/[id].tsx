@@ -35,6 +35,7 @@ import {
   Info,
 } from "lucide-react-native";
 import Svg, { Circle } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { materialsApi, notesApi } from "@/api/notesAPI";
 import { getNotesResourceUrl } from "@/api/apiClients";
 import { colors } from "@/constants/colors";
@@ -257,6 +258,7 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
 }) => {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
+  const [pipelineExpanded, setPipelineExpanded] = useState(false);
   const progressAnim = React.useRef(new Animated.Value(0)).current;
 
   // Elapsed timer — ticks every second
@@ -307,181 +309,196 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
   });
 
   return (
-    <View style={styles.fullScreenProcessing}>
-      {/* ── Top Navigation Bar with clear background action ── */}
-      <View style={styles.processingTopBar}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButtonWithLabel}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    <LinearGradient
+      colors={["#D94E06", "#EA580C", "#FC6E20", "#FF8C50"]}
+      locations={[0, 0.35, 0.7, 1]}
+      style={styles.fullScreenProcessingOrange}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#D94E06" />
+      <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
+        {/* ── Top Bar ── */}
+        <View style={styles.processingTopBarOrange}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButtonOrange}
+            activeOpacity={0.75}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <ChevronLeft size={20} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.backLabelTextOrange}>Notes</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.runInBackgroundBtnOrange}
+            activeOpacity={0.8}
+          >
+            <Minimize2 size={13} color="#ffffff" strokeWidth={2.2} />
+            <Text style={styles.runInBackgroundTextOrange}>Run in Background</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.processingScrollView}
+          contentContainerStyle={styles.processingScrollContentOrange}
+          showsVerticalScrollIndicator={false}
         >
-          <ChevronLeft size={22} color={colors.primaryBlack} />
-          <Text style={styles.backLabelText}>Notes</Text>
-        </TouchableOpacity>
+          {/* ── Central Circular Progress Ring (Quiz Screenshots 3 & 4 Style) ── */}
+          <View style={styles.processingHeroOrange}>
+            <View style={styles.circleProgressWrapOrange}>
+              <Svg width={RING_SIZE} height={RING_SIZE} style={styles.circleSvg}>
+                {/* Background Track Circle (Translucent White) */}
+                <Circle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
+                  stroke="rgba(255,255,255,0.25)"
+                  strokeWidth={RING_STROKE}
+                  fill="transparent"
+                />
+                {/* Animated Progress Circle (Bright Pure White) */}
+                <AnimatedCircle
+                  cx={RING_SIZE / 2}
+                  cy={RING_SIZE / 2}
+                  r={RING_RADIUS}
+                  stroke="#FFFFFF"
+                  strokeWidth={RING_STROKE}
+                  fill="transparent"
+                  strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                  strokeDashoffset={strokeDashoffset}
+                  strokeLinecap="round"
+                  transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
+                />
+              </Svg>
 
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.runInBackgroundBtn}
-          activeOpacity={0.8}
-        >
-          <Minimize2 size={13} color="#C2410C" />
-          <Text style={styles.runInBackgroundText}>Run in Background</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.processingScrollView}
-        contentContainerStyle={styles.processingScrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── Circular Progress & Brain Hero Section ── */}
-        <View style={styles.processingHero}>
-          <View style={styles.circleProgressWrap}>
-            <Svg width={RING_SIZE} height={RING_SIZE} style={styles.circleSvg}>
-              {/* Background Track Circle */}
-              <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
-                stroke="#E2E8F0"
-                strokeWidth={RING_STROKE}
-                fill="transparent"
-              />
-              {/* Animated Progress Circle */}
-              <AnimatedCircle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
-                stroke="#EA580C"
-                strokeWidth={RING_STROKE}
-                fill="transparent"
-                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
-              />
-            </Svg>
-
-            {/* Inner Content (Bottom-to-Top Filling Core + Static Brain Icon + Percentage + ETA) */}
-            <View style={styles.circleInnerContent}>
-              {/* Bottom-to-Top Animated Core Fill */}
-              <Animated.View
-                style={[
-                  styles.circleCoreFill,
-                  {
-                    height: progressAnim.interpolate({
-                      inputRange: [0, 100],
-                      outputRange: ["0%", "100%"],
-                      extrapolate: "clamp",
-                    }),
-                  },
-                ]}
-              />
-
-              {/* Static Content Layer */}
-              <View style={styles.circleContentLayer}>
-                <Brain size={30} color="#EA580C" strokeWidth={2.2} />
-                <Text style={styles.circlePctText}>{pct}%</Text>
-                <Text style={styles.circleEtaText}>~{fmtTime(etaSec)} left</Text>
+              {/* Inner Content (Frosted Glass Badge with Icon + Percentage) */}
+              <View style={styles.circleInnerContentOrange}>
+                <Sparkles size={28} color="#ffffff" strokeWidth={2.2} />
+                <Text style={styles.circlePctTextOrange}>{pct}%</Text>
+                <Text style={styles.circleEtaTextOrange}>~{fmtTime(etaSec)} left</Text>
               </View>
+            </View>
+
+            {/* Bold Title & Subtitle */}
+            <Text style={styles.processingMainTitleOrange}>Analyzing Notes</Text>
+            <Text style={styles.processingMainSubtitleOrange}>
+              Transcribing handwriting & mapping curriculum standards
+            </Text>
+
+            {/* Frosted AI Message Pill (Quiz Screenshot 3/4 Style) */}
+            <View style={styles.aiStatusChipOrange}>
+              <Sparkles size={14} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.aiStatusChipTextOrange}>
+                {pct < 30
+                  ? "Scanning handwritten pages with OCR…"
+                  : pct < 60
+                  ? "Matching syllabus topics & learning outcomes…"
+                  : pct < 85
+                  ? "Pinpointing knowledge gaps & insights…"
+                  : "Almost ready!"}
+              </Text>
+            </View>
+
+            {/* Animated 4-Dot Progress Indicator */}
+            <View style={styles.dotIndicatorRow}>
+              <View style={[styles.dotItem, pct >= 20 && styles.dotActive]} />
+              <View style={[styles.dotItem, pct >= 45 && styles.dotActive]} />
+              <View style={[styles.dotItem, pct >= 70 && styles.dotActivePill]} />
+              <View style={[styles.dotItem, pct >= 90 && styles.dotActive]} />
             </View>
           </View>
 
-          <Text style={styles.processingMainTitle}>Analysis in Progress</Text>
-          <Text style={styles.processingMainSubtitle}>
-            Extracting handwritten content & analyzing curriculum gaps
-          </Text>
-
-          {/* Rotating Educational Tip Card */}
-          <View style={styles.tipCard}>
-            <Sparkles size={14} color="#EA580C" style={{ marginTop: 2 }} />
-            <Text style={styles.tipText} numberOfLines={2}>
+          {/* ── Educational Tip Banner ── */}
+          <View style={styles.tipCardOrange}>
+            <View style={styles.tipIconCircle}>
+              <Sparkles size={14} color="#FC6E20" />
+            </View>
+            <Text style={styles.tipTextOrange} numberOfLines={2}>
               {PROCESSING_TIPS[tipIndex]}
             </Text>
           </View>
-        </View>
 
-        {/* ── Pipeline Stages Section (Directly below Hero) ── */}
-        <View style={styles.pipelineSection}>
-          <View style={styles.pipelineHeaderRow}>
-            <Text style={styles.pipelineSectionTitle}>ANALYSIS PIPELINE</Text>
-            <View style={styles.pipelineElapsedBadge}>
-              <Clock size={11} color="#64748B" />
-              <Text style={styles.pipelineElapsedText}>{fmtTime(elapsedSec)} elapsed</Text>
-            </View>
-          </View>
+          {/* ── Collapsible Pipeline Stages Accordion ── */}
+          <View style={styles.pipelineAccordionCard}>
+            <TouchableOpacity
+              style={styles.pipelineAccordionHeader}
+              onPress={() => setPipelineExpanded(!pipelineExpanded)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+                <Clock size={14} color="#ffffff" />
+                <Text style={styles.pipelineAccordionTitle}>
+                  ANALYSIS PIPELINE ({fmtTime(elapsedSec)} elapsed)
+                </Text>
+              </View>
+              {pipelineExpanded ? (
+                <ChevronUp size={16} color="#ffffff" />
+              ) : (
+                <ChevronDown size={16} color="#ffffff" />
+              )}
+            </TouchableOpacity>
 
-          <View style={styles.pipelineList}>
-            {PIPELINE_STAGES_INFO.map((stage, idx) => {
-              const isDone = idx < activeIdx;
-              const isActive = idx === activeIdx;
+            {pipelineExpanded && (
+              <View style={styles.pipelineAccordionList}>
+                {PIPELINE_STAGES_INFO.map((stage, idx) => {
+                  const isDone = idx < activeIdx;
+                  const isActive = idx === activeIdx;
 
-              return (
-                <View
-                  key={idx}
-                  style={[
-                    styles.pipelineCard,
-                    isDone && styles.pipelineCardDone,
-                    isActive && styles.pipelineCardActive,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.pipelineDotWrap,
-                      isDone && styles.pipelineDotDone,
-                      isActive && styles.pipelineDotActive,
-                    ]}
-                  >
-                    {isDone ? (
-                      <CheckCircle2 size={15} color="#fff" strokeWidth={2.5} />
-                    ) : isActive ? (
-                      <ActivityIndicator size={12} color="#fff" />
-                    ) : (
-                      <Text style={styles.pipelineIndexText}>{idx + 1}</Text>
-                    )}
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text
+                  return (
+                    <View
+                      key={idx}
                       style={[
-                        styles.pipelineStageName,
-                        isDone && styles.pipelineStageNameDone,
-                        isActive && styles.pipelineStageNameActive,
+                        styles.pipelineCardOrange,
+                        isDone && styles.pipelineCardOrangeDone,
+                        isActive && styles.pipelineCardOrangeActive,
                       ]}
-                      numberOfLines={1}
                     >
-                      {stage.label}
-                    </Text>
-                    {isActive && (
-                      <Text style={styles.pipelineStageDesc} numberOfLines={2}>
-                        {stage.detail}
-                      </Text>
-                    )}
-                  </View>
+                      <View
+                        style={[
+                          styles.pipelineDotWrapOrange,
+                          isDone && styles.pipelineDotOrangeDone,
+                          isActive && styles.pipelineDotOrangeActive,
+                        ]}
+                      >
+                        {isDone ? (
+                          <CheckCircle2 size={13} color="#16A34A" strokeWidth={2.5} />
+                        ) : isActive ? (
+                          <ActivityIndicator size={10} color="#FC6E20" />
+                        ) : (
+                          <Text style={styles.pipelineIndexTextOrange}>{idx + 1}</Text>
+                        )}
+                      </View>
 
-                  {isDone && (
-                    <View style={styles.stageDonePill}>
-                      <Text style={styles.stageDonePillText}>Done</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.pipelineStageNameOrange,
+                            isDone && styles.pipelineStageNameOrangeDone,
+                            isActive && styles.pipelineStageNameOrangeActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {stage.label}
+                        </Text>
+                        {isActive && (
+                          <Text style={styles.pipelineStageDescOrange} numberOfLines={2}>
+                            {stage.detail}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  )}
-                  {isActive && (
-                    <View style={styles.stageActivePill}>
-                      <Text style={styles.stageActivePillText}>Running</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+                  );
+                })}
+              </View>
+            )}
           </View>
-        </View>
 
-        {/* ── Footer Background Notice ── */}
-        <Text style={styles.processingBottomHint}>
-          ✦ Processing continues in the background — you can safely leave this screen anytime
-        </Text>
-      </ScrollView>
-    </View>
+          <Text style={styles.processingBottomHintOrange}>
+            ✦ Processing continues in the background — feel free to explore other tabs anytime
+          </Text>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 };
 
@@ -757,14 +774,15 @@ export default function NoteDetail() {
                     </Text>
                   </View>
 
-                  {/* Main Stats: Circle Ring on Left, Explicit Breakdown on Right */}
-                  <View style={styles.summaryBodyRow}>
+                  {/* ── Main Performance Summary Row (Quiz Screenshot 6 Inspired) ── */}
+                  <View style={styles.summaryHeroRow}>
+                    {/* Circular Completeness Ring */}
                     <View style={styles.heroScoreRingWrap}>
-                      <Svg width={100} height={100}>
-                        <Circle cx={50} cy={50} r={ringR} stroke="#F1F5F9" strokeWidth={9} fill="transparent" />
+                      <Svg width={106} height={106}>
+                        <Circle cx={53} cy={53} r={ringR} stroke="#F1F5F9" strokeWidth={9} fill="transparent" />
                         <Circle
-                          cx={50}
-                          cy={50}
+                          cx={53}
+                          cy={53}
                           r={ringR}
                           stroke={scoreColor}
                           strokeWidth={9}
@@ -772,57 +790,87 @@ export default function NoteDetail() {
                           strokeDasharray={`${ringC} ${ringC}`}
                           strokeDashoffset={offset}
                           strokeLinecap="round"
-                          transform="rotate(-90, 50, 50)"
+                          transform="rotate(-90, 53, 53)"
                         />
                       </Svg>
                       <View style={styles.heroScoreRingInner}>
                         <Text style={[styles.heroScorePct, { color: scoreColor }]}>{score}%</Text>
                         <Text style={styles.heroScoreLabel}>Curriculum</Text>
-                        <Text style={styles.heroScoreLabel}>Coverage</Text>
+                        <Text style={styles.heroScoreLabel}>Mastery</Text>
                       </View>
                     </View>
 
-                    <View style={styles.summaryStatsCol}>
-                      <View style={styles.statLineItem}>
-                        <View style={[styles.statDot, { backgroundColor: "#DCFCE7" }]}>
-                          <CheckCircle2 size={13} color="#16A34A" />
+                    {/* 2x2 Metric Tiles Grid */}
+                    <View style={styles.metricGrid2x2}>
+                      {/* Tile 1: Concepts Covered */}
+                      <View style={styles.metricGridTile}>
+                        <View style={[styles.metricTileIcon, { backgroundColor: "#DCFCE7" }]}>
+                          <CheckCircle2 size={13} color="#16A34A" strokeWidth={2.4} />
                         </View>
-                        <Text style={styles.statLineText}>
-                          <Text style={styles.statLineBold}>{coveredCount}/{totalConcepts}</Text> concepts covered
+                        <Text style={styles.metricTileVal}>{coveredCount}/{totalConcepts}</Text>
+                        <Text style={styles.metricTileLbl}>CONCEPTS</Text>
+                      </View>
+
+                      {/* Tile 2: Learning Gaps */}
+                      <View style={styles.metricGridTile}>
+                        <View
+                          style={[
+                            styles.metricTileIcon,
+                            { backgroundColor: highPriorityGapsCount > 0 ? "#FEE2E2" : "#FEF3C7" },
+                          ]}
+                        >
+                          <Target
+                            size={13}
+                            color={highPriorityGapsCount > 0 ? "#DC2626" : "#D97706"}
+                            strokeWidth={2.4}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.metricTileVal,
+                            highPriorityGapsCount > 0 && { color: "#DC2626" },
+                          ]}
+                        >
+                          {attentionCount}
                         </Text>
+                        <Text style={styles.metricTileLbl}>GAPS</Text>
                       </View>
 
-                      {attentionCount > 0 && (
-                        <View style={styles.statLineItem}>
-                          <View style={[styles.statDot, { backgroundColor: "#FEF3C7" }]}>
-                            <AlertTriangle size={13} color="#D97706" />
-                          </View>
-                          <Text style={styles.statLineText}>
-                            <Text style={styles.statLineBold}>{attentionCount}</Text> need{attentionCount === 1 ? "s" : ""} attention
-                          </Text>
+                      {/* Tile 3: Mastery Level */}
+                      <View style={styles.metricGridTile}>
+                        <View style={[styles.metricTileIcon, { backgroundColor: "#FFF7ED" }]}>
+                          <Sparkles size={13} color={colors.primary} strokeWidth={2.4} />
                         </View>
-                      )}
+                        <Text style={styles.metricTileVal}>{score}%</Text>
+                        <Text style={styles.metricTileLbl}>COVERAGE</Text>
+                      </View>
 
-                      {highPriorityGapsCount > 0 ? (
-                        <View style={styles.statLineItem}>
-                          <View style={[styles.statDot, { backgroundColor: "#FEE2E2" }]}>
-                            <Target size={13} color="#DC2626" />
-                          </View>
-                          <Text style={styles.statLineText}>
-                            <Text style={[styles.statLineBold, { color: "#DC2626" }]}>{highPriorityGapsCount}</Text> high-priority gap{highPriorityGapsCount > 1 ? "s" : ""}
-                          </Text>
+                      {/* Tile 4: Exam Readiness */}
+                      <View style={styles.metricGridTile}>
+                        <View style={[styles.metricTileIcon, { backgroundColor: "#EFF6FF" }]}>
+                          <TrendingUp size={13} color="#2563EB" strokeWidth={2.4} />
                         </View>
-                      ) : (
-                        <View style={styles.statLineItem}>
-                          <View style={[styles.statDot, { backgroundColor: "#DCFCE7" }]}>
-                            <Sparkles size={13} color="#16A34A" />
-                          </View>
-                          <Text style={styles.statLineText}>
-                            <Text style={styles.statLineBold}>0</Text> critical gaps
-                          </Text>
-                        </View>
-                      )}
+                        <Text style={styles.metricTileVal} numberOfLines={1}>
+                          {note.analysis.examReadiness?.rating || (score >= 75 ? "Great" : "Needs Work")}
+                        </Text>
+                        <Text style={styles.metricTileLbl}>READINESS</Text>
+                      </View>
                     </View>
+                  </View>
+
+                  {/* ── AI Motivation Card (Quiz Screenshot 8 Inspired) ── */}
+                  <View style={styles.aiMotivationBanner}>
+                    <View style={styles.aiMotivationHeaderRow}>
+                      <Sparkles size={14} color="#C2410C" strokeWidth={2.2} />
+                      <Text style={styles.aiMotivationTag}>AI MOTIVATION & STUDY PLAN</Text>
+                    </View>
+                    <Text style={styles.aiMotivationBody}>
+                      {score >= 80
+                        ? `Outstanding work! You've mastered ${coveredCount} syllabus outcomes. Complete quick revision cards to solidify full retention.`
+                        : score >= 50
+                        ? `Great start! You've evidenced ${coveredCount} core concepts. Focus on the ${attentionCount} identified learning gaps below to boost exam readiness.`
+                        : `Building momentum! Your notes cover ${coveredCount} foundational concepts. Use the personalized study flashcards and structured notes to fill the missing syllabus areas.`}
+                    </Text>
                   </View>
 
                   {/* Quick Action CTAs */}
@@ -832,8 +880,10 @@ export default function NoteDetail() {
                       onPress={scrollToGaps}
                       activeOpacity={0.8}
                     >
-                      <Target size={14} color="#475569" />
-                      <Text style={styles.summarySecondaryBtnText}>View Learning Gaps</Text>
+                      <Target size={14} color="#475569" strokeWidth={2} />
+                      <Text style={styles.summarySecondaryBtnText}>
+                        View {attentionCount} Gap{attentionCount !== 1 ? "s" : ""}
+                      </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -841,7 +891,7 @@ export default function NoteDetail() {
                       onPress={() => navigateToMaterial("structured_notes")}
                       activeOpacity={0.85}
                     >
-                      <Zap size={14} color="#FFFFFF" />
+                      <Zap size={14} color="#FFFFFF" strokeWidth={2} />
                       <Text style={styles.summaryPrimaryBtnText}>Start Revision</Text>
                     </TouchableOpacity>
                   </View>
@@ -1660,65 +1710,117 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 40 },
 
-  // ── Full-Screen AI Processing State ───────────────────────────────────────
-  fullScreenProcessing: {
-    flex: 1,
-    backgroundColor: "#F8F9FB",
+  // ── Failed state card ────────────────────────────────────────────────────
+  failedCard: {
+    margin: 20,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  processingTopBar: {
+  failedIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  failedTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#991B1B",
+    marginBottom: 8,
+  },
+  failedText: {
+    fontSize: 13.5,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  failedRetryBtn: {
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  failedRetryText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 13.5,
+  },
+
+  // ── Full-Screen AI Processing State (Quiz Screenshots 3 & 4 Style) ────────
+  fullScreenProcessingOrange: {
+    flex: 1,
+  },
+  processingTopBarOrange: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
-  backButtonWithLabel: {
+  backButtonOrange: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-    paddingVertical: 6,
-    paddingRight: 8,
+    gap: 5,
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
   },
-  backLabelText: {
-    fontSize: 15,
+  backLabelTextOrange: {
+    fontSize: 14,
     fontWeight: "700",
-    color: colors.primaryBlack,
+    color: "#ffffff",
   },
-  runInBackgroundBtn: {
+  runInBackgroundBtnOrange: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#FFEDD5",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#FDBA74",
+    borderColor: "rgba(255, 255, 255, 0.35)",
   },
-  runInBackgroundText: {
+  runInBackgroundTextOrange: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#C2410C",
+    color: "#ffffff",
   },
   processingScrollView: {
     flex: 1,
   },
-  processingScrollContent: {
+  processingScrollContentOrange: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  processingHero: {
+    paddingTop: 12,
+    paddingBottom: 36,
     alignItems: "center",
-    marginTop: 4,
+  },
+  processingHeroOrange: {
+    alignItems: "center",
+    width: "100%",
     marginBottom: 18,
   },
-  circleProgressWrap: {
+  circleProgressWrapOrange: {
     width: 170,
     height: 170,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 16,
     position: "relative",
   },
   circleSvg: {
@@ -1726,239 +1828,209 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
-  circleInnerContent: {
-    width: 136,
-    height: 136,
-    borderRadius: 68,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-    position: "relative",
-    shadowColor: "#EA580C",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: "rgba(234, 88, 12, 0.18)",
-  },
-  circleCoreFill: {
+  circleInnerContentOrange: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(234, 88, 12, 0.15)",
-    borderTopWidth: 1.5,
-    borderTopColor: "rgba(234, 88, 12, 0.55)",
-  },
-  circleContentLayer: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.40)",
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1,
   },
-  circlePctText: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0F172A",
+  circlePctTextOrange: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#ffffff",
     marginTop: 2,
   },
-  circleEtaText: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    color: "#C2410C",
+  circleEtaTextOrange: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.90)",
     marginTop: 1,
   },
-  processingMainTitle: {
-    fontSize: 21,
+  processingMainTitleOrange: {
+    fontSize: 24,
     fontWeight: "800",
-    color: "#0F172A",
-    marginTop: 2,
+    color: "#ffffff",
+    marginTop: 8,
     textAlign: "center",
   },
-  processingMainSubtitle: {
+  processingMainSubtitleOrange: {
     fontSize: 13,
-    color: "#475569",
+    color: "rgba(255, 255, 255, 0.90)",
     marginTop: 4,
     textAlign: "center",
     lineHeight: 18,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
-  tipCard: {
+  aiStatusChipOrange: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: "#fff",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 14,
-    marginTop: 12,
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "rgba(255, 255, 255, 0.35)",
+  },
+  aiStatusChipTextOrange: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  dotIndicatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 14,
+  },
+  dotItem: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "rgba(255, 255, 255, 0.35)",
+  },
+  dotActive: {
+    backgroundColor: "#ffffff",
+  },
+  dotActivePill: {
+    width: 18,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#ffffff",
+  },
+  tipCardOrange: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    width: "100%",
+    marginBottom: 14,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
-  tipText: {
+  tipIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFF7ED",
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  tipTextOrange: {
     flex: 1,
     fontSize: 12,
     color: "#334155",
     lineHeight: 17,
     fontWeight: "500",
   },
-  pipelineSection: {
-    marginBottom: 16,
+  pipelineAccordionCard: {
+    width: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.28)",
+    marginBottom: 14,
   },
-  pipelineHeaderRow: {
+  pipelineAccordionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
   },
-  pipelineSectionTitle: {
+  pipelineAccordionTitle: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#64748B",
-    letterSpacing: 0.8,
+    color: "#ffffff",
+    letterSpacing: 0.6,
   },
-  pipelineElapsedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  pipelineElapsedText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  pipelineList: {
+  pipelineAccordionList: {
+    marginTop: 12,
     gap: 8,
   },
-  pipelineCard: {
+  pipelineCardOrange: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 13,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    borderRadius: 12,
+    padding: 11,
+    gap: 10,
   },
-  pipelineCardDone: {
-    borderColor: "#E2E8F0",
+  pipelineCardOrangeDone: {
+    backgroundColor: "#ffffff",
   },
-  pipelineCardActive: {
-    borderColor: "#FDBA74",
-    backgroundColor: "#FFF7ED",
+  pipelineCardOrangeActive: {
+    backgroundColor: "#ffffff",
     borderWidth: 1.5,
+    borderColor: "#EA580C",
   },
-  pipelineDotWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+  pipelineDotWrapOrange: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: "#F1F5F9",
     justifyContent: "center",
     alignItems: "center",
+    flexShrink: 0,
   },
-  pipelineDotDone: {
-    backgroundColor: "#10B981",
+  pipelineDotOrangeDone: {
+    backgroundColor: "#DCFCE7",
   },
-  pipelineDotActive: {
-    backgroundColor: "#EA580C",
+  pipelineDotOrangeActive: {
+    backgroundColor: "#FFEDD5",
   },
-  pipelineIndexText: {
-    fontSize: 12,
+  pipelineIndexTextOrange: {
+    fontSize: 11,
     fontWeight: "700",
     color: "#64748B",
   },
-  pipelineStageName: {
-    fontSize: 13.5,
-    fontWeight: "500",
-    color: "#64748B",
+  pipelineStageNameOrange: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#475569",
   },
-  pipelineStageNameDone: {
+  pipelineStageNameOrangeDone: {
     color: "#0F172A",
     fontWeight: "700",
   },
-  pipelineStageNameActive: {
-    color: "#9A3412",
-    fontWeight: "800",
-  },
-  pipelineStageDesc: {
-    fontSize: 12,
-    color: "#431407",
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  stageDonePill: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  stageDonePillText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  stageActivePill: {
-    backgroundColor: "#FFEDD5",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  stageActivePillText: {
-    fontSize: 11,
-    fontWeight: "800",
+  pipelineStageNameOrangeActive: {
     color: "#C2410C",
+    fontWeight: "800",
   },
-  processingBottomHint: {
-    fontSize: 12,
+  pipelineStageDescOrange: {
+    fontSize: 11,
     color: "#64748B",
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  processingBottomHintOrange: {
+    fontSize: 11.5,
+    color: "rgba(255, 255, 255, 0.85)",
     fontWeight: "500",
     textAlign: "center",
-    marginTop: 6,
-    marginBottom: 12,
-    letterSpacing: 0.1,
+    marginTop: 2,
+    marginBottom: 10,
   },
 
-  // ── Failed state card ────────────────────────────────────────────────────
-  processingCard: {
-    margin: 20,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 28,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: `${colors.primary}25`,
-  },
-  processingText: {
-    fontSize: 14,
-    color: "#6B7280",
-    fontWeight: "400",
-    textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-
-  // ── Top Summary Card (Redesigned for Improvement 1) ──────────────────────
+  // ── Top Summary Card (Redesigned for Improvement 1 & Quiz Screenshots 1 & 6) ──
   topSummaryCard: {
-    marginHorizontal: 20,
-    marginTop: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
-    padding: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#EEF2F6",
     shadowColor: "#0F172A",
@@ -1968,13 +2040,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   summaryHeader: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   summaryHeaderTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subjectPill: {
     flexDirection: "row",
@@ -1984,6 +2056,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+    alignSelf: "flex-start",
   },
   subjectPillText: {
     fontSize: 12,
@@ -2011,6 +2084,147 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.primaryBlack,
     lineHeight: 24,
+    letterSpacing: -0.3,
+    marginTop: 4,
+  },
+  summaryHeroRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  heroScoreRingWrap: {
+    width: 106,
+    height: 106,
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  heroScoreRingInner: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroScorePct: {
+    fontSize: 20,
+    fontWeight: "900",
+    lineHeight: 24,
+  },
+  heroScoreLabel: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: "#64748B",
+    lineHeight: 11,
+  },
+
+  // 2x2 Metric Grid (Quiz Screenshot 6 Style)
+  metricGrid2x2: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  metricGridTile: {
+    width: "47%",
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    alignItems: "center",
+    gap: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  metricTileIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  metricTileVal: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  metricTileLbl: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#94A3B8",
+    letterSpacing: 0.4,
+  },
+
+  // AI Motivation Banner (Quiz Screenshot 8 Style)
+  aiMotivationBanner: {
+    backgroundColor: "#FFF7ED",
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    marginBottom: 12,
+    gap: 4,
+  },
+  aiMotivationHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  aiMotivationTag: {
+    fontSize: 10.5,
+    fontWeight: "800",
+    color: "#C2410C",
+    letterSpacing: 0.6,
+  },
+  aiMotivationBody: {
+    fontSize: 12,
+    color: "#9A3412",
+    lineHeight: 17,
+    fontWeight: "500",
+  },
+
+  summaryActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 2,
+  },
+  summarySecondaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    borderRadius: 14,
+  },
+  summarySecondaryBtnText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "#334155",
+    letterSpacing: -0.2,
+  },
+  summaryPrimaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 10,ght: 24,
     letterSpacing: -0.3,
   },
   summaryBodyRow: {

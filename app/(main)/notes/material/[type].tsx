@@ -117,11 +117,16 @@ const Flashcard = ({ card }: { card: any }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASHCARD LIST — Vertical scroll through all cards
+// FLASHCARD DECK — Interactive Deck & Step Dash Progress (Quiz Screenshot 5 Style)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [completed, setCompleted] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<"deck" | "list">("deck");
+
+  const currentCard = flashcards[currentIndex] || flashcards[0];
+  const isCurrentDone = completed.has(currentIndex);
 
   const toggleDone = (index: number) => {
     const next = new Set(completed);
@@ -130,21 +135,76 @@ const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
     setCompleted(next);
   };
 
+  const handleNext = () => {
+    if (currentIndex < flashcards.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
   const allDone = completed.size === flashcards.length;
 
   return (
     <View style={styles.flashcardListContainer}>
-      {/* Summary row */}
-      <View style={styles.flashcardListHeader}>
-        <Text style={styles.flashcardListCount}>
-          {flashcards.length} cards · tap to flip
-        </Text>
+      {/* Mode switcher pill: Deck vs All List */}
+      <View style={styles.flashcardModeRow}>
+        <View style={styles.flashcardModePills}>
+          <TouchableOpacity
+            style={[styles.flashcardModeBtn, viewMode === "deck" && styles.flashcardModeBtnActive]}
+            onPress={() => setViewMode("deck")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.flashcardModeBtnText,
+                viewMode === "deck" && styles.flashcardModeBtnTextActive,
+              ]}
+            >
+              Interactive Deck
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.flashcardModeBtn, viewMode === "list" && styles.flashcardModeBtnActive]}
+            onPress={() => setViewMode("list")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.flashcardModeBtnText,
+                viewMode === "list" && styles.flashcardModeBtnTextActive,
+              ]}
+            >
+              All Cards ({flashcards.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.flashcardDoneCount}>
           <CheckCircle2 size={14} color="#16A34A" />
           <Text style={styles.flashcardDoneText}>
-            {completed.size} / {flashcards.length}
+            {completed.size}/{flashcards.length}
           </Text>
         </View>
+      </View>
+
+      {/* Stepped Progress Bar (Quiz Screenshot 5 Style) */}
+      <View style={styles.stepProgressRow}>
+        {flashcards.map((_, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.stepDash,
+              idx <= currentIndex ? styles.stepDashActive : styles.stepDashInactive,
+              completed.has(idx) && styles.stepDashCompleted,
+            ]}
+          />
+        ))}
       </View>
 
       {/* Completion banner */}
@@ -155,37 +215,92 @@ const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
         </View>
       )}
 
-      {/* All cards stacked vertically */}
-      {flashcards.map((card, i) => (
-        <View key={i} style={styles.flashcardListItem}>
-          {/* Card number + done toggle */}
-          <View style={styles.flashcardListMeta}>
-            <Text style={styles.flashcardListNum}>#{i + 1}</Text>
+      {viewMode === "deck" ? (
+        <View style={styles.deckContainer}>
+          {/* Subtitle / Counter Row */}
+          <View style={styles.deckCounterRow}>
+            <Text style={styles.deckCounterText}>
+              Card {currentIndex + 1} / {flashcards.length}
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.flashcardDoneBtn,
-                completed.has(i) && styles.flashcardDoneBtnActive,
-              ]}
-              onPress={() => toggleDone(i)}
+              style={[styles.flashcardDoneBtn, isCurrentDone && styles.flashcardDoneBtnActive]}
+              onPress={() => toggleDone(currentIndex)}
               activeOpacity={0.7}
             >
-              <CheckCircle2
-                size={14}
-                color={completed.has(i) ? "#16A34A" : "#CBD5E1"}
-              />
-              <Text
-                style={[
-                  styles.flashcardDoneBtnText,
-                  completed.has(i) && { color: "#16A34A" },
-                ]}
-              >
-                {completed.has(i) ? "Done" : "Mark done"}
+              <CheckCircle2 size={13} color={isCurrentDone ? "#16A34A" : "#94A3B8"} />
+              <Text style={[styles.flashcardDoneBtnText, isCurrentDone && { color: "#16A34A" }]}>
+                {isCurrentDone ? "Mastered" : "Mark Mastered"}
               </Text>
             </TouchableOpacity>
           </View>
-          <Flashcard card={card} />
+
+          {/* Flashcard Component */}
+          {currentCard && <Flashcard key={currentIndex} card={currentCard} />}
+
+          {/* Previous / Next Controls (Quiz Screenshot 5 Style) */}
+          <View style={styles.deckNavRow}>
+            <TouchableOpacity
+              style={[styles.deckNavBtnPrev, currentIndex === 0 && styles.deckNavBtnDisabled]}
+              onPress={handlePrev}
+              disabled={currentIndex === 0}
+              activeOpacity={0.8}
+            >
+              <ChevronLeft size={18} color={currentIndex === 0 ? "#CBD5E1" : "#475569"} />
+              <Text style={[styles.deckNavBtnTextPrev, currentIndex === 0 && { color: "#CBD5E1" }]}>
+                Previous
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.deckNavBtnNext,
+                currentIndex === flashcards.length - 1 && styles.deckNavBtnNextLast,
+              ]}
+              onPress={handleNext}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.deckNavBtnTextNext}>
+                {currentIndex === flashcards.length - 1 ? "Completed 🎉" : "Next"}
+              </Text>
+              <ChevronRight size={18} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
-      ))}
+      ) : (
+        /* All cards stacked vertically */
+        <View style={styles.allCardsList}>
+          {flashcards.map((card, i) => (
+            <View key={i} style={styles.flashcardListItem}>
+              {/* Card number + done toggle */}
+              <View style={styles.flashcardListMeta}>
+                <Text style={styles.flashcardListNum}>#{i + 1}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.flashcardDoneBtn,
+                    completed.has(i) && styles.flashcardDoneBtnActive,
+                  ]}
+                  onPress={() => toggleDone(i)}
+                  activeOpacity={0.7}
+                >
+                  <CheckCircle2
+                    size={14}
+                    color={completed.has(i) ? "#16A34A" : "#CBD5E1"}
+                  />
+                  <Text
+                    style={[
+                      styles.flashcardDoneBtnText,
+                      completed.has(i) && { color: "#16A34A" },
+                    ]}
+                  >
+                    {completed.has(i) ? "Mastered" : "Mark mastered"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Flashcard card={card} />
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -920,21 +1035,144 @@ const styles = StyleSheet.create({
   },
   resetBtnText: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
 
-  // ── Flashcard vertical list ──────────────────────────────────────────────────────────
-  flashcardListContainer: { gap: 16 },
-  flashcardListHeader: {
+  // ── Flashcard interactive deck & list ─────────────────────────────────────────
+  flashcardListContainer: { gap: 14 },
+  flashcardModeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  flashcardModePills: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 3,
+    gap: 3,
+  },
+  flashcardModeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 11,
+  },
+  flashcardModeBtnActive: {
+    backgroundColor: "#ffffff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  flashcardModeBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  flashcardModeBtnTextActive: {
+    color: colors.primaryBlack,
+    fontWeight: "700",
+  },
+  flashcardDoneCount: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  flashcardDoneText: { fontSize: 12.5, color: "#16A34A", fontWeight: "700" },
+
+  // Stepped progress dashes (Quiz Screenshot 5 Style)
+  stepProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
     marginBottom: 4,
   },
-  flashcardListCount: {
-    fontSize: 13,
-    color: "#94A3B8",
-    fontWeight: "500",
+  stepDash: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
   },
-  flashcardDoneCount: { flexDirection: "row", alignItems: "center", gap: 4 },
-  flashcardDoneText: { fontSize: 13, color: "#16A34A", fontWeight: "600" },
+  stepDashActive: {
+    backgroundColor: colors.primary,
+  },
+  stepDashInactive: {
+    backgroundColor: "#E2E8F0",
+  },
+  stepDashCompleted: {
+    backgroundColor: "#16A34A",
+  },
+
+  deckContainer: {
+    gap: 12,
+    alignItems: "center",
+  },
+  deckCounterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    paddingHorizontal: 4,
+  },
+  deckCounterText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  deckNavRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+    marginTop: 8,
+  },
+  deckNavBtnPrev: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  deckNavBtnDisabled: {
+    opacity: 0.5,
+  },
+  deckNavBtnTextPrev: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  deckNavBtnNext: {
+    flex: 1.3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  deckNavBtnNextLast: {
+    backgroundColor: "#16A34A",
+    shadowColor: "#16A34A",
+  },
+  deckNavBtnTextNext: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+
+  allCardsList: {
+    gap: 14,
+  },
   flashcardListItem: { gap: 6 },
   flashcardListMeta: {
     flexDirection: "row",
@@ -952,16 +1190,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingVertical: 4,
+    paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: "#F1F5F9",
   },
   flashcardDoneBtnActive: { backgroundColor: "#DCFCE7" },
   flashcardDoneBtnText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#94A3B8",
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#64748B",
   },
 
   // ── Mind Map ─────────────────────────────────────────────────────────────────
