@@ -7,19 +7,24 @@ import { router, useNavigation } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useForm, Controller } from "react-hook-form";
-import z from "zod";
+import {z} from "zod";
 import { userSignInSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth, useSignIn } from "@clerk/expo";
 import { type signInFormValues } from "@/types/chatModuleTypes";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function Signin() {
   const navigation = useNavigation();
 
   const { signIn, fetchStatus } = useSignIn();
+  const { isSignedIn } = useAuth();
+
+  const [phase, setPhase] = useState<"idle" | "submitting" | "settled">("idle");
+  const passwordErrorRef = useRef<string | null>(null);
+  const handledRef = useRef(false);
 
   const {
     control,
@@ -34,40 +39,97 @@ export default function Signin() {
     },
   });
 
+  useEffect(() => {
+    if (isSignedIn) {
+      router.replace("/(tabs)/ai");
+      return;
+    }
+
+    if (phase !== "settled" || handledRef.current) return;
+
+    const currentSignIn = signIn;
+    const status = currentSignIn?.status;
+
+    if (currentSignIn && status === "complete") {
+      handledRef.current = true;
+
+      let cancelled = false;
+      (async () => {
+        const { error } = await currentSignIn.finalize({
+          navigate: ({ session }) => {
+            if (session?.currentTask) {
+              console.log("Current task: ", session?.currentTask);
+              return;
+            }
+
+            router.replace("/(tabs)/ai");
+          },
+        });
+
+        if (error && !cancelled) {
+          handledRef.current = false;
+          setPhase("idle");
+          Toast.show({
+            type: "error",
+            text1: "Error",
+            text2: "Could not complete sign in. Please try again.",
+          });
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    handledRef.current = true;
+    setPhase("idle");
+
+    if (passwordErrorRef.current) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: passwordErrorRef.current,
+      });
+      return;
+    }
+
+    if (
+      status === "needs_first_factor" ||
+      status === "needs_second_factor" ||
+      status === "needs_new_password" ||
+      status === "needs_client_trust"
+    ) {
+      Toast.show({
+        type: "error",
+        text1: "Additional verification required",
+        text2:
+          "This account needs another step to sign in that isn't available here yet.",
+      });
+      return;
+    }
+
+    Toast.show({
+      type: "error",
+      text1: "Sign in failed",
+      text2: "We couldn't sign you in. Please try again.",
+    });
+  }, [signIn, isSignedIn, phase]);
+
   const onSubmit = async (formData: signInFormValues) => {
+    if (!signIn || phase === "submitting") return;
+
+    handledRef.current = false;
+    passwordErrorRef.current = null;
+    setPhase("submitting");
+
     const { error } = await signIn.password({
       emailAddress: formData.email,
       password: formData.password,
     });
 
-    if (error) {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: error.message,
-      });
-
-      return;
-    }
-
-    if (signIn.status === "complete") {
-      await signIn.finalize({
-        navigate: ({ session }) => {
-          if (session?.currentTask) {
-            console.log("Current task: ", session?.currentTask);
-            return;
-          }
-
-          router.push("/(tabs)/ai");
-        },
-      });
-    } else {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Signin attempt not completed!",
-      });
-    }
+    passwordErrorRef.current = error?.message ?? null;
+    setPhase("settled");
   };
 
   return (
@@ -119,7 +181,12 @@ export default function Signin() {
             <CustomButton
               title="Sign in"
               handlePress={handleSubmit(onSubmit)}
-              isLoading={isSubmitting || !isValid || fetchStatus === "fetching"}
+              isLoading={
+                isSubmitting ||
+                !isValid ||
+                fetchStatus === "fetching" ||
+                phase !== "idle"
+              }
             />
           </View>
           <View className="mt-5 justify-center items-center">
@@ -137,7 +204,7 @@ export default function Signin() {
           </View>
           <View className="mt-8 flex-row gap-2 justify-center items-center mb-8">
             <Text className="font-amedium text-lg text-[#979797]">
-              Don't have an account?
+              Don&apos;t have an account?
             </Text>
             <Pressable onPress={() => router.push("/(auth)/sign-up")}>
               <Text className="font-amedium text-lg underline">Signup</Text>

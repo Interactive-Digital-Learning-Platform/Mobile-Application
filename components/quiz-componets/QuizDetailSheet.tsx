@@ -9,11 +9,12 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import {
-  Clock, BarChart2, ListChecks, Play, RotateCcw, X, HelpCircle,
+  Clock, BarChart2, ListChecks, Play, RotateCcw, X,
   type LucideIcon,
 } from "lucide-react-native";
-import { getDifficultyStyle, ICON_COLORS, SUBJECT_ICONS } from "@/constants/quizStyles";
+import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } from "@/constants/quizStyles";
 import { Difficulty, PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
+import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
@@ -37,6 +38,7 @@ function StatTile({ icon: Icon, label, value }: { icon: LucideIcon; label: strin
 
 export default function QuizDetailSheet({ item, visible, onClose, onAction }: QuizDetailSheetProps) {
   const router = useRouter();
+  const [showRetakeWarning, setShowRetakeWarning] = useState(false);
 
   // Keep the modal mounted until the exit animation finishes, since RN's
   // <Modal> would otherwise unmount it instantly and cut the animation short.
@@ -68,7 +70,10 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
     transform: [{ translateY: sheetTranslateY.value }],
   }));
 
-  const Icon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
+  const Icon = getSubjectIcon(item.subject);
+  const isShuffleQuiz = item.subject === "Mixed";
+  // Shuffle mode has no difficulty of its own — each subject picks its own
+  // independently at generation time — so no difficulty badge is shown here.
   const diff = getDifficultyStyle(item.difficulty);
   const hasStarted = item.progress > 0;
   const isComplete = item.progress === 100;
@@ -96,6 +101,30 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
     : displayPct >= 50 ? "text-amber-500"
     : "text-rose-500";
 
+  const startQuiz = () => {
+    onClose();
+    onAction();
+    router.push({
+      pathname: "/(main)/quiz/quiz-session",
+      params: {
+        subject:          item.subject,
+        difficulty:       item.difficulty.toLowerCase(),
+        questionCount:    String(item.questions),
+        timer:            item.timer.replace(" min", ""),
+        grade:            "10",
+        resumeSessionId: String(item.session_id),
+        // Retake: load same questions from DB but reset all answers
+        ...(isComplete ? { restartSession: "true" } : {}),
+        // Without this, quiz-session.tsx has no way to know a resumed/
+        // retaken session was Shuffle Mode (its own generation request is
+        // skipped entirely on resume, so it never gets this from `subjects`)
+        // — it needs `shuffle` itself to show each question's real subject
+        // and avoid rendering a single misleading difficulty for the quiz.
+        ...(isShuffleQuiz ? { shuffle: "true" } : {}),
+      },
+    } as any);
+  };
+
   return (
     <Modal visible={isMounted} transparent animationType="none" onRequestClose={onClose}>
       <Animated.View style={[{ flex: 1, justifyContent: "flex-end" }, backdropStyle]} className="bg-black/40">
@@ -113,11 +142,15 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
               <Icon size={28} color={ICON_COLORS.slate500} strokeWidth={1.6} />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-black text-slate-800">{item.subject}</Text>
-              <View className={`self-start flex-row items-center gap-1 px-2.5 py-0.5 rounded-full mt-1.5 ${diff.bg}`}>
-                <View className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
-                <Text className={`text-xs font-semibold ${diff.text}`}>{item.difficulty}</Text>
-              </View>
+              <Text className="text-xl font-black text-slate-800" numberOfLines={1}>
+                {formatSubjectLabel(item.subject)}
+              </Text>
+              {!isShuffleQuiz && (
+                <View className={`self-start flex-row items-center gap-1 px-2.5 py-0.5 rounded-full mt-1.5 ${diff.bg}`}>
+                  <View className={`w-1.5 h-1.5 rounded-full ${diff.dot}`} />
+                  <Text className={`text-xs font-semibold ${diff.text}`}>{item.difficulty}</Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -164,23 +197,7 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
                 : "bg-primary shadow-primary/30"
             }`}
             activeOpacity={0.85}
-            onPress={() => {
-              onClose();
-              onAction();
-              router.push({
-                pathname: "/(main)/quiz/quiz-session",
-                params: {
-                  subject:          item.subject,
-                  difficulty:       item.difficulty.toLowerCase(),
-                  questionCount:    String(item.questions),
-                  timer:            item.timer.replace(" min", ""),
-                  grade:            "10",
-                  resumeSessionId: String(item.session_id),
-                  // Retake: load same questions from DB but reset all answers
-                  ...(isComplete ? { restartSession: "true" } : {}),
-                },
-              } as any);
-            }}
+            onPress={() => (isComplete ? setShowRetakeWarning(true) : startQuiz())}
           >
             {isComplete ? (
               <RotateCcw size={18} color={ICON_COLORS.white} strokeWidth={2.5} />
@@ -193,6 +210,15 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
+
+      <RestartConfirmModal
+        visible={showRetakeWarning}
+        onCancel={() => setShowRetakeWarning(false)}
+        onConfirm={() => {
+          setShowRetakeWarning(false);
+          startQuiz();
+        }}
+      />
     </Modal>
   );
 }

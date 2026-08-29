@@ -1,6 +1,6 @@
 import {
   Calculator, FlaskConical, Landmark, BookOpen,
-  Globe, Code2, HelpCircle,
+  Globe, Code2, HelpCircle, Shuffle,
   type LucideIcon,
 } from "lucide-react-native";
 import { capitalize } from "@/constants/quizHelpers";
@@ -90,6 +90,23 @@ export const SUBJECT_ICONS: Record<string, LucideIcon> = {
 export { HelpCircle as SubjectIconFallback };
 
 export const SUBJECTS = Object.keys(SUBJECT_ICONS);
+
+// "Mixed" is a shuffle session's own resulting subject, not a pickable
+// subject — kept out of SUBJECT_ICONS/SUBJECTS (which double as the
+// CreateQuizModal subject picker and the practice-list subject filter) and
+// resolved separately here instead.
+export function getSubjectIcon(subject: string | undefined | null): LucideIcon {
+  if (subject === "Mixed") return Shuffle;
+  return (subject && SUBJECT_ICONS[subject]) || HelpCircle;
+}
+
+// Display-only: a session's stored subject is literally "Mixed" for a
+// shuffle quiz that ended up spanning more than one subject — shown to the
+// user as "Shuffle" instead, since that's the mode they picked.
+export function formatSubjectLabel(subject: string | undefined | null): string {
+  if (subject === "Mixed") return "Shuffled";
+  return subject ?? "";
+}
 
 export function getDifficultyStyle(raw: string | undefined | null) {
   const key = (raw ? capitalize(raw) : "") as Difficulty;

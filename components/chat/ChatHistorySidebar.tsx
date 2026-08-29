@@ -9,12 +9,16 @@ import {
 import { useUser } from "@clerk/expo";
 import { FlashList } from "@shopify/flash-list";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { MessageCircleDashed, Plus, TriangleAlert } from "lucide-react-native";
+import {
+  MessageCircleDashed,
+  SquarePen,
+  TriangleAlert,
+} from "lucide-react-native";
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  LayoutChangeEvent,
   Pressable,
   StyleSheet,
   Text,
@@ -24,7 +28,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PAGE_SIZE = 20;
+/** Gradient fades out just before the sidebar's vertical center. */
+const GRADIENT_HEIGHT_RATIO = 0.48;
 const SECTION_ORDER: ChatHistorySectionName[] = ["Today", "Last Week", "Older"];
+
+type StatusKind = "loading" | "error" | "empty";
+
+type SidebarListItem =
+  | { type: "status"; id: string; status: StatusKind }
+  | ChatHistoryListItem;
 
 function getSectionName(dateValue: string): ChatHistorySectionName {
   const updatedAt = new Date(dateValue);
@@ -71,35 +83,19 @@ function flattenConversations(
   });
 }
 
-/** Warm gradient orb shown whenever there is no real profile photo to load. */
-function AvatarGlow() {
-  return (
-    <LinearGradient
-      colors={["#FFC978", "#FC6E20", "#B7350C"]}
-      locations={[0, 0.55, 1]}
-      start={{ x: 0.2, y: 0 }}
-      end={{ x: 0.85, y: 1 }}
-      style={styles.avatarGlow}
-    >
-      <LinearGradient
-        colors={["rgba(255,255,255,0.85)", "rgba(255,255,255,0)"]}
-        start={{ x: 0.15, y: 0.1 }}
-        end={{ x: 0.7, y: 0.75 }}
-        style={styles.avatarGlowHighlight}
-      />
-    </LinearGradient>
-  );
-}
-
 export default function AIChatSidebar({
   selectedConversationID,
   onConversationPress,
   onNewChatPress,
 }: AIChatSidebarProps) {
   const { user, isLoaded } = useUser();
-  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [sidebarHeight, setSidebarHeight] = useState(0);
 
   const userId = user?.id;
+
+  const handleSidebarLayout = (event: LayoutChangeEvent) => {
+    setSidebarHeight(event.nativeEvent.layout.height);
+  };
 
   const {
     data,
@@ -133,144 +129,160 @@ export default function AIChatSidebar({
     [data],
   );
 
-  const profileImageUrl = user?.hasImage ? user.imageUrl : undefined;
   const showInitialLoader = !isLoaded || isLoading;
 
-  return (
-    <View style={styles.root}>
-      <LinearGradient
-        colors={["#6CC2FF", "#9AD6FF"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <SafeAreaView edges={["top", "left", "right"]}>
-          <View style={styles.headerRow}>
-            <View style={styles.headerCopy}>
-              <Text style={styles.headerTitle}>History</Text>
-              <Text style={styles.headerDescription}>
-                Your recent conversations
-              </Text>
-            </View>
+  const items: SidebarListItem[] = useMemo(() => {
+    if (showInitialLoader) {
+      return [{ type: "status", id: "status-loading", status: "loading" }];
+    }
+    if (isError) {
+      return [{ type: "status", id: "status-error", status: "error" }];
+    }
+    if (listData.length === 0) {
+      return [{ type: "status", id: "status-empty", status: "empty" }];
+    }
+    return listData;
+  }, [listData, showInitialLoader, isError]);
 
-            <View style={styles.avatarFrame}>
-              {profileImageUrl && !avatarFailed ? (
-                <Image
-                  accessibilityLabel="Your profile picture"
-                  source={{ uri: profileImageUrl }}
-                  contentFit="cover"
-                  transition={150}
-                  style={styles.avatar}
-                  onError={() => setAvatarFailed(true)}
-                />
-              ) : (
-                <AvatarGlow />
-              )}
-            </View>
+  return (
+    <View style={styles.root} onLayout={handleSidebarLayout}>
+      {sidebarHeight > 0 ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            "rgba(124, 199, 255, 0.9)",
+            "rgba(124, 199, 255, 0.55)",
+            "rgba(124, 199, 255, 0.18)",
+            "rgba(124, 199, 255, 0)",
+          ]}
+          locations={[0, 0.35, 0.7, 1]}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={[
+            styles.gradient,
+            { height: sidebarHeight * GRADIENT_HEIGHT_RATIO },
+          ]}
+        />
+      ) : null}
+
+      <SafeAreaView edges={["top", "left", "right"]}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerCopy}>
+            <Text style={styles.headerTitle}>History</Text>
+            <Text style={styles.headerDescription}>Your recent conversations</Text>
           </View>
 
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Start a new chat"
-            activeOpacity={0.7}
+            activeOpacity={0.6}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             onPress={onNewChatPress}
             style={styles.newChatButton}
           >
-            <Plus color="#FFFFFF" size={19} strokeWidth={2.4} />
-            <Text style={styles.newChatText}>New chat</Text>
+            <SquarePen color="#FFFFFF" size={21} strokeWidth={2.2} />
           </TouchableOpacity>
-        </SafeAreaView>
-      </LinearGradient>
+        </View>
+      </SafeAreaView>
 
       <SafeAreaView edges={["bottom", "left", "right"]} style={styles.body}>
-        {showInitialLoader ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator color="#FC6E20" size="small" />
-            <Text style={styles.stateText}>Loading conversations…</Text>
-          </View>
-        ) : isError ? (
-          <View style={styles.centerState}>
-            <View style={styles.stateIconFrame}>
-              <TriangleAlert size={22} color="#FC6E20" strokeWidth={1.8} />
-            </View>
-            <Text style={styles.stateTitle}>Couldn’t load history</Text>
-            <Text style={styles.stateText} numberOfLines={2}>
-              {error instanceof Error ? error.message : "Please try again."}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                void refetch();
-              }}
-              style={styles.retryButton}
-            >
-              <Text style={styles.retryText}>Try again</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <FlashList
-            data={listData}
-            extraData={selectedConversationID}
-            keyExtractor={(item) => item.id}
-            getItemType={(item) => item.type}
-            renderItem={({ item }) => {
-              if (item.type === "section") {
+        <FlashList
+          data={items}
+          extraData={selectedConversationID}
+          keyExtractor={(item) => item.id}
+          getItemType={(item) => item.type}
+          renderItem={({ item }) => {
+            if (item.type === "status") {
+              if (item.status === "loading") {
                 return (
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>{item.title}</Text>
-                    <View style={styles.sectionRule} />
+                  <View style={styles.centerState}>
+                    <ActivityIndicator color="#FC6E20" size="small" />
+                    <Text style={styles.stateText}>Loading conversations…</Text>
+                  </View>
+                );
+              }
+
+              if (item.status === "error") {
+                return (
+                  <View style={styles.centerState}>
+                    <View style={styles.stateIconFrame}>
+                      <TriangleAlert size={22} color="#FC6E20" strokeWidth={1.8} />
+                    </View>
+                    <Text style={styles.stateTitle}>Couldn’t load history</Text>
+                    <Text style={styles.stateText} numberOfLines={2}>
+                      {error instanceof Error ? error.message : "Please try again."}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => {
+                        void refetch();
+                      }}
+                      style={styles.retryButton}
+                    >
+                      <Text style={styles.retryText}>Try again</Text>
+                    </Pressable>
                   </View>
                 );
               }
 
               return (
-                <ChatHistoryItem
-                  conversation={item.conversation}
-                  isSelected={
-                    item.conversation.conversation_id === selectedConversationID
-                  }
-                  onPress={onConversationPress}
-                />
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.centerState}>
-                <View style={styles.stateIconFrame}>
-                  <MessageCircleDashed
-                    size={22}
-                    color="#FC6E20"
-                    strokeWidth={1.8}
-                  />
+                <View style={styles.centerState}>
+                  <View style={styles.stateIconFrame}>
+                    <MessageCircleDashed
+                      size={22}
+                      color="#FC6E20"
+                      strokeWidth={1.8}
+                    />
+                  </View>
+                  <Text style={styles.stateTitle}>No conversations yet</Text>
+                  <Text style={styles.stateText}>
+                    Your AI chats will appear here.
+                  </Text>
                 </View>
-                <Text style={styles.stateTitle}>No conversations yet</Text>
-                <Text style={styles.stateText}>
-                  Your AI chats will appear here.
-                </Text>
-              </View>
+              );
             }
-            ListFooterComponent={
-              isFetchingNextPage ? (
-                <ActivityIndicator
-                  color="#FC6E20"
-                  size="small"
-                  style={styles.footerLoader}
-                />
-              ) : null
+
+            if (item.type === "section") {
+              return (
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>{item.title}</Text>
+                  <View style={styles.sectionRule} />
+                </View>
+              );
             }
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshing={isRefetching && !isFetchingNextPage}
-            onRefresh={() => {
-              void refetch();
-            }}
-            onEndReached={() => {
-              if (hasNextPage && !isFetchingNextPage) {
-                void fetchNextPage();
-              }
-            }}
-            onEndReachedThreshold={0.4}
-          />
-        )}
+
+            return (
+              <ChatHistoryItem
+                conversation={item.conversation}
+                isSelected={
+                  item.conversation.conversation_id === selectedConversationID
+                }
+                onPress={onConversationPress}
+              />
+            );
+          }}
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <ActivityIndicator
+                color="#FC6E20"
+                size="small"
+                style={styles.footerLoader}
+              />
+            ) : null
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshing={isRefetching && !isFetchingNextPage}
+          onRefresh={() => {
+            void refetch();
+          }}
+          onEndReached={() => {
+            if (hasNextPage && !isFetchingNextPage) {
+              void fetchNextPage();
+            }
+          }}
+          onEndReachedThreshold={0.4}
+        />
       </SafeAreaView>
     </View>
   );
@@ -283,28 +295,23 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: "rgba(22, 50, 74, 0.06)",
   },
-  header: {
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    paddingBottom: 20,
-    shadowColor: "#16324A",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    elevation: 6,
+  gradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
   },
   headerRow: {
-    minHeight: 72,
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 18,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 20,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
+    gap: 12,
   },
   headerCopy: {
     flex: 1,
-    paddingRight: 14,
   },
   headerTitle: {
     color: "#FFFFFF",
@@ -315,39 +322,15 @@ const styles = StyleSheet.create({
   },
   headerDescription: {
     marginTop: 2,
-    color: "rgba(255, 255, 255, 0.85)",
+    color: "rgba(255, 255, 255, 0.9)",
     fontFamily: "Author-Regular",
-    fontSize: 13,
-    lineHeight: 17,
-  },
-  avatarFrame: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.24)",
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.85)",
-  },
-  avatar: {
-    width: "100%",
-    height: "100%",
-  },
-  avatarGlow: {
-    width: "100%",
-    height: "100%",
-  },
-  avatarGlowHighlight: {
-    width: "100%",
-    height: "100%",
+    fontSize: 15,
+    lineHeight: 19,
   },
   body: {
     flex: 1,
   },
   listContent: {
-    paddingTop: 14,
     paddingBottom: 24,
   },
   sectionHeader: {
@@ -419,21 +402,9 @@ const styles = StyleSheet.create({
     marginVertical: 18,
   },
   newChatButton: {
-    marginHorizontal: 18,
-    height: 48,
-    borderRadius: 14,
-    flexDirection: "row",
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.4)",
-  },
-  newChatText: {
-    color: "#FFFFFF",
-    fontFamily: "Author-Semibold",
-    fontSize: 15,
-    lineHeight: 20,
   },
 });

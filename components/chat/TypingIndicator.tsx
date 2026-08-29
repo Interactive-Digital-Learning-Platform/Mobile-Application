@@ -35,9 +35,9 @@ function Dot({ delay }: { delay: number }) {
     <Animated.View
       style={[
         {
-          width: 7,
-          height: 7,
-          borderRadius: 4,
+          width: 6,
+          height: 6,
+          borderRadius: 3,
           backgroundColor: "#9CA3AF",
         },
         animatedStyle,
@@ -48,7 +48,7 @@ function Dot({ delay }: { delay: number }) {
 
 export default function TypingIndicator() {
   return (
-    <View className="flex-row items-center gap-1.5 py-1 px-1">
+    <View className="flex-row items-center gap-1 py-0.5 px-0.5">
       <Dot delay={0} />
       <Dot delay={150} />
       <Dot delay={300} />

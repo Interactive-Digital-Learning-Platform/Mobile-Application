@@ -5,6 +5,7 @@ import {
   Plus,
   Send,
   SlidersHorizontal,
+  Square,
   TextAlignStart,
 } from "lucide-react-native";
 import {
@@ -39,9 +40,14 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { useChat } from "@/hooks/use-chat";
+import { useAttachmentPicker } from "@/hooks/attachments/use-attachment-picker";
+import { useAttachmentUpload } from "@/hooks/attachments/use-attachment-upload";
+import AttachmentPreviewBar from "@/components/chat/AttachmentPreviewBar";
+import AttachmentSourceModal from "@/components/chat/AttachmentSourceModal";
 import { Drawer } from "react-native-drawer-layout";
 import { useState } from "react";
 import ChatHistorySidebar from "@/components/chat/ChatHistorySidebar";
+import LanguageSelectorModal from "@/components/chat/LanguageSelectorModal";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
@@ -51,14 +57,22 @@ export default function AIChat() {
   const {
     messages,
     conversationID,
+    language,
+    setLanguage,
     sendMessage,
     isSending,
     chatRef,
     startNewConversation,
     openConversation,
+    ensureConversation,
+    stopStreaming,
   } = useChat();
 
+  const picker = useAttachmentPicker();
+  const upload = useAttachmentUpload(user?.id);
+
   const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [isLangModalOpen, setLangModalOpen] = useState<boolean>(false);
   const [cardSize, setCardSize] = useState<{
     width: number;
     height: number;
@@ -87,8 +101,11 @@ export default function AIChat() {
       return;
     }
 
+    const sendable = upload.getSendable();
+    upload.reset();
+
     try {
-      await sendMessage(values);
+      await sendMessage(values, sendable?.snapshot);
     } catch (error) {
       Toast.show({
         type: "error",
@@ -98,8 +115,28 @@ export default function AIChat() {
     }
   });
 
+  const handlePickAttachment = async () => {
+    if (isSending) return;
+
+    const file = await picker.pick();
+    if (!file) return;
+
+    try {
+      const cid = await ensureConversation();
+      upload.start(file, cid);
+    } catch {
+      Toast.show({
+        type: "error",
+        text1: "Couldn't attach file",
+        text2: "Unable to prepare the conversation. Try again.",
+      });
+    }
+  };
+
   const inputValue = watch("message");
-  const isSendDisabled = !inputValue?.trim() || isSending;
+  const isUploadingAttachment = upload.attachment?.status === "uploading";
+  const isSendDisabled =
+    !inputValue?.trim() || isSending || isUploadingAttachment;
 
   const CARD_RADIUS = 28;
   const BORDER_WIDTH = 2.5;
@@ -122,10 +159,12 @@ export default function AIChat() {
         <ChatHistorySidebar
           selectedConversationID={conversationID ?? undefined}
           onNewChatPress={() => {
+            upload.reset();
             startNewConversation();
             setDrawerOpen(false);
           }}
           onConversationPress={(conversation) => {
+            upload.reset();
             openConversation(conversation.conversation_id);
             setDrawerOpen(false);
           }}
@@ -234,6 +273,11 @@ export default function AIChat() {
                     className="w-full overflow-hidden"
                     style={{ borderRadius: CARD_RADIUS }}
                   >
+                    <AttachmentPreviewBar
+                      attachment={upload.attachment}
+                      onRemove={upload.remove}
+                      onRetry={upload.retry}
+                    />
                     <Controller
                       control={control}
                       name="message"
@@ -252,11 +296,22 @@ export default function AIChat() {
                     />
                     <View className="w-full flex-row justify-between items-center px-3 pb-4 pt-4">
                       <View className="flex-row items-center gap-3">
-                        <Pressable className="w-9 h-9 rounded-full bg-white justify-center items-center">
+                        <Pressable
+                          onPress={handlePickAttachment}
+                          disabled={isSending}
+                          className="w-9 h-9 rounded-full bg-white justify-center items-center"
+                          style={{ opacity: isSending ? 0.4 : 1 }}
+                        >
                           <Plus size={20} color="#6B7280" />
                         </Pressable>
-                        <Pressable className="w-9 h-9 rounded-full bg-white justify-center items-center">
+                        <Pressable
+                          onPress={() => setLangModalOpen(true)}
+                          className="h-9 px-2.5 rounded-full bg-white flex-row items-center gap-1.5"
+                        >
                           <SlidersHorizontal size={18} color="#6B7280" />
+                          <Text className="text-xs font-amedium text-[#6B7280]">
+                            {language === "Sinhala" ? "සිං" : "EN"}
+                          </Text>
                         </Pressable>
                       </View>
                       <View className="flex-row items-center gap-3">
@@ -264,8 +319,8 @@ export default function AIChat() {
                           <Mic size={20} color="#6B7280" />
                         </Pressable>
                         <Pressable
-                          onPress={onSubmit}
-                          disabled={isSendDisabled}
+                          onPress={isSending ? stopStreaming : onSubmit}
+                          disabled={isSending ? false : isSendDisabled}
                           style={{
                             width: 40,
                             height: 40,
@@ -273,9 +328,14 @@ export default function AIChat() {
                             backgroundColor: colors.primary,
                             justifyContent: "center",
                             alignItems: "center",
+                            opacity: !isSending && isSendDisabled ? 0.5 : 1,
                           }}
                         >
-                          <Send size={18} color="#ffffff" />
+                          {isSending ? (
+                            <Square size={15} color="#ffffff" fill="#ffffff" />
+                          ) : (
+                            <Send size={18} color="#ffffff" />
+                          )}
                         </Pressable>
                       </View>
                     </View>
@@ -328,6 +388,16 @@ export default function AIChat() {
             </KeyboardAvoidingView>
           </SafeAreaView>
         </LinearGradient>
+        <AttachmentSourceModal {...picker.modalProps} />
+        <LanguageSelectorModal
+          visible={isLangModalOpen}
+          selected={language}
+          onSelect={(next) => {
+            setLanguage(next);
+            setLangModalOpen(false);
+          }}
+          onClose={() => setLangModalOpen(false)}
+        />
       </>
     </Drawer>
   );

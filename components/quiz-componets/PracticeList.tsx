@@ -157,6 +157,22 @@ export default function PracticeList() {
   );
 
   const handleGenerate = (config: QuizConfig) => {
+    if (config.shuffle) {
+      // Shuffle draws fresh variety across every subject, so there's no
+      // single subject to filter prior question ids against.
+      router.push({
+        pathname: "/(main)/quiz/quiz-session",
+        params: {
+          shuffle:       "true",
+          subjects:      JSON.stringify(ALL_SUBJECTS),
+          questionCount: String(config.questions),
+          timer:         String(config.timer),
+          grade:         "10",
+        },
+      } as any);
+      return;
+    }
+
     // Excludes questions already seen in this subject so the backend serves
     // fresh ones; lesson and difficulty are picked automatically server-side.
     const seenIds = (sessions ?? [])

@@ -31,7 +31,7 @@ export default function QuizHome() {
           </View>
         </View>
         <View className="h-[60%] w-full bg-primary rounded-b-[40px] justify-center items-center px-[30px]">
-          <StatisticButton/>
+          <StatisticButton mode={mode} />
         </View>
       </View>
 
