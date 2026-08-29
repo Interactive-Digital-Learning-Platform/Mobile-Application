@@ -6,7 +6,10 @@ import {
   GenerateQuizRequest,
   GenerateQuizResponse,
   QuestionOut,
+  QuizQuoteRequest,
+  QuizQuoteResponse,
   QuizSessionSummary,
+  RetakeSessionResponse,
   SavedQuizResponse,
   SaveProgressRequest,
   SaveProgressResponse,
@@ -49,6 +52,15 @@ export async function fetchQuizSession(
 ): Promise<SavedQuizResponse> {
   const { data } = await quizClient.get<SavedQuizResponse>(
     `/quiz/sessions/${sessionId}`
+  );
+  return data;
+}
+
+export async function retakeQuizSession(
+  sessionId: number
+): Promise<RetakeSessionResponse> {
+  const { data } = await quizClient.post<RetakeSessionResponse>(
+    `/quiz/sessions/${sessionId}/retake`
   );
   return data;
 }
@@ -97,6 +109,16 @@ export async function fetchAnalytics(): Promise<UserAnalyticsResponse> {
 export async function fetchAIFeedback(): Promise<AIFeedbackResponse> {
   const { data } = await quizClient.get<AIFeedbackResponse>(
     "/analytics/feedback"
+  );
+  return data;
+}
+
+export async function fetchMotivationalQuote(
+  payload: QuizQuoteRequest
+): Promise<QuizQuoteResponse> {
+  const { data } = await quizClient.post<QuizQuoteResponse>(
+    "/quiz/motivational-quote",
+    payload
   );
   return data;
 }

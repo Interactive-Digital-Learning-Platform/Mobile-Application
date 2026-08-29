@@ -30,6 +30,7 @@ import {
   Laugh,
   Annoyed,
   Timer,
+  Quote,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -37,6 +38,7 @@ import AnswerReviewCard    from "@/components/quiz-componets/AnswerReviewCard";
 import ConfettiView        from "@/components/quiz-componets/ConfettiView";
 import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 import CircularProgressRing from "@/components/quiz-componets/CircularProgressRing";
+import { fetchMotivationalQuote } from "@/api/quizAPI";
 import type { QuestionOut, SubmitQuizResponse } from "@/types/quizModuleTypes";
 import { ICON_COLORS } from "@/constants/quizStyles";
 
@@ -169,6 +171,36 @@ export default function QuizResultsScreen() {
 
   const [showReview,  setShowReview]  = useState(false);
   const [showRestart, setShowRestart] = useState(false);
+
+  const [quote,        setQuote]        = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchMotivationalQuote({
+      subject: subject ?? "",
+      difficulty: difficulty ?? "medium",
+      accuracy: pct,
+      correct_count: correctCount,
+      total_questions: totalQ,
+      is_timeout: timedOut,
+    })
+      .then((res) => {
+        if (!cancelled) setQuote(res.quote);
+      })
+      .catch(() => {
+        // Non-critical — the results screen works fine without a quote.
+      })
+      .finally(() => {
+        if (!cancelled) setQuoteLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const heroY   = useSharedValue(-80);
   const heroOp  = useSharedValue(0);
@@ -351,6 +383,22 @@ export default function QuizResultsScreen() {
           </Animated.View>
         )}
 
+        {(quoteLoading || quote) && (
+          <Animated.View style={statsStyle} className="mx-4 mt-4">
+            <View className="bg-primary-400 rounded-2xl px-5 py-5 flex-row items-start gap-3">
+              {quoteLoading ? (
+                <Text className="flex-1 text-white text-sm ">
+                  Generating a little encouragement…
+                </Text>
+              ) : (
+                <Text className="flex-1 text-white text-base">
+                  {quote}
+                </Text>
+              )}
+            </View>
+          </Animated.View>
+        )}
+
         <Animated.View style={statsStyle} className="mx-4 mt-5 gap-3">
           <TouchableOpacity
             className="w-full bg-primary flex-row justify-center items-center gap-2 py-4 rounded-2xl"
@@ -376,6 +424,7 @@ export default function QuizResultsScreen() {
         visible={showRestart}
         onCancel={() => setShowRestart(false)}
         onConfirm={handleRestart}
+        hasCurrentAnswers
       />
     </SafeAreaView>
   );

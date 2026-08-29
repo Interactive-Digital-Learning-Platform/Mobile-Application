@@ -18,6 +18,14 @@ module.exports = {
     "bg-emerald-600", // ≥ 70% Great Job
     "bg-blue-600",    // ≥ 50% Not Bad
     "bg-rose-600",    // < 50% Keep Trying
+    // Battle league badges (constants/battleStyles.ts LEAGUE_STYLES)
+    "bg-orange-100", "text-orange-700", "bg-orange-500",
+    "bg-slate-200",  "text-slate-600",  "bg-slate-400",
+    "bg-amber-100",  "text-amber-700",
+    "bg-cyan-100",   "text-cyan-700",   "bg-cyan-500",
+    "bg-violet-100", "text-violet-700", "bg-violet-500",
+    // Battle result hero backgrounds (constants/battleStyles.ts BATTLE_RESULT_STYLES)
+    "bg-emerald-600", "bg-rose-600", "bg-slate-600", "bg-slate-700",
   ],
   theme: {
     extend: {

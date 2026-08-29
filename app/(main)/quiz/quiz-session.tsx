@@ -30,13 +30,15 @@ import {
   RotateCcw,
 } from "lucide-react-native";
 
-import { getDifficultyStyle, ICON_COLORS } from "@/constants/quizStyles";
+import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } from "@/constants/quizStyles";
 import { OPTION_LABELS, formatTime } from "@/constants/quizHelpers";
 import TimesUpModel from "@/components/quiz-componets/TimesUpModel";
 import ExitQuizModal from "@/components/quiz-componets/ExitQuizModal";
+import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
 import {
   useGenerateQuizMutation,
   useQuizSessionQuery,
+  useRetakeQuizSessionMutation,
   useSaveQuizProgressMutation,
   useSubmitQuizMutation,
   useSubmitQuizTimeoutMutation,
@@ -65,7 +67,11 @@ const RETRIEVING_STEPS: QuizStatusStep[] = [
 // Handles three modes: new quiz (no resumeSessionId, calls POST /generate on
 // mount), resume (resumeSessionId present, loads the existing session and
 // restores progress), and restart (resumeSessionId + restartSession="true",
-// same questions but ignores the completion record and starts over).
+// same questions, but submits into a brand-new *retake* session cloned from
+// resumeSessionId via POST /sessions/{id}/retake instead of resubmitting into
+// the already-completed one — the backend rejects a second submit against the
+// same session_id, and a retake's results (the user has already seen the
+// correct answers) must never count toward analytics or adaptive difficulty.
 // Questions are frozen into local state once loaded so a restart never
 // re-generates them.
 export default function QuizSession() {
@@ -80,8 +86,10 @@ export default function QuizSession() {
     resumeSessionId:      resumeSessionIdStr,
     restartSession:       restartSessionStr,
     excludedQuestionIds:  excludedQuestionIdsStr,
+    shuffle:              shuffleStr,
+    subjects:             subjectsStr,
   } = useLocalSearchParams<{
-    subject:               string;
+    subject?:              string;
     lesson?:               string;
     difficulty?:           string;
     questionCount:         string;
@@ -90,11 +98,16 @@ export default function QuizSession() {
     resumeSessionId?:      string;
     restartSession?:       string;
     excludedQuestionIds?:  string;
+    shuffle?:              string;
+    subjects?:             string;
   }>();
 
   const excludedQuestionIds: number[] = excludedQuestionIdsStr
     ? JSON.parse(excludedQuestionIdsStr)
     : [];
+
+  const isShuffle = shuffleStr === "true";
+  const shuffleSubjects: string[] = subjectsStr ? JSON.parse(subjectsStr) : [];
 
   const totalQ       = parseInt(questionCount ?? "10");
   const totalSec     = parseInt(timerMinutes  ?? "10") * 60;
@@ -128,6 +141,12 @@ export default function QuizSession() {
   }, []);
 
   const {
+    mutate:  createRetake,
+    error:   retakeError,
+    reset:   resetRetake,
+  } = useRetakeQuizSessionMutation();
+
+  const {
     mutate:    submitNormal,
     isPending: isSubmittingNormal,
     data:      submitNormalData,
@@ -144,20 +163,31 @@ export default function QuizSession() {
 
   const displayDifficulty = quizData?.difficulty ?? savedSession?.difficulty ?? difficulty ?? "";
   const diff = getDifficultyStyle(displayDifficulty || "medium");
+  const displaySubject = formatSubjectLabel(subject) || (isShuffle ? "Shuffled" : "");
 
   const [shouldGenerate] = useState(() => !resumeSessionIdStr);
 
   const triggerGenerate = useCallback((forceCache = false) => {
-    generateQuiz({
-      grade:                 parseInt(grade ?? "10"),
-      subject:               subject ?? "Mathematics",
-      lesson:                lesson || undefined,
-      difficulty:            difficulty ? (difficulty.toLowerCase() as "easy" | "medium" | "hard") : undefined,
-      question_count:        totalQ,
-      excluded_question_ids: excludedQuestionIds,
-      force_cache:           forceCache,
-    });
-  }, [grade, subject, lesson, difficulty, totalQ, excludedQuestionIds]);
+    if (isShuffle) {
+      generateQuiz({
+        grade:          parseInt(grade ?? "10"),
+        shuffle:        true,
+        subjects:       shuffleSubjects,
+        question_count: totalQ,
+        force_cache:    forceCache,
+      });
+    } else {
+      generateQuiz({
+        grade:                 parseInt(grade ?? "10"),
+        subject:               subject ?? "Mathematics",
+        lesson:                lesson || undefined,
+        difficulty:            difficulty ? (difficulty.toLowerCase() as "easy" | "medium" | "hard") : undefined,
+        question_count:        totalQ,
+        excluded_question_ids: excludedQuestionIds,
+        force_cache:           forceCache,
+      });
+    }
+  }, [grade, subject, lesson, difficulty, totalQ, excludedQuestionIds, isShuffle, shuffleSubjects, generateQuiz]);
 
   const resetForRetry = useCallback(() => {
     resetGenerate();
@@ -184,6 +214,17 @@ export default function QuizSession() {
     generateTriggeredRef.current = true;
     triggerGenerate();
   }, []);
+
+  // Set the instant the user (or the timeout auto-submit) starts submitting
+  // — declared here (rather than down with the other submission logic) so
+  // the "already completed" redirect guard below can read it.
+  const submissionTriggeredRef = useRef(false);
+
+  // Holds the countdown's active setInterval id so it can be stopped the
+  // instant the user taps Submit — otherwise it keeps ticking (and can
+  // still fire the timeout auto-submit) while the submit request is in
+  // flight and this screen is still mounted.
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [frozenQuestions,  setFrozenQuestions]  = useState<QuestionOut[]>([]);
   const [frozenSessionId,  setFrozenSessionId]  = useState<number | null>(null);
@@ -212,38 +253,79 @@ export default function QuizSession() {
 
   useEffect(() => { if (timeUp) setShowTimesUpModal(true); }, [timeUp]);
 
+  // Bounces the user away if they land on an ALREADY-completed session (stale
+  // link, reopening a finished quiz). Must not fire when `completion` just
+  // appeared because WE'RE the ones who submitted it a moment ago — the
+  // submit mutation's own cache invalidation refetches this same session
+  // query while this screen is still mounted underneath quiz-results, and
+  // without the submissionTriggeredRef check that refetch would re-run this
+  // effect and replace the results screen we just navigated to.
   useEffect(() => {
-    if (isResuming && !isRestartMode && savedSession?.completion) {
+    if (
+      isResuming && !isRestartMode && savedSession?.completion &&
+      !submissionTriggeredRef.current
+    ) {
       router.replace("/(tabs)/quiz");
     }
   }, [isResuming, isRestartMode, savedSession]);
 
   const [stateRestored, setStateRestored] = useState(false);
+  const retakeTriggeredRef = useRef(false);
+
+  // Restart clones resumeSessionId into a new retake session server-side
+  // (see the mode comment at the top of this file) before the quiz is
+  // considered ready — stateRestored only flips once that new session_id
+  // comes back, so isReady/isLoading below keep showing the loading screen
+  // until then. Called directly (not through the effect below) so tapping
+  // "retry" on the error screen re-fires the request without depending on
+  // some other prop changing to re-trigger the effect.
+  const handleRetryRetake = useCallback(() => {
+    if (!resumeId) return;
+    resetRetake();
+    createRetake(resumeId, {
+      onSuccess: (data) => {
+        setFrozenSessionId(data.session_id);
+        setStateRestored(true);
+      },
+    });
+  }, [resetRetake, createRetake, resumeId]);
+
   useEffect(() => {
     if (!isResuming || !savedSession || stateRestored) return;
 
     setFrozenQuestions(savedSession.questions ?? []);
-    setFrozenSessionId(resumeId);
 
-    if (!isRestartMode) {
-      const drafts = savedSession.latest_progress?.draft_answers ?? [];
-      const restored: Record<number, number> = {};
-      for (const draft of drafts) {
-        if (draft.selected_answer == null) continue;
-        const qIdx = savedSession.questions.findIndex((q) => q.id === draft.question_id);
-        if (qIdx === -1) continue;
-        const optIdx = savedSession.questions[qIdx].options?.indexOf(draft.selected_answer) ?? -1;
-        if (optIdx !== -1) restored[qIdx] = optIdx;
-      }
-      setAnswers(restored);
-      const rem = savedSession.latest_progress?.remaining_time;
-      if (rem != null) setTimeLeft(Math.round(rem));
-      const firstUnanswered = savedSession.questions.findIndex((_, i) => restored[i] === undefined);
-      if (firstUnanswered > 0) setCurrent(firstUnanswered);
+    if (isRestartMode) {
+      if (retakeTriggeredRef.current) return;
+      retakeTriggeredRef.current = true;
+      createRetake(resumeId!, {
+        onSuccess: (data) => {
+          setFrozenSessionId(data.session_id);
+          setStateRestored(true);
+        },
+      });
+      return;
     }
 
+    setFrozenSessionId(resumeId);
+
+    const drafts = savedSession.latest_progress?.draft_answers ?? [];
+    const restored: Record<number, number> = {};
+    for (const draft of drafts) {
+      if (draft.selected_answer == null) continue;
+      const qIdx = savedSession.questions.findIndex((q) => q.id === draft.question_id);
+      if (qIdx === -1) continue;
+      const optIdx = savedSession.questions[qIdx].options?.indexOf(draft.selected_answer) ?? -1;
+      if (optIdx !== -1) restored[qIdx] = optIdx;
+    }
+    setAnswers(restored);
+    const rem = savedSession.latest_progress?.remaining_time;
+    if (rem != null) setTimeLeft(Math.round(rem));
+    const firstUnanswered = savedSession.questions.findIndex((_, i) => restored[i] === undefined);
+    if (firstUnanswered > 0) setCurrent(firstUnanswered);
+
     setStateRestored(true);
-  }, [isResuming, savedSession, stateRestored, resumeId, isRestartMode]);
+  }, [isResuming, savedSession, stateRestored, resumeId, isRestartMode, createRetake]);
 
   const isReady = questions.length > 0 && (!isResuming || stateRestored);
 
@@ -251,7 +333,6 @@ export default function QuizSession() {
   const [questionTimes, setQuestionTimes] = useState<Record<number, number>>({});
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const submissionTriggeredRef = useRef(false);
 
   const shakeX   = useSharedValue(0);
   const timerPct = useSharedValue(1);
@@ -303,6 +384,7 @@ export default function QuizSession() {
         return prev - 1;
       });
     }, 1000);
+    timerIntervalRef.current = id;
     return () => clearInterval(id);
   }, [isReady, timeUp]);
 
@@ -378,7 +460,7 @@ export default function QuizSession() {
     router.push({
       pathname: "/(main)/quiz/quiz-results",
       params: {
-        subject,
+        subject: displaySubject,
         difficulty: displayDifficulty,
         questionCount,
         timer:             timerMinutes,
@@ -396,6 +478,7 @@ export default function QuizSession() {
   const goToResults = () => {
     if (submissionTriggeredRef.current) return;
     submissionTriggeredRef.current = true;
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     recordQuestionTime(current);
     clearTimeout(autosaveTimerRef.current);
     doSaveProgress(answers, questionTimes, timeLeft);
@@ -425,22 +508,22 @@ export default function QuizSession() {
   const isLoading = isResuming
     ? (isLoadingSession || !isReady)
     : (isGenerating || (!frozenQuestions.length && !generateError));
-  const activeError = isResuming ? sessionError : generateError;
+  const activeError = isResuming ? (sessionError || retakeError) : generateError;
   const isSuccess = !isLoading && !activeError && questions.length > 0;
 
   const goBackToQuizList = () => router.replace("/(tabs)/quiz");
 
   if (isLoading || (isSuccess && !readyToShowQuiz)) {
     return shouldGenerate
-      ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />
-      : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={subject ?? "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />;
+      ? <QuizStatusScreen title="Generating Quiz" steps={GENERATING_STEPS} subject={displaySubject || "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />
+      : <QuizStatusScreen title="Retrieving Quiz" steps={RETRIEVING_STEPS} subject={displaySubject || "Quiz"} difficulty="Adaptive" isComplete={isSuccess} onComplete={() => setReadyToShowQuiz(true)} />;
   }
 
   if (activeError || questions.length === 0) {
     return (
       <QuizErrorScreen
         message={(activeError as Error)?.message ?? "No questions were returned."}
-        onRetry={handleRetry}
+        onRetry={isRestartMode ? handleRetryRetake : handleRetry}
         onUseCache={!isResuming ? handleUseCache : undefined}
         onBack={goBackToQuizList}
       />
@@ -464,10 +547,15 @@ export default function QuizSession() {
         </TouchableOpacity>
 
         <View className="items-center justify-center">
-          <Text className="text-md font-black text-slate-800">{subject}</Text>
-          <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
-            <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
-          </View>
+          <Text className="text-md font-black text-slate-800">{displaySubject}</Text>
+          {/* Shuffle mode has no difficulty of its own — each subject picks
+              its own independently at generation time — so no difficulty
+              pill is shown here at all when isShuffle. */}
+          {!isShuffle && (
+            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
+              <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -542,46 +630,44 @@ export default function QuizSession() {
             <Text className="text-[11px] text-violet-600 font-semibold">Flagged for review</Text>
           </View>
         )}
-        {!!q?.lesson && (
-          <View className="self-start flex-row items-center gap-1 px-2 py-1 rounded-full bg-primary-50 mb-3">
-            <BookOpen size={11} color={ICON_COLORS.primary500} strokeWidth={2.5} />
-            <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
-              {q.lesson}
-            </Text>
+        {(isShuffle && !!q?.subject) || !!q?.lesson ? (
+          <View className="flex-row flex-wrap items-center gap-2 mb-3">
+            {isShuffle && !!q?.subject && (() => {
+              const SubjectIcon = getSubjectIcon(q.subject);
+              return (
+                <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-violet-50">
+                  <SubjectIcon size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} />
+                  <Text className="text-[11px] text-violet-600 font-semibold" numberOfLines={1}>
+                    {q.subject}
+                  </Text>
+                </View>
+              );
+            })()}
+            {!!q?.lesson && (
+              <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-primary-50">
+                <BookOpen size={11} color={ICON_COLORS.primary500} strokeWidth={2.5} />
+                <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
+                  {q.lesson}
+                </Text>
+              </View>
+            )}
           </View>
-        )}
+        ) : null}
         <Text className="font-bold text-slate-800 leading-6 text-xl">{q?.question}</Text>
       </View>
 
       <View className="w-full flex-1 py-2 px-4">
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
           <View className="gap-2.5">
-            {(q?.options ?? []).map((opt, i) => {
-              const isSelected = selectedOpt === i;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  activeOpacity={0.8}
-                  onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
-                  className={`flex-row items-center gap-3 p-4 rounded-2xl border ${
-                    isSelected ? "bg-primary border-primary" : "bg-white border-slate-200"
-                  }`}
-                >
-                  <View className={`w-8 h-8 rounded-full justify-center items-center ${
-                    isSelected ? "bg-white/25" : "bg-slate-100"
-                  }`}>
-                    <Text className={`text-md font-black ${isSelected ? "text-white" : "text-slate-600"}`}>
-                      {OPTION_LABELS[i]}
-                    </Text>
-                  </View>
-                  <Text className={`flex-1 text-sm font-medium leading-5 ${
-                    isSelected ? "text-white" : "text-slate-700"
-                  }`}>
-                    {opt}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {(q?.options ?? []).map((opt, i) => (
+              <QuizOptionButton
+                key={i}
+                label={OPTION_LABELS[i]}
+                optionText={opt}
+                isSelected={selectedOpt === i}
+                onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
+              />
+            ))}
           </View>
 
         </ScrollView>

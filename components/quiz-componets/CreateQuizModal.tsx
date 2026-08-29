@@ -7,7 +7,7 @@ import Animated, {
   runOnJS,
   Easing,
 } from "react-native-reanimated";
-import { X, Sparkles, Plus, Minus } from "lucide-react-native";
+import { X, Sparkles, Plus, Minus, Shuffle } from "lucide-react-native";
 import { ICON_COLORS, SUBJECTS } from "@/constants/quizStyles";
 
 const SHEET_OFFSCREEN_Y = 700;
@@ -17,6 +17,7 @@ export interface QuizConfig {
   subject: string;
   questions: number;
   timer: number;
+  shuffle: boolean;
 }
 
 interface CreateQuizModalProps {
@@ -30,6 +31,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
   const [questions, setQuestions] = useState(10);
   const [timer, setTimer] = useState(10);
   const [timerCustomized, setTimerCustomized] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
   // Blocks a fast double-tap from firing onGenerate twice — that used to create
   // two duplicate QuizSession rows for one tap.
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,6 +53,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
     setQuestions(10);
     setTimer(10);
     setTimerCustomized(false);
+    setShuffle(false);
     setIsSubmitting(false);
   };
 
@@ -106,24 +109,61 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
           </View>
 
           <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-            Subject
+            Mode
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
-            {SUBJECTS.map((s) => (
-              <TouchableOpacity
-                key={s}
-                className={`mr-2 px-4 py-2 rounded-xl border ${
-                  subject === s ? "bg-primary border-primary" : "bg-white border-slate-200"
-                }`}
-                activeOpacity={0.8}
-                onPress={() => setSubject(s)}
-              >
-                <Text className={`text-xs font-semibold ${subject === s ? "text-white" : "text-slate-600"}`}>
-                  {s}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View className="flex-row gap-2 mb-5">
+            <TouchableOpacity
+              className={`flex-1 px-4 py-2 rounded-xl border items-center ${
+                !shuffle ? "bg-primary border-primary" : "bg-white border-slate-200"
+              }`}
+              activeOpacity={0.8}
+              onPress={() => setShuffle(false)}
+            >
+              <Text className={`text-xs font-semibold ${!shuffle ? "text-white" : "text-slate-600"}`}>
+                Single Subject
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`flex-1 flex-row justify-center items-center gap-1.5 px-4 py-2 rounded-xl border ${
+                shuffle ? "bg-primary border-primary" : "bg-white border-slate-200"
+              }`}
+              activeOpacity={0.8}
+              onPress={() => setShuffle(true)}
+            >
+              <Shuffle size={12} color={shuffle ? ICON_COLORS.white : ICON_COLORS.slate500} strokeWidth={2.5} />
+              <Text className={`text-xs font-semibold ${shuffle ? "text-white" : "text-slate-600"}`}>
+                Shuffle
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {shuffle ? (
+            <Text className="text-[10px] text-slate-400 mb-5">
+              Questions will be pulled from every subject, mixing lessons and topics in one quiz.
+            </Text>
+          ) : (
+            <>
+              <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                Subject
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+                {SUBJECTS.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    className={`mr-2 px-4 py-2 rounded-xl border ${
+                      subject === s ? "bg-primary border-primary" : "bg-white border-slate-200"
+                    }`}
+                    activeOpacity={0.8}
+                    onPress={() => setSubject(s)}
+                  >
+                    <Text className={`text-xs font-semibold ${subject === s ? "text-white" : "text-slate-600"}`}>
+                      {s}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
+          )}
 
           <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
             Number of Questions
@@ -192,7 +232,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
             onPress={() => {
               if (isSubmitting) return;
               setIsSubmitting(true);
-              onGenerate({ subject, questions, timer });
+              onGenerate({ subject, questions, timer, shuffle });
               onClose();
             }}
           >

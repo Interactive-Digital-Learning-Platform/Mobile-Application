@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  StatusBar,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,9 +19,11 @@ import {
   BookOpen,
   Volume2,
   Info,
-  Lightbulb,
   RotateCcw,
   CheckCircle2,
+  Target,
+  AlertCircle,
+  Sparkles,
 } from "lucide-react-native";
 
 import {
@@ -32,7 +35,6 @@ import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
-
 const { width: SCREEN_W } = Dimensions.get("window");
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -40,7 +42,6 @@ const { width: SCREEN_W } = Dimensions.get("window");
 // ═══════════════════════════════════════════════════════════════════════════
 
 const Flashcard = ({ card }: { card: any }) => {
-
   const [isFlipped, setIsFlipped] = useState(false);
   const flipAnim = useRef(new Animated.Value(0)).current;
 
@@ -115,13 +116,17 @@ const Flashcard = ({ card }: { card: any }) => {
   );
 };
 
-
 // ═══════════════════════════════════════════════════════════════════════════
-// FLASHCARD LIST — Vertical scroll through all cards
+// FLASHCARD DECK — Interactive Deck & Step Dash Progress (Quiz Screenshot 5 Style)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [completed, setCompleted] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<"deck" | "list">("deck");
+
+  const currentCard = flashcards[currentIndex] || flashcards[0];
+  const isCurrentDone = completed.has(currentIndex);
 
   const toggleDone = (index: number) => {
     const next = new Set(completed);
@@ -130,21 +135,76 @@ const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
     setCompleted(next);
   };
 
+  const handleNext = () => {
+    if (currentIndex < flashcards.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    }
+  };
+
   const allDone = completed.size === flashcards.length;
 
   return (
     <View style={styles.flashcardListContainer}>
-      {/* Summary row */}
-      <View style={styles.flashcardListHeader}>
-        <Text style={styles.flashcardListCount}>
-          {flashcards.length} cards · tap to flip
-        </Text>
+      {/* Mode switcher pill: Deck vs All List */}
+      <View style={styles.flashcardModeRow}>
+        <View style={styles.flashcardModePills}>
+          <TouchableOpacity
+            style={[styles.flashcardModeBtn, viewMode === "deck" && styles.flashcardModeBtnActive]}
+            onPress={() => setViewMode("deck")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.flashcardModeBtnText,
+                viewMode === "deck" && styles.flashcardModeBtnTextActive,
+              ]}
+            >
+              Interactive Deck
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.flashcardModeBtn, viewMode === "list" && styles.flashcardModeBtnActive]}
+            onPress={() => setViewMode("list")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.flashcardModeBtnText,
+                viewMode === "list" && styles.flashcardModeBtnTextActive,
+              ]}
+            >
+              All Cards ({flashcards.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.flashcardDoneCount}>
           <CheckCircle2 size={14} color="#16A34A" />
           <Text style={styles.flashcardDoneText}>
-            {completed.size} / {flashcards.length}
+            {completed.size}/{flashcards.length}
           </Text>
         </View>
+      </View>
+
+      {/* Stepped Progress Bar (Quiz Screenshot 5 Style) */}
+      <View style={styles.stepProgressRow}>
+        {flashcards.map((_, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.stepDash,
+              idx <= currentIndex ? styles.stepDashActive : styles.stepDashInactive,
+              completed.has(idx) && styles.stepDashCompleted,
+            ]}
+          />
+        ))}
       </View>
 
       {/* Completion banner */}
@@ -155,38 +215,92 @@ const FlashcardList = ({ flashcards }: { flashcards: any[] }) => {
         </View>
       )}
 
-      {/* All cards stacked vertically */}
-      {flashcards.map((card, i) => (
-        <View key={i} style={styles.flashcardListItem}>
-          {/* Card number + done toggle */}
-          <View style={styles.flashcardListMeta}>
-            <Text style={styles.flashcardListNum}>#{i + 1}</Text>
+      {viewMode === "deck" ? (
+        <View style={styles.deckContainer}>
+          {/* Subtitle / Counter Row */}
+          <View style={styles.deckCounterRow}>
+            <Text style={styles.deckCounterText}>
+              Card {currentIndex + 1} / {flashcards.length}
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.flashcardDoneBtn,
-                completed.has(i) && styles.flashcardDoneBtnActive,
-              ]}
-              onPress={() => toggleDone(i)}
+              style={[styles.flashcardDoneBtn, isCurrentDone && styles.flashcardDoneBtnActive]}
+              onPress={() => toggleDone(currentIndex)}
               activeOpacity={0.7}
             >
-              <CheckCircle2
-                size={14}
-                color={completed.has(i) ? "#16A34A" : "#CBD5E1"}
-              />
-              <Text
-                style={[
-                  styles.flashcardDoneBtnText,
-                  completed.has(i) && { color: "#16A34A" },
-                ]}
-              >
-                {completed.has(i) ? "Done" : "Mark done"}
+              <CheckCircle2 size={13} color={isCurrentDone ? "#16A34A" : "#94A3B8"} />
+              <Text style={[styles.flashcardDoneBtnText, isCurrentDone && { color: "#16A34A" }]}>
+                {isCurrentDone ? "Mastered" : "Mark Mastered"}
               </Text>
             </TouchableOpacity>
           </View>
-          <Flashcard card={card} />
 
+          {/* Flashcard Component */}
+          {currentCard && <Flashcard key={currentIndex} card={currentCard} />}
+
+          {/* Previous / Next Controls (Quiz Screenshot 5 Style) */}
+          <View style={styles.deckNavRow}>
+            <TouchableOpacity
+              style={[styles.deckNavBtnPrev, currentIndex === 0 && styles.deckNavBtnDisabled]}
+              onPress={handlePrev}
+              disabled={currentIndex === 0}
+              activeOpacity={0.8}
+            >
+              <ChevronLeft size={18} color={currentIndex === 0 ? "#CBD5E1" : "#475569"} />
+              <Text style={[styles.deckNavBtnTextPrev, currentIndex === 0 && { color: "#CBD5E1" }]}>
+                Previous
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.deckNavBtnNext,
+                currentIndex === flashcards.length - 1 && styles.deckNavBtnNextLast,
+              ]}
+              onPress={handleNext}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.deckNavBtnTextNext}>
+                {currentIndex === flashcards.length - 1 ? "Completed 🎉" : "Next"}
+              </Text>
+              <ChevronRight size={18} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
-      ))}
+      ) : (
+        /* All cards stacked vertically */
+        <View style={styles.allCardsList}>
+          {flashcards.map((card, i) => (
+            <View key={i} style={styles.flashcardListItem}>
+              {/* Card number + done toggle */}
+              <View style={styles.flashcardListMeta}>
+                <Text style={styles.flashcardListNum}>#{i + 1}</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.flashcardDoneBtn,
+                    completed.has(i) && styles.flashcardDoneBtnActive,
+                  ]}
+                  onPress={() => toggleDone(i)}
+                  activeOpacity={0.7}
+                >
+                  <CheckCircle2
+                    size={14}
+                    color={completed.has(i) ? "#16A34A" : "#CBD5E1"}
+                  />
+                  <Text
+                    style={[
+                      styles.flashcardDoneBtnText,
+                      completed.has(i) && { color: "#16A34A" },
+                    ]}
+                  >
+                    {completed.has(i) ? "Mastered" : "Mark mastered"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Flashcard card={card} />
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 };
@@ -378,11 +492,177 @@ const AudioPlayerView = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// STRUCTURED NOTES VIEWER — with gap annotations & auto-scroll anchors
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface NoteSection {
+  id: number;
+  heading: string;
+  body: string;
+  isRemediatedGap: boolean;
+  isFromNotes: boolean;
+}
+
+const StructuredNotesViewer = ({
+  textContent,
+  targetGapId,
+  targetConcept,
+}: {
+  textContent: string;
+  targetGapId?: string;
+  targetConcept?: string;
+}) => {
+  const scrollRef = useRef<ScrollView>(null);
+  const [sectionLayouts, setSectionLayouts] = useState<Record<number, number>>({});
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+
+  // Parse sections by ## or ### headings
+  const sections: NoteSection[] = React.useMemo(() => {
+    const rawChunks = textContent.split(/(?=\n##\s+|\n###\s+)/g);
+    return rawChunks.map((chunk, idx) => {
+      const trimmed = chunk.trim();
+      const firstLine = trimmed.split("\n")[0] || "";
+      const isRemediatedGap =
+        trimmed.includes("Remediated Learning Gap") ||
+        trimmed.includes("Identified Learning Gap") ||
+        trimmed.includes("⚠️");
+      const isFromNotes = trimmed.includes("From Your Handwritten Notes");
+
+      return {
+        id: idx,
+        heading: firstLine.replace(/^[#\s]+/, ""),
+        body: trimmed,
+        isRemediatedGap,
+        isFromNotes,
+      };
+    });
+  }, [textContent]);
+
+  // Determine which section to jump to if target params exist
+  const targetSectionIndex = React.useMemo(() => {
+    if (!targetGapId && !targetConcept) return -1;
+    const lowerConcept = (targetConcept || "").toLowerCase();
+    const lowerGapId = (targetGapId || "").toLowerCase();
+
+    // 1. Try exact concept match
+    let matchIdx = sections.findIndex((s) => {
+      const lower = s.body.toLowerCase();
+      return (
+        (lowerConcept && lower.includes(lowerConcept)) ||
+        (lowerGapId && lower.includes(lowerGapId))
+      );
+    });
+
+    // 2. Fallback to first remediated gap section
+    if (matchIdx === -1) {
+      matchIdx = sections.findIndex((s) => s.isRemediatedGap);
+    }
+
+    return matchIdx;
+  }, [sections, targetGapId, targetConcept]);
+
+  // Auto-scroll when layout is ready
+  useEffect(() => {
+    if (targetSectionIndex >= 0 && sectionLayouts[targetSectionIndex] !== undefined) {
+      const targetY = sectionLayouts[targetSectionIndex];
+      setHighlightedIndex(targetSectionIndex);
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, targetY - 16),
+          animated: true,
+        });
+      }, 350);
+    }
+  }, [targetSectionIndex, sectionLayouts]);
+
+  return (
+    <ScrollView
+      ref={scrollRef}
+      style={styles.scroll}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 80 }}
+    >
+      <View style={styles.contentPad}>
+        {/* Direct Gap Jump Notice */}
+        {(targetConcept || targetGapId) && (
+          <View style={styles.gapJumpBanner}>
+            <View style={styles.gapJumpIconWrap}>
+              <Target size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gapJumpTitle}>Targeted Gap Remediation</Text>
+              <Text style={styles.gapJumpSub}>
+                Auto-focused on:{" "}
+                <Text style={{ fontWeight: "700", color: "#B45309" }}>
+                  {targetConcept || targetGapId}
+                </Text>
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Legend / Visual Guide Bar */}
+        <View style={styles.snLegendRow}>
+          <View style={[styles.snLegendTag, { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#16A34A" }]}>📝 From Your Notes</Text>
+          </View>
+          <View style={[styles.snLegendTag, { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#D97706" }]}>⚠️ Remediated Gap</Text>
+          </View>
+          <View style={[styles.snLegendTag, { backgroundColor: "#EEF2FF", borderColor: "#C7D2FE" }]}>
+            <Text style={[styles.snLegendTagText, { color: "#4F46E5" }]}>💡 Definitions & Theory</Text>
+          </View>
+        </View>
+
+        {/* Section Cards */}
+        {sections.map((sec, idx) => {
+          const isTargeted = highlightedIndex === idx;
+
+          return (
+            <View
+              key={sec.id}
+              onLayout={(e) => {
+                const y = e.nativeEvent.layout.y;
+                setSectionLayouts((prev) => ({ ...prev, [idx]: y }));
+              }}
+              style={[
+                styles.snSectionCard,
+                sec.isRemediatedGap && styles.snSectionCardGap,
+                isTargeted && styles.snSectionCardTargeted,
+              ]}
+            >
+              {sec.isRemediatedGap && (
+                <View style={styles.snGapTagBadge}>
+                  <Target size={12} color="#D97706" />
+                  <Text style={styles.snGapTagBadgeText}>Remediated Gap</Text>
+                </View>
+              )}
+              {isTargeted && (
+                <View style={styles.snTargetedBadge}>
+                  <Sparkles size={12} color="#fff" />
+                  <Text style={styles.snTargetedBadgeText}>Jumped to this section</Text>
+                </View>
+              )}
+              <Markdown style={markdownStyles}>{sec.body}</Markdown>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default function MaterialViewer() {
-  const { id, type } = useLocalSearchParams<{ id: string; type: string }>();
+  const { id, type, targetGapId, targetConcept } = useLocalSearchParams<{
+    id: string;
+    type: string;
+    targetGapId?: string;
+    targetConcept?: string;
+  }>();
   const router = useRouter();
 
   const [material, setMaterial] = useState<any>(null);
@@ -459,7 +739,7 @@ export default function MaterialViewer() {
             </View>
             <Text style={[styles.heroTitle, { color: headerColor }]}>Audio Lesson</Text>
             <Text style={styles.heroSub}>
-              A spoken explanation tailored to your handwritten notes
+              A spoken explanation tailored to your handwritten notes & gaps
             </Text>
           </View>
           <AudioPlayerView
@@ -489,7 +769,7 @@ export default function MaterialViewer() {
       return (
         <View style={styles.contentPad}>
           <View style={styles.materialHero}>
-            <Text style={styles.heroSub}>Visual concept map of your topic</Text>
+            <Text style={styles.heroSub}>Visual concept map of the complete lesson</Text>
           </View>
           <MindMapViewer mindMap={material.mindMap} />
         </View>
@@ -520,7 +800,18 @@ export default function MaterialViewer() {
       );
     }
 
-    // ── Markdown views (structured_notes, revision_summary, learning_points)
+    // ── Structured Notes (Specialized gap-annotated viewer) ─────────────────
+    if (type === "structured_notes" && material.textContent) {
+      return (
+        <StructuredNotesViewer
+          textContent={material.textContent}
+          targetGapId={targetGapId}
+          targetConcept={targetConcept}
+        />
+      );
+    }
+
+    // ── Other Markdown views (revision_summary, learning_points) ───────────
     if (material.textContent) {
       return (
         <View style={styles.contentPad}>
@@ -539,7 +830,8 @@ export default function MaterialViewer() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.container}>
+      <StatusBar backgroundColor="#ffffff" barStyle="dark-content" />
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: `${headerColor}20` }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -552,13 +844,18 @@ export default function MaterialViewer() {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
-      >
-        {renderContent()}
-      </ScrollView>
+      {/* For structured_notes, StructuredNotesViewer manages its own scroll to support accurate section offsets */}
+      {type === "structured_notes" ? (
+        renderContent()
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 60 }}
+        >
+          {renderContent()}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -568,46 +865,56 @@ export default function MaterialViewer() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const markdownStyles = {
-  body: { fontSize: 16, color: "#374151", fontFamily: "Author-Regular", lineHeight: 26 },
+  body: { fontSize: 15, color: "#374151", fontWeight: "400" as const, lineHeight: 25 },
   heading1: {
-    fontSize: 24,
-    fontFamily: "Author-Bold",
+    fontSize: 22,
+    fontWeight: "800" as const,
     color: colors.primaryBlack,
-    marginTop: 8,
-    marginBottom: 14,
+    marginTop: 4,
+    marginBottom: 12,
   },
   heading2: {
-    fontSize: 20,
-    fontFamily: "Author-SemiBold",
-    color: colors.primaryBlack,
-    marginTop: 20,
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: "700" as const,
+    color: "#1E293B",
+    marginTop: 14,
+    marginBottom: 8,
   },
   heading3: {
-    fontSize: 17,
-    fontFamily: "Author-Medium",
-    color: colors.primaryBlack,
-    marginTop: 16,
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: "#334155",
+    marginTop: 10,
     marginBottom: 6,
   },
-  paragraph: { marginBottom: 14 },
-  list_item: { marginBottom: 8, paddingLeft: 4 },
-  strong: { fontFamily: "Author-Bold", color: colors.primaryBlack },
-  em: { fontStyle: "italic", color: colors.primary },
-  bullet_list: { marginBottom: 14 },
-  ordered_list: { marginBottom: 14 },
+  paragraph: { marginBottom: 10 },
+  list_item: { marginBottom: 6, paddingLeft: 4 },
+  strong: { fontWeight: "700" as const, color: colors.primaryBlack },
+  em: { fontStyle: "italic" as const, color: colors.primary },
+  bullet_list: { marginBottom: 10 },
+  ordered_list: { marginBottom: 10 },
   code_inline: {
     backgroundColor: "#F1F5F9",
     color: "#BE185D",
-    fontFamily: "Author-Medium",
+    fontWeight: "600" as const,
     paddingHorizontal: 4,
     borderRadius: 4,
+    fontSize: 13,
+  },
+  blockquote: {
+    backgroundColor: "#F8FAFC",
+    borderLeftColor: "#3B82F6",
+    borderLeftWidth: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 8,
   },
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FB" },
-  scroll: { flex: 1 },
+  container: { flex: 1, backgroundColor: "#fff" },
+  scroll: { flex: 1, backgroundColor: "#F8F9FB" },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
@@ -615,8 +922,8 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 80,
   },
-  loadingText: { marginTop: 14, fontSize: 15, color: "#6B7280", fontFamily: "Author-Medium" },
-  errorText: { fontSize: 15, color: "#94A3B8", fontFamily: "Author-Medium", textAlign: "center" },
+  loadingText: { marginTop: 14, fontSize: 15, color: "#6B7280", fontWeight: "500" },
+  errorText: { fontSize: 15, color: "#94A3B8", fontWeight: "500", textAlign: "center" },
 
   // Header
   header: {
@@ -631,7 +938,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 8 },
   headerCenter: { flexDirection: "row", alignItems: "center", gap: 8 },
   headerDot: { width: 10, height: 10, borderRadius: 5 },
-  headerTitle: { fontSize: 17, fontFamily: "Author-Bold", color: colors.primaryBlack },
+  headerTitle: { fontSize: 17, fontWeight: "700", color: colors.primaryBlack },
 
   contentPad: { padding: 16 },
 
@@ -645,8 +952,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  heroTitle: { fontSize: 22, fontFamily: "Author-Bold", marginBottom: 4 },
-  heroSub: { fontSize: 14, color: "#94A3B8", fontFamily: "Author-Regular", textAlign: "center" },
+  heroTitle: { fontSize: 22, fontWeight: "700", marginBottom: 4 },
+  heroSub: { fontSize: 14, color: "#94A3B8", fontWeight: "400", textAlign: "center" },
 
   // ── Flashcards ──────────────────────────────────────────────────────────────
 
@@ -665,13 +972,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
   },
-  completionText: { fontSize: 14, fontFamily: "Author-SemiBold", color: "#16A34A" },
+  completionText: { fontSize: 14, fontWeight: "600", color: "#16A34A" },
 
   flashcardScene: { width: "100%", alignItems: "center" },
   flashcardCounter: {
     fontSize: 13,
     color: "#94A3B8",
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     marginBottom: 12,
   },
   flashcardWrapper: { width: "100%", height: 230, position: "relative" },
@@ -698,13 +1005,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 18,
     fontSize: 11,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 1,
   },
   flashcardText: {
     fontSize: 18,
-    fontFamily: "Author-SemiBold",
+    fontWeight: "600",
     color: colors.primaryBlack,
     textAlign: "center",
     lineHeight: 28,
@@ -713,7 +1020,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 18,
     fontSize: 12,
-    fontFamily: "Author-Medium",
+    fontWeight: "500",
     color: "#CBD5E1",
   },
   resetBtn: {
@@ -726,23 +1033,146 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#F1F5F9",
   },
-  resetBtnText: { fontSize: 12, color: "#6B7280", fontFamily: "Author-Medium" },
+  resetBtnText: { fontSize: 12, color: "#6B7280", fontWeight: "500" },
 
-  // ── Flashcard vertical list ──────────────────────────────────────────────────────────
-  flashcardListContainer: { gap: 16 },
-  flashcardListHeader: {
+  // ── Flashcard interactive deck & list ─────────────────────────────────────────
+  flashcardListContainer: { gap: 14 },
+  flashcardModeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  flashcardModePills: {
+    flexDirection: "row",
+    backgroundColor: "#F1F5F9",
+    borderRadius: 14,
+    padding: 3,
+    gap: 3,
+  },
+  flashcardModeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 11,
+  },
+  flashcardModeBtnActive: {
+    backgroundColor: "#ffffff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  flashcardModeBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  flashcardModeBtnTextActive: {
+    color: colors.primaryBlack,
+    fontWeight: "700",
+  },
+  flashcardDoneCount: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  flashcardDoneText: { fontSize: 12.5, color: "#16A34A", fontWeight: "700" },
+
+  // Stepped progress dashes (Quiz Screenshot 5 Style)
+  stepProgressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
     marginBottom: 4,
   },
-  flashcardListCount: {
-    fontSize: 13,
-    color: "#94A3B8",
-    fontFamily: "Author-Medium",
+  stepDash: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
   },
-  flashcardDoneCount: { flexDirection: "row", alignItems: "center", gap: 4 },
-  flashcardDoneText: { fontSize: 13, color: "#16A34A", fontFamily: "Author-SemiBold" },
+  stepDashActive: {
+    backgroundColor: colors.primary,
+  },
+  stepDashInactive: {
+    backgroundColor: "#E2E8F0",
+  },
+  stepDashCompleted: {
+    backgroundColor: "#16A34A",
+  },
+
+  deckContainer: {
+    gap: 12,
+    alignItems: "center",
+  },
+  deckCounterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    paddingHorizontal: 4,
+  },
+  deckCounterText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  deckNavRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+    marginTop: 8,
+  },
+  deckNavBtnPrev: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  deckNavBtnDisabled: {
+    opacity: 0.5,
+  },
+  deckNavBtnTextPrev: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  deckNavBtnNext: {
+    flex: 1.3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 16,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  deckNavBtnNextLast: {
+    backgroundColor: "#16A34A",
+    shadowColor: "#16A34A",
+  },
+  deckNavBtnTextNext: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+
+  allCardsList: {
+    gap: 14,
+  },
   flashcardListItem: { gap: 6 },
   flashcardListMeta: {
     flexDirection: "row",
@@ -752,7 +1182,7 @@ const styles = StyleSheet.create({
   },
   flashcardListNum: {
     fontSize: 12,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#CBD5E1",
     letterSpacing: 0.5,
   },
@@ -760,16 +1190,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingVertical: 4,
+    paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 12,
     backgroundColor: "#F1F5F9",
   },
   flashcardDoneBtnActive: { backgroundColor: "#DCFCE7" },
   flashcardDoneBtnText: {
-    fontSize: 11,
-    fontFamily: "Author-SemiBold",
-    color: "#94A3B8",
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#64748B",
   },
 
   // ── Mind Map ─────────────────────────────────────────────────────────────────
@@ -806,15 +1236,15 @@ const styles = StyleSheet.create({
   },
   mmRootText: {
     fontSize: 17,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#fff",
   },
   mmChildPill: {
     borderWidth: 1.5,
   },
   mmDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
-  mmNodeText: { fontSize: 14, fontFamily: "Author-Medium", flexShrink: 1 },
-  mmChildText: { fontSize: 14, fontFamily: "Author-Medium" },
+  mmNodeText: { fontSize: 14, fontWeight: "500", flexShrink: 1 },
+  mmChildText: { fontSize: 14, fontWeight: "500" },
   mmChildrenWrap: {
     marginLeft: 20,
     paddingLeft: 14,
@@ -828,7 +1258,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     color: "#94A3B8",
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     marginTop: 16,
   },
 
@@ -861,7 +1291,7 @@ const styles = StyleSheet.create({
   },
   playStatus: {
     fontSize: 12,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: colors.primary,
     letterSpacing: 2,
     marginBottom: 20,
@@ -876,7 +1306,7 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: colors.primary, borderRadius: 3 },
   timeRow: { flexDirection: "row", justifyContent: "space-between", width: "100%" },
-  timeText: { fontSize: 12, fontFamily: "Author-Medium", color: "#94A3B8" },
+  timeText: { fontSize: 12, fontWeight: "500", color: "#94A3B8" },
 
   transcriptCard: {
     backgroundColor: "#fff",
@@ -896,17 +1326,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignItems: "flex-start",
   },
-  infoText: { flex: 1, fontSize: 13, fontFamily: "Author-Medium", color: "#0369A1", lineHeight: 20 },
+  infoText: { flex: 1, fontSize: 13, fontWeight: "500", color: "#0369A1", lineHeight: 20 },
   transcriptLabel: {
     fontSize: 11,
-    fontFamily: "Author-Bold",
+    fontWeight: "700",
     color: "#94A3B8",
     letterSpacing: 1,
     marginBottom: 10,
   },
   transcriptText: {
     fontSize: 15,
-    fontFamily: "Author-Regular",
+    fontWeight: "400",
     color: colors.primaryBlack,
     lineHeight: 26,
   },
@@ -934,9 +1364,120 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexShrink: 0,
   },
-  defIndexText: { fontSize: 14, fontFamily: "Author-Bold" },
-  defTerm: { fontSize: 16, fontFamily: "Author-Bold", marginBottom: 6 },
-  defDefinition: { fontSize: 14, fontFamily: "Author-Regular", color: "#475569", lineHeight: 22 },
+  defIndexText: { fontSize: 14, fontWeight: "700" },
+  defTerm: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
+  defDefinition: { fontSize: 14, fontWeight: "400", color: "#475569", lineHeight: 22 },
+
+  // ── Structured Notes Specialized Styles ──────────────────────────────────────
+
+  gapJumpBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FEF3C7",
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: "#F59E0B",
+  },
+  gapJumpIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FDE68A",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gapJumpTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#92400E",
+    marginBottom: 2,
+  },
+  gapJumpSub: {
+    fontSize: 12,
+    color: "#B45309",
+    fontWeight: "500",
+  },
+
+  snLegendRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 16,
+  },
+  snLegendTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  snLegendTagText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  snSectionCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  snSectionCardGap: {
+    borderColor: "#FDE68A",
+    backgroundColor: "#FFFCF5",
+  },
+  snSectionCardTargeted: {
+    borderColor: "#F59E0B",
+    borderWidth: 2,
+    backgroundColor: "#FFFDF8",
+    shadowColor: "#F59E0B",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  snGapTagBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#FEF3C7",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  snGapTagBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#D97706",
+  },
+  snTargetedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: "#D97706",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  snTargetedBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
 
   // ── Markdown ─────────────────────────────────────────────────────────────────
 
