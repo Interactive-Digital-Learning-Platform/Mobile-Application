@@ -54,6 +54,15 @@ module.exports = {
         asemibold: ["Author-Semibold", "sans-serif"],
         aitalic: ["Author-Italic", "sans-serif"]
       },
+      colors: {
+        primary: "#FC6E20",
+        "primary-dark": "#E35F16",
+        ink: "#0F172A",
+        muted: "#979797",
+        border: "#E3E1E1",
+        "bg-soft": "#e4ebfb",
+        surface: "#FFFFFF",
+      },
     },
   },
   plugins: [],

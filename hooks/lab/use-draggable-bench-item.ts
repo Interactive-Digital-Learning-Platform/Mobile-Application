@@ -1,0 +1,92 @@
+import { Gesture } from "react-native-gesture-handler";
+import { interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+
+type Args = {
+  id: string;
+  position: { x: number; y: number };
+  onMove: (id: string, position: { x: number; y: number }) => void;
+  // Fired via runOnJS, throttled to ~120ms, on every drag tick — used by probe-role equipment
+  // (e.g. the pH meter) to re-check collision against liquid regions while dragging. Omit for
+  // equipment that only needs to reposition itself (the common case).
+  onDragChange?: () => void;
+  // Container-to-container pouring (see EquipmentContainer): resolves which other registered
+  // instance, if any, the item was released on top of. Reuses the same drop-target registry
+  // ChemicalBottle already hit-tests against, since every EquipmentContainer registers itself
+  // there too. Omit for items that only reposition (e.g. probe-role instruments).
+  resolveDropTarget?: (x: number, y: number, excludeId?: string) => Promise<string | null>;
+  // Called once a *different* instance is resolved under the release point; return true if that
+  // counts as a completed drop (the item snaps back to its pre-drag position instead of moving —
+  // pouring doesn't relocate the source) or false to fall back to a normal reposition (e.g. the
+  // source had nothing to pour).
+  onDrop?: (targetId: string) => boolean;
+  // Fired on every pan release regardless of drop resolution — e.g. the dropper uses it to mark
+  // itself "active" (open its action panel) so a near-stationary drag that isn't recognised as a
+  // clean Tap still opens the panel.
+  onRelease?: () => void;
+};
+
+// Shared "draggable bench item body" behavior, extracted from EquipmentContainer so probe-role
+// instruments (PhMeterInstrument) don't duplicate the same translateX/Y + pan-gesture plumbing.
+// Callers still compose their own tap/longPress gestures locally via Gesture.Race(panGesture, ...)
+// — this hook only owns the pan/reposition piece, matching how EquipmentShelfItem/ChemicalBottle
+// already compose gestures inline rather than sharing a wrapper component.
+export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, resolveDropTarget, onDrop, onRelease }: Args) => {
+  const translateX = useSharedValue(position.x);
+  const translateY = useSharedValue(position.y);
+  const lastCheckTs = useSharedValue(0);
+  // Lift-and-shadow feedback while dragging — matches the scale-up already used by the shelf
+  // spawners (EquipmentShelfItem/ChemicalBottle), which this hook's callers previously lacked.
+  const dragScale = useSharedValue(1);
+
+  // Mirrors ChemicalBottle's own async handleDrop — resolveDropTarget/onDrop are plain JS
+  // functions (not worklets), so this runs on the JS thread via runOnJS below.
+  const handleDragEnd = async (absoluteX: number, absoluteY: number) => {
+    // Exclude self: this item is registered as a drop target too, and it's always under its own
+    // release point — without this the drop would non-deterministically resolve to itself.
+    const targetId = resolveDropTarget ? await resolveDropTarget(absoluteX, absoluteY, id) : null;
+    const dropped = targetId && targetId !== id && onDrop ? onDrop(targetId) : false;
+    if (dropped) {
+      translateX.value = withSpring(position.x);
+      translateY.value = withSpring(position.y);
+    } else {
+      onMove(id, { x: translateX.value, y: translateY.value });
+    }
+  };
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      dragScale.value = withSpring(1.06);
+    })
+    .onChange((e) => {
+      translateX.value += e.changeX;
+      translateY.value += e.changeY;
+      if (onDragChange) {
+        const now = Date.now();
+        if (now - lastCheckTs.value > 120) {
+          lastCheckTs.value = now;
+          runOnJS(onDragChange)();
+        }
+      }
+    })
+    .onEnd((e) => {
+      dragScale.value = withSpring(1);
+      if (resolveDropTarget) {
+        runOnJS(handleDragEnd)(e.absoluteX, e.absoluteY);
+      } else {
+        runOnJS(onMove)(id, { x: translateX.value, y: translateY.value });
+      }
+      if (onDragChange) runOnJS(onDragChange)();
+      if (onRelease) runOnJS(onRelease)();
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: dragScale.value }],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    shadowOpacity: interpolate(dragScale.value, [1, 1.06], [0, 0.2]),
+    elevation: interpolate(dragScale.value, [1, 1.06], [0, 6]),
+  }));
+
+  return { translateX, translateY, panGesture, animatedStyle };
+};
