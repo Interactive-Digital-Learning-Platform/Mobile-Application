@@ -10,6 +10,9 @@ export const SERVICE_URLS = {
   notes: `${API_GATEWAY_URL}/api/notes`,
   quiz: `${API_GATEWAY_URL}/api/quiz`,
   pdf: `${API_GATEWAY_URL}/api/pdf`,
+  // Online 1v1 battle mode -- its own microservice (Quiz-Battle-Service),
+  // reached through the gateway the same way as every other service.
+  battle: `${API_GATEWAY_URL}/api/battle`,
 } as const;
 
 export const assistantClient = create({
@@ -61,6 +64,18 @@ export function setClerkTokenGetter(fn: () => Promise<string | null>) {
   _getClerkToken = fn;
 }
 
+// One-off token fetch for callers that can't ride the axios interceptor —
+// e.g. a native WebSocket URL, which must carry the token as a query param
+// rather than an Authorization header.
+export async function getClerkToken(): Promise<string | null> {
+  if (!_getClerkToken) return null;
+  try {
+    return await _getClerkToken();
+  } catch {
+    return null;
+  }
+}
+
 // Resolved once Clerk finishes its initial auth-state check (`isLoaded`).
 // Without this, a query that fires the instant a screen mounts can race
 // ahead of Clerk restoring the session — harmless on iOS Simulator where
@@ -83,48 +98,50 @@ export function markClerkReady() {
   _resolveClerkReady?.();
 }
 
-quizClient.interceptors.request.use(async (config) => {
-  await _clerkReadyOrTimeout;
-  if (_getClerkToken) {
-    try {
-      const token = await _getClerkToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+// Shared by every client that needs a Bearer token (currently quizClient and
+// battleClient) — attaches the same Clerk-ready-gated token fetch and the
+// same error-message normalization to whichever axios instance is passed in.
+function attachAuthInterceptors(client: ReturnType<typeof create>) {
+  client.interceptors.request.use(async (config) => {
+    await _clerkReadyOrTimeout;
+    if (_getClerkToken) {
+      try {
+        const token = await _getClerkToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch {
+        // Token fetch failed; send without — backend bypass will handle dev
       }
-    } catch {
-      // Token fetch failed; send without — backend bypass will handle dev
     }
-  }
-  return config;
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      const message =
+        error?.response?.data?.detail ??
+        error?.message ??
+        "An unexpected error occurred";
+      return Promise.reject(new Error(message));
+    }
+  );
+}
+
+attachAuthInterceptors(quizClient);
+
+// Online 1v1 battle mode's own microservice (Quiz-Battle-Service) -- shares
+// the same Clerk auth as quizClient (same users), reached through the
+// gateway at /api/battle instead of /api/quiz.
+export const battleClient = create({
+  baseURL: `${SERVICE_URLS.battle}/api/v1`,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  timeout: 45_000,
 });
-
-const addNotesBearerToken = async (config: any) => {
-  await _clerkReadyOrTimeout;
-  if (_getClerkToken) {
-    try {
-      const token = await _getClerkToken();
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    } catch {
-      // The protected Notes backend returns an authentication error if the
-      // device cannot restore its Clerk session.
-    }
-  }
-  return config;
-};
-
-notesClient.interceptors.request.use(addNotesBearerToken);
-notesAssetsClient.interceptors.request.use(addNotesBearerToken);
-
-quizClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    const message =
-      error?.response?.data?.detail ??
-      error?.message ??
-      "An unexpected error occurred";
-    return Promise.reject(new Error(message));
-  }
-);
+attachAuthInterceptors(battleClient);
 
 export const pdfClient = create({
   baseURL: SERVICE_URLS.pdf,

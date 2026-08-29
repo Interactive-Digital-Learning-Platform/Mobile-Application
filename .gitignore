@@ -47,3 +47,5 @@ app-example
 
 # Environment variable files
 .env
+
+dev-docs

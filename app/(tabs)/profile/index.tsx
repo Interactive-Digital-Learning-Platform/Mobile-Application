@@ -275,9 +275,9 @@ export default function Profile() {
 
   return (
     <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
-      <View className="mt-5 px-[30px] bg-primary flex flex-row z-20 h-[160px] rounded-b-[40px] w-[100%] items-center justify-between absolute ">
-        <View className="flex-1 mr-2">
-          <Text className="text-white text-2xl font-bold" numberOfLines={1}>
+      <SafeAreaView className=" px-[30px] bg-primary flex flex-row z-20 rounded-b-[40px] w-[100%] items-center justify-between absolute ">
+        <View >
+          <Text className="text-white text-2xl  font-bold">
             Hi {displayName}
           </Text>
           {joinDate && (
@@ -304,7 +304,7 @@ export default function Profile() {
             <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
           </View>
         </View>
-      </View>
+      </SafeAreaView>
       <ScrollView showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />} className="bg-white">
       
