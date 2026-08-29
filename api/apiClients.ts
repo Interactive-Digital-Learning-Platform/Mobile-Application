@@ -25,7 +25,7 @@ export const assistantClient = create({
 // The notes service defines its own /api prefix behind the gateway prefix.
 export const notesClient = create({
   baseURL: `${SERVICE_URLS.notes}/api`,
-  timeout: 10000,
+  timeout: 60000,
 });
 
 export const notesAssetsClient = create({

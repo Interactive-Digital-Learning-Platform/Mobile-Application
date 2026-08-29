@@ -1,6 +1,13 @@
 import { notesClient } from "@/api/apiClients";
 import { Platform } from "react-native";
 
+export interface NoteUploadContext {
+  subject?: string;
+  grade?: 10 | 11;
+  topic?: string;
+  lessonId?: string;
+}
+
 export const notesApi = {
   // Get all notes for a user
   getNotes: async (userId: string) => {
@@ -14,6 +21,26 @@ export const notesApi = {
     return response.data;
   },
 
+  // Store the student's own response to a curriculum finding. A future
+  // integration can forward `needs_help` concepts to the Quiz service.
+  verifyConceptFinding: async (
+    noteId: string,
+    conceptId: string,
+    status: "understood" | "needs_help",
+  ) => {
+    const response = await notesClient.patch(
+      `/notes/${noteId}/concepts/${conceptId}/verification`,
+      { status },
+    );
+    return response.data;
+  },
+
+  // Student-corrected context is persisted before the note is re-analysed.
+  updateNoteContext: async (noteId: string, context: NoteUploadContext) => {
+    const response = await notesClient.patch(`/notes/${noteId}/context`, context);
+    return response.data;
+  },
+
   // Delete a note
   deleteNote: async (noteId: string) => {
     const response = await notesClient.delete(`/notes/${noteId}`);
@@ -21,7 +48,12 @@ export const notesApi = {
   },
 
   // Upload a note (single or multi-page)
-  uploadNote: async (userId: string, title: string, fileUris: string | string[]) => {
+  uploadNote: async (
+    userId: string,
+    title: string,
+    fileUris: string | string[],
+    context?: NoteUploadContext,
+  ) => {
     try {
       const uris = Array.isArray(fileUris) ? fileUris : [fileUris];
       console.log("Uploading note pages:", {
@@ -40,25 +72,41 @@ export const notesApi = {
           const blob = await response.blob();
           formData.append("images", blob, `note-page-${i + 1}.jpg`);
         } else {
+          const filename = uri.split("/").pop() || `note-page-${i + 1}.jpg`;
+          const extMatch = /\.(\w+)$/.exec(filename);
+          const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+          const type =
+            ext === "png"
+              ? "image/png"
+              : ext === "webp"
+              ? "image/webp"
+              : ext === "heic" || ext === "heif"
+              ? "image/heic"
+              : "image/jpeg";
+
           formData.append("images", {
             uri,
-            name: `note-page-${i + 1}.jpg`,
-            type: "image/jpeg",
+            name: filename.includes(".") ? filename : `note-page-${i + 1}.jpg`,
+            type,
           } as any);
         }
       }
 
       formData.append("userId", userId);
       formData.append("title", title);
+      if (context?.subject?.trim()) formData.append("subject", context.subject.trim());
+      if (context?.grade) formData.append("grade", String(context.grade));
+      if (context?.topic?.trim()) formData.append("topic", context.topic.trim());
+      if (context?.lessonId?.trim()) formData.append("lessonId", context.lessonId.trim());
 
       const apiResponse = await notesClient.post(
         "/notes/upload-and-process",
         formData,
         {
           headers: {
-            "Content-Type": "multipart/form-data",
+            Accept: "application/json",
           },
-          transformRequest: (data) => data,
+          timeout: 60000,
         },
       );
 
