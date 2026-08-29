@@ -6,7 +6,6 @@ import { useFonts } from "expo-font";
 import { useEffect } from "react";
 import "nativewind";
 import ClerkProviderCom from "@/providers/ClerkProviderCom";
-import LabAuthSyncBoundary from "@/providers/LabAuthSyncBoundary";
 import Toast from "react-native-toast-message";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -43,7 +42,6 @@ export default function RootLayout() {
       <KeyboardProvider>
         <QueryClientProviderCom>
            <ClerkProviderCom>
-            <LabAuthSyncBoundary>
               <Stack>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="(main)" options={{ headerShown: false }} />
@@ -51,7 +49,6 @@ export default function RootLayout() {
                 <Stack.Screen name="index" options={{ headerShown: false }} />
               </Stack>
               <Toast />
-            </LabAuthSyncBoundary>
            </ClerkProviderCom>
         </QueryClientProviderCom>
       </KeyboardProvider>

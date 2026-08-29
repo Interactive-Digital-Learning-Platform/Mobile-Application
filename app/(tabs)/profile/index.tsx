@@ -215,13 +215,6 @@ export default function Profile() {
   const { signOut } = useAuth();
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
-  const { signOut } = useAuth();
-
-  // TEMP: remove once logout lives in the integrated profile flow
-  const handleLogout = async () => {
-    await signOut();
-    router.replace("/(auth)/sign-in");
-  };
   const {
     data: analytics,
     isLoading: analyticsLoading,
