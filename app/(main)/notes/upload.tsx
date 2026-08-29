@@ -35,6 +35,9 @@ export default function UploadNote() {
 
   const [images, setImages] = useState<string[]>([]);
   const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("");
+  const [grade, setGrade] = useState<10 | 11 | undefined>();
+  const [topic, setTopic] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
   const pickImages = async () => {
@@ -106,7 +109,11 @@ export default function UploadNote() {
 
     setIsUploading(true);
     try {
-      const response = await notesApi.uploadNote(userId, title.trim(), images);
+      const response = await notesApi.uploadNote(userId, title.trim(), images, {
+        subject,
+        grade,
+        topic,
+      });
       if (response.success) {
         Toast.show({
           type: "success",
@@ -162,9 +169,45 @@ export default function UploadNote() {
         <View style={styles.inputCard}>
           <InputField
             title="Note Title"
-            placeHolder="e.g. Science - Photosynthesis & Respiration"
+            placeHolder="e.g. Science - 2nd lesson"
             value={title}
             handleChange={setTitle}
+            keyboardType="default"
+          />
+
+          <Text style={styles.contextTitle}>Optional learning context</Text>
+          <Text style={styles.contextHelper}>
+            This helps match your note to the right syllabus lesson. Leave blank if you are unsure.
+          </Text>
+          <InputField
+            title="Subject"
+            placeHolder="e.g. Science or Mathematics"
+            value={subject}
+            handleChange={setSubject}
+            keyboardType="default"
+          />
+          <View style={styles.gradeBlock}>
+            <Text style={styles.gradeLabel}>Grade</Text>
+            <View style={styles.gradeOptions}>
+              {([10, 11] as const).map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.gradeOption, grade === option && styles.gradeOptionActive]}
+                  onPress={() => setGrade(grade === option ? undefined : option)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.gradeOptionText, grade === option && styles.gradeOptionTextActive]}>
+                    Grade {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <InputField
+            title="Topic or lesson name"
+            placeHolder="e.g. Photosynthesis"
+            value={topic}
+            handleChange={setTopic}
             keyboardType="default"
           />
         </View>
@@ -414,6 +457,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
+  },
+  contextTitle: {
+    marginTop: 18,
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  contextHelper: {
+    marginTop: 4,
+    marginBottom: 14,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#64748B",
+  },
+  gradeBlock: {
+    marginBottom: 14,
+  },
+  gradeLabel: {
+    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  gradeOptions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  gradeOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+  },
+  gradeOptionActive: {
+    borderColor: colors.primary,
+    backgroundColor: "#FFF7ED",
+  },
+  gradeOptionText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  gradeOptionTextActive: {
+    color: colors.primary,
   },
   emptyUploadBox: {
     backgroundColor: "#ffffff",
@@ -667,4 +756,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

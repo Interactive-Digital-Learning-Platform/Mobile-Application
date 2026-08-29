@@ -9,6 +9,8 @@ import {
   Animated,
   Image,
   StatusBar,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -67,11 +69,27 @@ interface LearningGap {
 interface CoverageScores {
   simpleCoverage: number;
   weightedCoverage: number;
+  confidenceAdjustedWeightedCoverage?: number;
   totalConcepts: number;
   foundConcepts: number;
   missedConcepts: number;
   maxWeightedScore: number;
   achievedWeightedScore: number;
+  coverageScope?: "lesson_coverage" | "note_coverage";
+}
+
+interface ConceptFinding {
+  conceptId: string;
+  conceptName: string;
+  found: boolean;
+  decisionConfidence: number;
+  matchMethod: "keyword" | "semantic" | "not_found";
+  evidence?: string;
+  curriculumCategory?: string;
+  importanceWeight?: number;
+  isFrequentlyTested?: boolean;
+  studentVerification: "unverified" | "understood" | "needs_help";
+  verifiedAt?: string;
 }
 
 interface ExplainableGap {
@@ -87,6 +105,8 @@ interface ExplainableGap {
     category: string;
   }>;
   recommendation: string;
+  findingStatus?: "covered_in_note" | "not_found_in_note" | "confirmed_learning_gap";
+  verificationStatus?: "not_required" | "pending" | "verified";
 }
 
 interface ExamReadiness {
@@ -94,7 +114,6 @@ interface ExamReadiness {
   highPriorityConceptsCoverage: number;
   frequentlyExaminedMissing: string[];
   revisionPriority: "Low" | "Medium" | "High" | "Critical";
-  estimatedScoreRange: string;
 }
 
 interface Analysis {
@@ -107,12 +126,27 @@ interface Analysis {
   keyConcepts: string[];
   strengthAreas: string[];
   missingConcepts: string[];
+  conceptFindings?: ConceptFinding[];
   learningGaps: LearningGap[];
   explainableGaps?: ExplainableGap[];
   coverageScores?: CoverageScores;
   examReadiness?: ExamReadiness;
   ocrConfidence?: number;
   ocrLowQualityWarning?: boolean;
+  ocrPageSummary?: {
+    totalPages: number;
+    extractedPages: number;
+    failedPages: number;
+  };
+  noteScope?: {
+    scope: "complete_lesson_note" | "partial_lesson_note" | "revision_summary" | "exercise_or_worksheet" | "diagram_or_formula_sheet" | "unknown";
+    confidence: number;
+    rationale: string;
+  };
+  contentLanguage?: {
+    primaryLanguage: "Sinhala" | "English" | "Mixed" | "Unknown";
+    confidence: number;
+  };
   textbookReference?: string;
   overallCompleteness: number;
   analyzedAt: string;
@@ -127,6 +161,10 @@ interface Note {
   rawText: string;
   status: "uploaded" | "processing" | "analyzed" | "failed";
   errorMessage?: string;
+  userSubject?: string;
+  userGrade?: number;
+  userTopic?: string;
+  userLessonId?: string;
   analysis?: Analysis;
   createdAt: string;
 }
@@ -515,11 +553,17 @@ export default function NoteDetail() {
   const [materialsOverview, setMaterialsOverview] = useState<MaterialsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [verifyingConceptId, setVerifyingConceptId] = useState<string | null>(null);
   const [ocrExpanded, setOcrExpanded] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [gapsExpanded, setGapsExpanded] = useState(false);
   const [priorityGapExplainerOpen, setPriorityGapExplainerOpen] = useState(false);
+  const [contextEditorOpen, setContextEditorOpen] = useState(false);
+  const [contextSaving, setContextSaving] = useState(false);
+  const [contextSubject, setContextSubject] = useState("");
+  const [contextTopic, setContextTopic] = useState("");
+  const [contextGrade, setContextGrade] = useState<10 | 11 | undefined>();
   const [coverageExpanded, setCoverageExpanded] = useState(false);
   const [expandedGapIndices, setExpandedGapIndices] = useState<Record<number, boolean>>({});
   // Guard: ensure auto-generate fires only once per screen mount
@@ -557,6 +601,57 @@ export default function NoteDetail() {
       setLoading(false);
     }
   }, [id]);
+
+  const verifyConceptFinding = async (
+    conceptId: string,
+    status: "understood" | "needs_help",
+  ) => {
+    if (!note) return;
+    try {
+      setVerifyingConceptId(conceptId);
+      const response = await notesApi.verifyConceptFinding(note._id, conceptId, status);
+      if (response.success && response.data?.note) {
+        setNote(response.data.note);
+      }
+    } catch (error) {
+      console.error("Failed to save concept verification:", error);
+    } finally {
+      setVerifyingConceptId(null);
+    }
+  };
+
+  const openContextEditor = () => {
+    if (!note?.analysis) return;
+    const detectedGrade = Number(note.analysis.gradeLevel.replace(/\D/g, ""));
+    setContextSubject(note.userSubject || note.analysis.subject || "");
+    setContextTopic(note.userTopic || note.analysis.topic || "");
+    setContextGrade(note.userGrade === 10 || note.userGrade === 11
+      ? note.userGrade
+      : detectedGrade === 10 || detectedGrade === 11 ? detectedGrade : undefined);
+    setContextEditorOpen(true);
+  };
+
+  const saveCorrectedContext = async () => {
+    if (!note) return;
+    try {
+      setContextSaving(true);
+      const response = await notesApi.updateNoteContext(note._id, {
+        subject: contextSubject,
+        topic: contextTopic,
+        grade: contextGrade,
+      });
+      if (response.success) {
+        setContextEditorOpen(false);
+        setMaterialsOverview(null);
+        setNote((current) => current ? { ...current, status: "processing" } : current);
+        fetchNote();
+      }
+    } catch (error) {
+      console.error("Failed to correct note context:", error);
+    } finally {
+      setContextSaving(false);
+    }
+  };
 
   // ── Fetch materials overview ────────────────────────────────────────────────
   const fetchMaterials = useCallback(async () => {
@@ -716,9 +811,46 @@ export default function NoteDetail() {
         {/* ── Analyzed State ── */}
         {isAnalyzed && note.analysis && (
           <>
+            {(note.analysis.ocrPageSummary?.failedPages ?? 0) > 0 && (
+              <View style={styles.ocrWarningCard}>
+                <AlertTriangle size={20} color="#B45309" strokeWidth={2.4} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ocrWarningTitle}>Some note pages were not read</Text>
+                  <Text style={styles.ocrWarningText}>
+                    OCR extracted {note.analysis.ocrPageSummary?.extractedPages} of {note.analysis.ocrPageSummary?.totalPages} uploaded pages. Coverage may be incomplete until you upload clear replacements.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push("/(main)/notes/upload" as any)}
+                    activeOpacity={0.75}
+                    style={{ alignSelf: "flex-start", marginTop: 8 }}
+                  >
+                    <Text style={styles.ocrWarningAction}>Upload replacement photos</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {note.analysis.ocrLowQualityWarning && (
+              <View style={styles.ocrWarningCard}>
+                <AlertTriangle size={20} color="#B45309" strokeWidth={2.4} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ocrWarningTitle}>This note may be hard to read</Text>
+                  <Text style={styles.ocrWarningText}>
+                    OCR confidence is {note.analysis.ocrConfidence ?? "low"}%. Coverage findings may be incomplete. Retake clear, well-lit photos before relying on them.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push("/(main)/notes/upload" as any)}
+                    activeOpacity={0.75}
+                    style={{ alignSelf: "flex-start", marginTop: 8 }}
+                  >
+                    <Text style={styles.ocrWarningAction}>Upload clearer photos</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             {/* ── 1. Top Summary Card (Improvement 1) ── */}
             {(() => {
               const score = note.analysis.overallCompleteness;
+              const isLessonCoverage = note.analysis.coverageScores?.coverageScope === "lesson_coverage";
               const scoreColor = getCompletenessColor(score);
               const totalConcepts =
                 note.analysis.coverageScores?.totalConcepts ||
@@ -772,6 +904,20 @@ export default function NoteDetail() {
                     <Text style={styles.summaryTopicTitle} numberOfLines={2}>
                       {note.analysis.topic}
                     </Text>
+                    {typeof note.analysis.coverageScores?.confidenceAdjustedWeightedCoverage === "number" && (
+                      <Text style={{ marginTop: 5, color: "#64748B", fontSize: 11.5 }}>
+                        Evidence-adjusted coverage: {note.analysis.coverageScores.confidenceAdjustedWeightedCoverage}%
+                      </Text>
+                    )}
+                    <TouchableOpacity
+                      onPress={openContextEditor}
+                      activeOpacity={0.75}
+                      style={{ alignSelf: "flex-start", marginTop: 10 }}
+                    >
+                      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "700" }}>
+                        Wrong subject or lesson? Correct it
+                      </Text>
+                    </TouchableOpacity>
                   </View>
 
                   {/* ── Main Performance Summary Row (Quiz Screenshot 6 Inspired) ── */}
@@ -795,8 +941,8 @@ export default function NoteDetail() {
                       </Svg>
                       <View style={styles.heroScoreRingInner}>
                         <Text style={[styles.heroScorePct, { color: scoreColor }]}>{score}%</Text>
-                        <Text style={styles.heroScoreLabel}>Curriculum</Text>
-                        <Text style={styles.heroScoreLabel}>Mastery</Text>
+                        <Text style={styles.heroScoreLabel}>{isLessonCoverage ? "Curriculum" : "This Note"}</Text>
+                        <Text style={styles.heroScoreLabel}>{isLessonCoverage ? "Coverage" : "Coverage"}</Text>
                       </View>
                     </View>
 
@@ -833,7 +979,7 @@ export default function NoteDetail() {
                         >
                           {attentionCount}
                         </Text>
-                        <Text style={styles.metricTileLbl}>GAPS</Text>
+                        <Text style={styles.metricTileLbl}>{isLessonCoverage ? "GAPS" : "NOT FOUND"}</Text>
                       </View>
 
                       {/* Tile 3: Mastery Level */}
@@ -845,15 +991,15 @@ export default function NoteDetail() {
                         <Text style={styles.metricTileLbl}>COVERAGE</Text>
                       </View>
 
-                      {/* Tile 4: Exam Readiness */}
+                      {/* Tile 4: Revision priority from note coverage */}
                       <View style={styles.metricGridTile}>
                         <View style={[styles.metricTileIcon, { backgroundColor: "#EFF6FF" }]}>
                           <TrendingUp size={13} color="#2563EB" strokeWidth={2.4} />
                         </View>
                         <Text style={styles.metricTileVal} numberOfLines={1}>
-                          {note.analysis.examReadiness?.rating || (score >= 75 ? "Great" : "Needs Work")}
+                          {note.analysis.examReadiness?.revisionPriority || "Not assessed"}
                         </Text>
-                        <Text style={styles.metricTileLbl}>READINESS</Text>
+                        <Text style={styles.metricTileLbl}>REVISION</Text>
                       </View>
                     </View>
                   </View>
@@ -868,7 +1014,7 @@ export default function NoteDetail() {
                       {score >= 80
                         ? `Outstanding work! You've mastered ${coveredCount} syllabus outcomes. Complete quick revision cards to solidify full retention.`
                         : score >= 50
-                        ? `Great start! You've evidenced ${coveredCount} core concepts. Focus on the ${attentionCount} identified learning gaps below to boost exam readiness.`
+                        ? `Great start! You've evidenced ${coveredCount} core concepts. Focus on the ${attentionCount} note-coverage findings below before you revise this lesson.`
                         : `Building momentum! Your notes cover ${coveredCount} foundational concepts. Use the personalized study flashcards and structured notes to fill the missing syllabus areas.`}
                     </Text>
                   </View>
@@ -1065,7 +1211,7 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 3. Learning Gaps ── */}
+            {/* ── 3. Note Coverage Findings ── */}
             {note.analysis.learningGaps.length > 0 && (
               <View
                 style={styles.section}
@@ -1077,7 +1223,7 @@ export default function NoteDetail() {
                 <View style={styles.gapsSectionHeader}>
                   <View style={styles.gapsSectionTitleWrap}>
                     <AlertCircle size={16} color={colors.primary} />
-                    <Text style={styles.gapsSectionTitle}>Learning Gaps</Text>
+                    <Text style={styles.gapsSectionTitle}>Not Covered in This Note</Text>
                   </View>
                   <View style={styles.gapCountPill}>
                     <Text style={styles.gapCountPillText}>{note.analysis.learningGaps.length}</Text>
@@ -1085,7 +1231,9 @@ export default function NoteDetail() {
                 </View>
 
                 <Text style={styles.sectionSubtitle}>
-                  Concepts from the official curriculum not adequately covered in your notes
+                  {note.analysis.noteScope?.scope === "complete_lesson_note"
+                    ? "These are curriculum concepts not found in this lesson note. They are not assumed to be knowledge gaps."
+                    : "This upload appears to be a partial or specialised note. These concepts were not found here and are not assumed to be knowledge gaps."}
                 </Text>
 
                 <View style={styles.gapsList}>
@@ -1109,14 +1257,16 @@ export default function NoteDetail() {
                       ? matchedExplainable.missingConcepts.map((c) => c.name)
                       : gap.concept.split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
+                  const relevantFinding = note?.analysis?.conceptFindings?.find((finding) =>
+                    missingList.some((name) =>
+                      name.toLowerCase() === finding.conceptName.toLowerCase()
+                    )
+                  );
+
                   const statusText =
-                    matchedExplainable?.status === "not_achieved"
-                      ? "Not Achieved"
-                      : matchedExplainable?.status === "partially_achieved"
-                      ? "Partially Achieved"
-                      : isHigh
-                      ? "Not Achieved"
-                      : "Partially Achieved";
+                    matchedExplainable?.findingStatus === "confirmed_learning_gap"
+                      ? "Confirmed learning gap"
+                      : "Not covered in this note";
 
                   return (
                     <View key={i} style={[styles.gapCard, { borderLeftColor: borderColor }]}>
@@ -1174,6 +1324,60 @@ export default function NoteDetail() {
                               </View>
                             </View>
                           ) : null}
+
+                          {relevantFinding && (
+                            <View style={styles.gapDetailBlock}>
+                              <View style={styles.gapDetailLabelRow}>
+                                <Info size={12} color="#64748B" />
+                                <Text style={styles.gapDetailLabel}>How this finding was made</Text>
+                              </View>
+                              <Text style={styles.gapRecommendationText}>
+                                Decision confidence: {Math.round(relevantFinding.decisionConfidence * 100)}% · {relevantFinding.matchMethod === "semantic" ? "semantic review" : relevantFinding.matchMethod === "keyword" ? "keyword match" : "no keyword or semantic evidence found"}
+                              </Text>
+                              {(relevantFinding.curriculumCategory || relevantFinding.importanceWeight) && (
+                                <Text style={styles.gapRecommendationText}>
+                                  Curriculum basis: {relevantFinding.curriculumCategory || "concept"}
+                                  {relevantFinding.importanceWeight ? ` · priority ${relevantFinding.importanceWeight}/5` : ""}
+                                  {relevantFinding.isFrequentlyTested ? " · frequently tested" : ""}
+                                </Text>
+                              )}
+                              {relevantFinding.evidence ? (
+                                <View style={styles.gapEvidenceQuote}>
+                                  <Text style={styles.gapEvidenceQuoteText}>{relevantFinding.evidence}</Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          )}
+
+                          {relevantFinding && !relevantFinding.found && (
+                            <View style={{ gap: 8 }}>
+                              <Text style={styles.gapDetailLabel}>
+                                Do you understand this concept even though it was not in this note?
+                              </Text>
+                              <TouchableOpacity
+                                style={styles.gapStudyBtn}
+                                disabled={verifyingConceptId === relevantFinding.conceptId}
+                                onPress={() => verifyConceptFinding(relevantFinding.conceptId, "understood")}
+                                activeOpacity={0.85}
+                              >
+                                <Text style={styles.gapStudyBtnText}>
+                                  {relevantFinding.studentVerification === "understood" ? "Marked: I understand this" : "I understand this"}
+                                </Text>
+                                <CheckCircle2 size={15} color="#FFFFFF" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.gapStudyBtn}
+                                disabled={verifyingConceptId === relevantFinding.conceptId}
+                                onPress={() => verifyConceptFinding(relevantFinding.conceptId, "needs_help")}
+                                activeOpacity={0.85}
+                              >
+                                <Text style={styles.gapStudyBtnText}>
+                                  {relevantFinding.studentVerification === "needs_help" ? "Marked: I need help" : "I need help with this"}
+                                </Text>
+                                <AlertCircle size={15} color="#FFFFFF" />
+                              </TouchableOpacity>
+                            </View>
+                          )}
 
                           {/* Missing concepts — numbered */}
                           {missingList.length > 0 && (
@@ -1233,7 +1437,7 @@ export default function NoteDetail() {
                     <Text style={styles.viewAllGapsText}>
                       {gapsExpanded
                         ? "Show less"
-                        : `View all ${note.analysis.learningGaps.length} gaps`}
+                        : `View all ${note.analysis.learningGaps.length} findings`}
                     </Text>
                     {gapsExpanded
                       ? <ChevronUp size={14} color={colors.primary} />
@@ -1249,7 +1453,7 @@ export default function NoteDetail() {
                     <Text style={styles.gapDisclaimerTitle}>About this analysis</Text>
                   </View>
                   <Text style={styles.gapDisclaimerText}>
-                    Gaps are estimated by comparing your uploaded notes with curriculum standards. Gaps highlight concepts not sufficiently evidenced in your notes and do not necessarily indicate a lack of understanding.
+                    This analysis compares your uploaded note with curriculum concepts. A concept not found here may be on another page or may still be understood by you; it is not treated as a confirmed learning gap.
                   </Text>
                 </View>
               </View>
@@ -1304,6 +1508,7 @@ export default function NoteDetail() {
               const missingConcepts = note.analysis.missingConcepts || [];
               const totalCount = coveredConcepts.length + missingConcepts.length;
               const score = note.analysis.overallCompleteness;
+              const isLessonCoverage = note.analysis.coverageScores?.coverageScope === "lesson_coverage";
               const scoreColor = getCompletenessColor(score);
               const coveredPct = totalCount > 0 ? Math.round((coveredConcepts.length / totalCount) * 100) : 0;
               const missingPct = totalCount > 0 ? 100 - coveredPct : 0;
@@ -1313,7 +1518,7 @@ export default function NoteDetail() {
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionTitleRow}>
                       <BookOpen size={17} color={colors.primaryBlack} />
-                      <Text style={styles.sectionTitle}>Curriculum Coverage</Text>
+                      <Text style={styles.sectionTitle}>{isLessonCoverage ? "Curriculum Coverage" : "Note Coverage"}</Text>
                     </View>
                     <View style={[styles.coverageScoreBadge, { backgroundColor: `${scoreColor}15`, borderColor: `${scoreColor}40` }]}>
                       <Text style={[styles.coverageScoreText, { color: scoreColor }]}>{score}%</Text>
@@ -1321,7 +1526,9 @@ export default function NoteDetail() {
                   </View>
 
                   <Text style={styles.sectionSubtitle}>
-                    {totalCount} total concepts mapped to official curriculum standards
+                    {isLessonCoverage
+                      ? `${totalCount} total concepts mapped to official curriculum standards`
+                      : `${totalCount} curriculum concepts checked against this upload only`}
                   </Text>
 
                   {/* ── Multi-Segment Visual Concept Coverage Bar (Improvement 8) ── */}
@@ -1643,6 +1850,71 @@ export default function NoteDetail() {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={contextEditorOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !contextSaving && setContextEditorOpen(false)}
+      >
+        <View style={styles.contextModalBackdrop}>
+          <View style={styles.contextModalCard}>
+            <Text style={styles.contextModalTitle}>Correct note context</Text>
+            <Text style={styles.contextModalHelp}>
+              This reruns the analysis with your selected syllabus context. Materials from the old match will be removed.
+            </Text>
+
+            <Text style={styles.contextFieldLabel}>Subject</Text>
+            <TextInput
+              value={contextSubject}
+              onChangeText={setContextSubject}
+              placeholder="e.g. Science"
+              style={styles.contextTextInput}
+              editable={!contextSaving}
+            />
+            <Text style={styles.contextFieldLabel}>Grade</Text>
+            <View style={styles.contextGradeRow}>
+              {([10, 11] as const).map((grade) => (
+                <TouchableOpacity
+                  key={grade}
+                  disabled={contextSaving}
+                  onPress={() => setContextGrade(contextGrade === grade ? undefined : grade)}
+                  style={[styles.contextGradeButton, contextGrade === grade && styles.contextGradeButtonSelected]}
+                >
+                  <Text style={[styles.contextGradeText, contextGrade === grade && styles.contextGradeTextSelected]}>
+                    Grade {grade}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.contextFieldLabel}>Topic or lesson name</Text>
+            <TextInput
+              value={contextTopic}
+              onChangeText={setContextTopic}
+              placeholder="e.g. Photosynthesis"
+              style={styles.contextTextInput}
+              editable={!contextSaving}
+            />
+
+            <View style={styles.contextModalActions}>
+              <TouchableOpacity
+                disabled={contextSaving}
+                onPress={() => setContextEditorOpen(false)}
+                style={styles.contextCancelButton}
+              >
+                <Text style={styles.contextCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={contextSaving}
+                onPress={saveCorrectedContext}
+                style={styles.contextSaveButton}
+              >
+                {contextSaving ? <ActivityIndicator color="#fff" /> : <Text style={styles.contextSaveText}>Save & Reanalyse</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1651,6 +1923,65 @@ export default function NoteDetail() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F9FB" },
+  contextModalBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.48)",
+  },
+  contextModalCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+  },
+  contextModalTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  contextModalHelp: { marginTop: 6, marginBottom: 16, fontSize: 12, lineHeight: 18, color: "#64748B" },
+  contextFieldLabel: { marginBottom: 6, fontSize: 12, fontWeight: "700", color: "#334155" },
+  contextTextInput: {
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 10,
+    color: "#0F172A",
+  },
+  contextGradeRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  contextGradeButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  contextGradeButtonSelected: { borderColor: colors.primary, backgroundColor: "#FFF7ED" },
+  contextGradeText: { fontSize: 13, fontWeight: "700", color: "#475569" },
+  contextGradeTextSelected: { color: colors.primary },
+  contextModalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 6 },
+  contextCancelButton: { paddingHorizontal: 14, paddingVertical: 11 },
+  contextCancelText: { fontSize: 13, fontWeight: "700", color: "#475569" },
+  contextSaveButton: {
+    minWidth: 142,
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+  },
+  contextSaveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  ocrWarningCard: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+    backgroundColor: "#FFFBEB",
+  },
+  ocrWarningTitle: { fontSize: 14, fontWeight: "800", color: "#92400E" },
+  ocrWarningText: { marginTop: 3, fontSize: 12, lineHeight: 17, color: "#92400E" },
+  ocrWarningAction: { fontSize: 12, fontWeight: "800", color: "#B45309" },
   centerContainer: {
     flex: 1,
     justifyContent: "center",

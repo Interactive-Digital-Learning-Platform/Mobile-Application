@@ -98,6 +98,23 @@ quizClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+const addNotesBearerToken = async (config: any) => {
+  await _clerkReadyOrTimeout;
+  if (_getClerkToken) {
+    try {
+      const token = await _getClerkToken();
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    } catch {
+      // The protected Notes backend returns an authentication error if the
+      // device cannot restore its Clerk session.
+    }
+  }
+  return config;
+};
+
+notesClient.interceptors.request.use(addNotesBearerToken);
+notesAssetsClient.interceptors.request.use(addNotesBearerToken);
+
 quizClient.interceptors.response.use(
   (response) => response,
   (error) => {
