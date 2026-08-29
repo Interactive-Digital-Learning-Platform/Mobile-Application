@@ -1,12 +1,28 @@
 import { ComponentType } from "react";
 import { View } from "react-native";
-import { EquipmentRole, LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
-import { LabWorkspaceProps, ProbeInstrumentProps } from "@/types/lab";
+import {
+  benchScale,
+  BOX,
+  capacityScale,
+  EquipmentRole,
+  friendlyEquipmentName,
+  LAB_EQUIPMENT_CATALOG,
+} from "@/constants/lab/equipment.constants";
+import { rendersAsTransferInstrument } from "@/constants/lab/transfer.constants";
+import { EquipmentInstanceType, LabWorkspaceProps, ProbeInstrumentProps } from "@/types/lab";
 import EquipmentContainer from "./equipment/EquipmentContainer";
 import PhMeterInstrument from "./equipment/PhMeterInstrument";
 import PhysicsInstrument from "./equipment/PhysicsInstrument";
+import PourStream from "./effects/PourStream";
+import DropperInstrument from "./transfer/DropperInstrument";
 
 const catalogEntry = (equipmentType: string) => LAB_EQUIPMENT_CATALOG.find((e) => e.key === equipmentType);
+
+// Bench-local point near the top-centre (spout / rim) of an instance's rendered box.
+const vesselMouth = (instance: EquipmentInstanceType) => {
+  const outerWidth = BOX * benchScale(instance.equipmentType) + 38;
+  return { x: instance.position.x + outerWidth / 2, y: instance.position.y + 6 };
+};
 
 // Role-keyed dispatch: a probe-role instance renders its own dedicated instrument component
 // instead of the generic EquipmentContainer. Wiring a future probe (e.g. a thermometer) is just
@@ -28,11 +44,22 @@ export default function LabWorkspace({
   probeMeasure,
   probeDetach,
   hoveredEquipmentId,
+  onHoverChange,
   resolveDropTarget,
   onPour,
+  pourEvent,
+  probeTargetId,
+  onProbeTargetChange,
+  onTransferInsert,
+  onTransferActivate,
   physicsEquipment,
   physicsDispatch,
 }: LabWorkspaceProps) {
+  const pourSource = pourEvent ? equipment.find((e) => e.instanceId === pourEvent.sourceId) : undefined;
+  const pourTarget = pourEvent ? equipment.find((e) => e.instanceId === pourEvent.targetId) : undefined;
+  // Tilt the source toward the target: target on the right → tip clockwise (+), on the left → (−).
+  const pourAngle = pourSource && pourTarget && pourTarget.position.x >= pourSource.position.x ? 24 : -24;
+
   return (
     <View style={{ flex: 1, position: "relative" }}>
       {(physicsEquipment || []).map((instance) => {
@@ -50,9 +77,30 @@ export default function LabWorkspace({
       })}
       {equipment.map((instance) => {
         const entry = catalogEntry(instance.equipmentType);
-        const label = entry?.label || instance.equipmentType;
+        const label = friendlyEquipmentName(equipment, instance.instanceId) || entry?.label || instance.equipmentType;
         const Visual = entry?.Visual;
         const role = entry?.role || "container";
+
+        // Transfer instruments that have a dedicated bench component (dropper today; pipette /
+        // burette when built). Others fall through to EquipmentContainer below.
+        if (rendersAsTransferInstrument(instance.equipmentType)) {
+          return (
+            <DropperInstrument
+              key={instance.instanceId}
+              id={instance.instanceId}
+              label={label}
+              instance={instance}
+              chemicalMap={chemicalMap}
+              registerRef={registerEquipmentRef(instance.instanceId)}
+              resolveDropTarget={resolveDropTarget}
+              onMove={onMoveEquipment}
+              onInspect={() => onInspectEquipment(instance.instanceId)}
+              onHoverChange={(cid) => onHoverChange?.(cid)}
+              onInsert={(dropperId, containerId) => onTransferInsert?.(dropperId, containerId)}
+              onActivate={(dropperId) => onTransferActivate?.(dropperId)}
+            />
+          );
+        }
 
         const Instrument = PROBE_INSTRUMENTS[role];
         if (Instrument && entry?.probeOffset) {
@@ -69,6 +117,7 @@ export default function LabWorkspace({
               onInspect={() => onInspectEquipment(instance.instanceId)}
               probeMeasure={probeMeasure}
               probeDetach={probeDetach}
+              onTargetChange={onProbeTargetChange}
             />
           );
         }
@@ -82,14 +131,19 @@ export default function LabWorkspace({
             id={instance.instanceId}
             label={label}
             Visual={Visual}
+            scale={benchScale(instance.equipmentType) * capacityScale(instance.equipmentType, instance.capacity)}
+            isPouringOut={pourEvent?.sourceId === instance.instanceId}
+            pourAngle={pourAngle}
             position={instance.position}
             chemicals={instance.contents.map((c) => chemicalMap[c.chemical]).filter(Boolean)}
             contents={instance.contents}
-            capacity={entry?.capacity}
+            observableState={instance.observableState}
+            capacity={instance.capacity ?? entry?.capacity}
             heated={instance.isHeated}
             isHeatSource={role === "heat_source"}
             temperature={instance.temperature}
             isDropTarget={hoveredEquipmentId === instance.instanceId}
+            isMeasuring={probeTargetId === instance.instanceId}
             onMove={onMoveEquipment}
             registerLiquidRegion={registerLiquidRegion}
             resolveDropTarget={resolveDropTarget}
@@ -101,6 +155,11 @@ export default function LabWorkspace({
           />
         );
       })}
+
+      {/* Pour stream on top — connects the tilted source's spout to the target's rim. */}
+      {pourEvent && pourSource && pourTarget && (
+        <PourStream key={pourEvent.nonce} from={vesselMouth(pourSource)} to={vesselMouth(pourTarget)} color={pourEvent.color} />
+      )}
     </View>
   );
 }

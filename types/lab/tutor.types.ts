@@ -46,6 +46,27 @@ export type LabReportType = {
     suggestions: string[];
   };
   conceptsToImprove: string[];
+  // Curriculum placement of the whole practical — "this practical is covered by <lesson>, pp. A–B
+  // of the <textbook>". Shown regardless of performance. null until the curriculum map is synced.
+  practicalReference?: {
+    bookTitle: string | null;
+    lessonTitle: string;
+    sectionTitle: string | null;
+    pageStart: number | null;
+    pageEnd: number | null;
+    displayText: string;
+  } | null;
+  // Extra textbook pages for the specific steps the student struggled on. Empty when they didn't
+  // struggle, or until the curriculum map is synced.
+  followUpReading?: {
+    stepId: number | null;
+    stepTitle: string | null;
+    bookTitle: string | null;
+    lessonTitle: string;
+    sectionTitle: string | null;
+    pageStart: number | null;
+    pageEnd: number | null;
+  }[];
   finalUnderstandingAssessment: string | null;
   score: number;
   totalTime: number;

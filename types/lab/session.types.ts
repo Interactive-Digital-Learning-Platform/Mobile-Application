@@ -69,15 +69,20 @@ export type SessionType = {
   labRunId?: string | null;
 };
 
+// Chemical selection is non-blocking (like equipment selection): every submission advances the
+// student into the workspace. `complete` is purely informational now — it drives the tone of the
+// transient feedback note, not whether the student may proceed.
 export type SelectionResultType =
-  | { complete: true; correct: string[]; unnecessaryCount: 0; missingCount: 0; missingBuildsCount: 0; nextPhase: string }
+  | { complete: true; correct: string[]; unnecessaryCount?: 0; missingCount: 0; missingBuildsCount: 0; nextPhase: string; alreadyEntered?: boolean }
   | {
       complete: false;
       correct: string[];
       unnecessaryItems: string[];
       missingCount: number;
       missingBuildsCount: number;
-      hint: string;
+      hint: string | null;
+      nextPhase?: string;
+      alreadyEntered?: boolean;
     };
 
 // Equipment selection is a learning/preparation step, not a gate — every submission (with at
@@ -110,11 +115,31 @@ export type LogStepActionRequestType = {
 // Client-side only — an AI hint queued in the workspace's Hint Center (see HintCenterPanel).
 // Built from an InterventionType.hint (auto-triggered by mistakes) or requestHint's hintText
 // (student-requested); never sent over the network itself.
+// Non-answer recovery hint from the backend (currently only "open_material_library"). Set when a
+// required material is genuinely absent from the lab — lets the Hint Center offer an action
+// button. Never carries the material's name/id.
+export type HintSuggestedActionType = "open_material_library" | null;
+
+// A pointer into the ingested Grade 10/11 curriculum ("read <lesson>, pp. X–Y of <book>"),
+// attached by the backend to hint responses (level >= 2) and to proactive interventions on a
+// repeated struggle. Precomputed offline — see the lab service's curriculumReferenceService.js.
+// Not an answer: it says where to read, never what to do.
+export type CurriculumReferenceType = {
+  bookTitle: string | null;
+  lessonTitle: string;
+  sectionTitle: string | null;
+  pageStart: number | null;
+  pageEnd: number | null;
+  displayText: string;
+};
+
 export type HintNotificationType = {
   id: string;
   message: string;
   timestamp: string;
   read: boolean;
+  suggestedAction?: HintSuggestedActionType;
+  curriculumReference?: CurriculumReferenceType | null;
 };
 
 // Physics sibling of ReactionResultType — the bench-computed answer for a measurement microStep
@@ -153,6 +178,10 @@ export type HintResponseType = {
   stepId: number;
   microStepId: number | null;
   helpAvailable: boolean;
+  suggestedAction?: HintSuggestedActionType;
+  // Textbook lesson/page pointer — present from hint level 2 when a confident curriculum match
+  // exists, null otherwise (e.g. a Grade 11 practical before the Grade 11 textbook is ingested).
+  curriculumReference?: CurriculumReferenceType | null;
 };
 
 // POST /api/sessions/:id/help — the answer reveal, only reachable after hint level 3. Chemicals
@@ -162,5 +191,11 @@ export type HelpRevealType = {
   microStepId: number | null;
   equipment: string[];
   chemicals: { name: string; symbol: string }[];
+  // The exact action to perform, derived server-side from the hidden requirements + the live
+  // bench (correct container instance, its contents, transfer tool, quantity). Falls back to
+  // `explanation` when nothing more specific can be synthesised.
+  actionInstruction: string | null;
+  // Ordered short sequence for multi-action tasks (fill → move → dispense); [] otherwise.
+  actionSteps: string[];
   explanation: string;
 };

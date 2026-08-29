@@ -13,12 +13,16 @@ type Args = {
   // instance, if any, the item was released on top of. Reuses the same drop-target registry
   // ChemicalBottle already hit-tests against, since every EquipmentContainer registers itself
   // there too. Omit for items that only reposition (e.g. probe-role instruments).
-  resolveDropTarget?: (x: number, y: number) => Promise<string | null>;
+  resolveDropTarget?: (x: number, y: number, excludeId?: string) => Promise<string | null>;
   // Called once a *different* instance is resolved under the release point; return true if that
   // counts as a completed drop (the item snaps back to its pre-drag position instead of moving —
   // pouring doesn't relocate the source) or false to fall back to a normal reposition (e.g. the
   // source had nothing to pour).
   onDrop?: (targetId: string) => boolean;
+  // Fired on every pan release regardless of drop resolution — e.g. the dropper uses it to mark
+  // itself "active" (open its action panel) so a near-stationary drag that isn't recognised as a
+  // clean Tap still opens the panel.
+  onRelease?: () => void;
 };
 
 // Shared "draggable bench item body" behavior, extracted from EquipmentContainer so probe-role
@@ -26,7 +30,7 @@ type Args = {
 // Callers still compose their own tap/longPress gestures locally via Gesture.Race(panGesture, ...)
 // — this hook only owns the pan/reposition piece, matching how EquipmentShelfItem/ChemicalBottle
 // already compose gestures inline rather than sharing a wrapper component.
-export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, resolveDropTarget, onDrop }: Args) => {
+export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, resolveDropTarget, onDrop, onRelease }: Args) => {
   const translateX = useSharedValue(position.x);
   const translateY = useSharedValue(position.y);
   const lastCheckTs = useSharedValue(0);
@@ -37,7 +41,9 @@ export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, reso
   // Mirrors ChemicalBottle's own async handleDrop — resolveDropTarget/onDrop are plain JS
   // functions (not worklets), so this runs on the JS thread via runOnJS below.
   const handleDragEnd = async (absoluteX: number, absoluteY: number) => {
-    const targetId = resolveDropTarget ? await resolveDropTarget(absoluteX, absoluteY) : null;
+    // Exclude self: this item is registered as a drop target too, and it's always under its own
+    // release point — without this the drop would non-deterministically resolve to itself.
+    const targetId = resolveDropTarget ? await resolveDropTarget(absoluteX, absoluteY, id) : null;
     const dropped = targetId && targetId !== id && onDrop ? onDrop(targetId) : false;
     if (dropped) {
       translateX.value = withSpring(position.x);
@@ -70,6 +76,7 @@ export const useDraggableBenchItem = ({ id, position, onMove, onDragChange, reso
         runOnJS(onMove)(id, { x: translateX.value, y: translateY.value });
       }
       if (onDragChange) runOnJS(onDragChange)();
+      if (onRelease) runOnJS(onRelease)();
     });
 
   const animatedStyle = useAnimatedStyle(() => ({

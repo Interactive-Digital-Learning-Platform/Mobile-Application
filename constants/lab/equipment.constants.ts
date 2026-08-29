@@ -262,12 +262,150 @@ export const LAB_EQUIPMENT_CATALOG: EquipmentCatalogItem[] = [
   },
 ];
 
+// Capability tags per equipment type — mirrors the backend's src/data/equipmentCapabilities.js.
+// Behaviour is driven by capability, never by experiment title/id. A micro-step's hidden
+// expectedTransfer.method names a capability; here it decides how an instance is rendered/handled.
+export const EQUIPMENT_CAPABILITIES: Record<string, string[]> = {
+  dropper: ["small_quantity_transfer"],
+  pipette: ["accurate_volume_transfer", "measured_transfer"],
+  burette: ["controlled_volume_delivery", "measured_transfer"],
+  beaker: ["bulk_transfer", "mixing_vessel"],
+  flask: ["bulk_transfer", "mixing_vessel"],
+  test_tube: ["bulk_transfer", "small_scale_vessel"],
+  measuring_cylinder: ["volume_measurement"],
+  ph_meter: ["ph_measurement"],
+  thermometer: ["temperature_measurement"],
+  balance: ["mass_measurement"],
+  burner: ["heating"],
+  stirrer: ["mixing"],
+};
+export const capabilitiesOf = (equipmentType: string): string[] => EQUIPMENT_CAPABILITIES[equipmentType] ?? [];
+export const hasCapability = (equipmentType: string, capability: string): boolean =>
+  capabilitiesOf(equipmentType).includes(capability);
+// Capabilities that make an instrument a fill → move → dispense liquid-transfer tool.
+export const TRANSFER_CAPABILITIES = ["small_quantity_transfer", "accurate_volume_transfer", "controlled_volume_delivery"];
+export const isTransferCapable = (equipmentType: string): boolean =>
+  capabilitiesOf(equipmentType).some((c) => TRANSFER_CAPABILITIES.includes(c));
+
 // --- EquipmentContainer bench sizing ---
 // Bench render size for every container-role instance. `BOX` is the art's footprint; the liquid
 // hitbox scales its height by fillLevel so it roughly tracks the SVG-rendered liquid.
-export const BOX = 88;
-export const VISUAL_SIZE = 58;
+export const BOX = 112;
+export const VISUAL_SIZE = 76;
 export const MAX_LIQUID_HEIGHT_PCT = 60;
+
+// Vessel sizes the student can pick when placing a container (mL). Types not listed are
+// fixed-size. The middle option is the sensible default. `containerCapacityOptions` returns [] for
+// a type with no choice (so the workspace places it straight away, no size prompt).
+export const CONTAINER_CAPACITY_OPTIONS: Record<string, number[]> = {
+  test_tube: [5, 10, 20, 30],
+  beaker: [50, 100, 250, 500],
+  flask: [100, 250, 500],
+  measuring_cylinder: [10, 25, 50, 100],
+};
+export const containerCapacityOptions = (equipmentType: string): number[] =>
+  CONTAINER_CAPACITY_OPTIONS[equipmentType] ?? [];
+export const defaultContainerCapacity = (equipmentType: string): number | undefined => {
+  const opts = CONTAINER_CAPACITY_OPTIONS[equipmentType];
+  return opts ? opts[Math.floor(opts.length / 2)] : undefined;
+};
+
+// A gentle capacity → render-size influence, so a 5 mL tube looks smaller than a 30 mL one
+// without the difference being cartoonish. 1.0 when the type has no size choice.
+export const capacityScale = (equipmentType: string, capacity: number | null | undefined): number => {
+  const opts = CONTAINER_CAPACITY_OPTIONS[equipmentType];
+  if (!opts || capacity == null) return 1;
+  const lo = opts[0];
+  const hi = opts[opts.length - 1];
+  if (hi === lo) return 1;
+  const t = Math.max(0, Math.min(1, (capacity - lo) / (hi - lo)));
+  return 0.82 + t * 0.36; // 0.82x … 1.18x
+};
+
+// Many O/L reagents (HCl, NaOH, water...) are curated with a near-white `color`, which renders as
+// an invisible fill in a thin tube/vessel. Substitute a faint blue-grey so a colourless liquid
+// still reads as "there's liquid in here" (spec: show a subtle fill boundary even when colourless).
+const NEAR_WHITE = new Set(["#FFFFFF", "#FFF", "#F2F2F2", "#F5F5F5", "#FAFAFA", "#F8FAFC", "#EAF6FF", "#E8E8E8", "#F5F5DC"]);
+export const visibleLiquidColor = (hex: string | null | undefined): string =>
+  hex && !NEAR_WHITE.has(hex.toUpperCase()) ? hex : "#AFC9E8";
+
+// A colourless solution still has to read as "there IS liquid in here" (spec §4): a faint tint at
+// low opacity, never fully transparent.
+export const COLOURLESS_LIQUID = { color: "#DCEBF7", opacity: 0.32 };
+
+// How a single chemical looks as the substance in a vessel — prefers the backend-authored
+// `appearance`, falls back to a category/state guess. Mirrors src/data/chemicalAppearance.js's
+// fallbackAppearance. Used for the dropper's held liquid and for legacy LabRuns whose containers
+// have no observableState yet.
+export const resolveLiquidAppearance = (
+  chemical: { color?: string; state?: string; appearance?: { solutionColor?: string | null; opacity?: number | null } | null } | null | undefined
+): { color: string; opacity: number } => {
+  if (!chemical) return { ...COLOURLESS_LIQUID };
+  const ap = chemical.appearance;
+  if (ap?.solutionColor) return { color: ap.solutionColor, opacity: ap.opacity ?? 0.85 };
+  if (chemical.state === "solid") return { color: chemical.color || "#EFEFEF", opacity: 1 };
+  if (chemical.state === "gas") return { color: chemical.color || "#EDEDED", opacity: 0.14 };
+  const c = (chemical.color || "").toUpperCase();
+  if (!c || NEAR_WHITE.has(c)) return { ...COLOURLESS_LIQUID };
+  return { color: chemical.color as string, opacity: 0.85 };
+};
+
+// The observable appearance the bench should render for a container — the authoritative
+// server-computed observableState when present, otherwise the last-added chemical's own
+// appearance (legacy fallback), otherwise "empty".
+export const resolveContainerAppearance = (
+  observableState: { liquidColor?: string | null; opacity?: number | null; hasPrecipitate?: boolean; precipitateColor?: string | null; cloudiness?: number } | null | undefined,
+  chemicals: ({ color?: string; state?: string; appearance?: { solutionColor?: string | null; opacity?: number | null } | null } | undefined)[]
+): { color: string; opacity: number; hasPrecipitate: boolean; precipitateColor: string | null; cloudiness: number } | null => {
+  if (observableState?.liquidColor) {
+    return {
+      color: observableState.liquidColor,
+      opacity: observableState.opacity ?? 0.8,
+      hasPrecipitate: !!observableState.hasPrecipitate,
+      precipitateColor: observableState.precipitateColor ?? null,
+      cloudiness: observableState.cloudiness ?? 0,
+    };
+  }
+  const present = chemicals.filter(Boolean);
+  if (present.length === 0) return null;
+  const look = resolveLiquidAppearance(present[present.length - 1]);
+  return { color: look.color, opacity: look.opacity, hasPrecipitate: false, precipitateColor: null, cloudiness: 0 };
+};
+
+// Believable relative bench sizes (spec: "test tubes, droppers, pH meters, burettes... should
+// have believable relative scale"). Multiplier on BOX/VISUAL_SIZE in EquipmentContainer. Probe
+// instruments (pH meter) are excluded — their probe-tip offset is calibrated to a fixed size.
+// Anything not listed renders at 1.0.
+export const BENCH_SIZE_SCALE: Record<string, number> = {
+  dropper: 0.6, // XS
+  pipette: 0.78, // S
+  test_tube: 0.82, // S
+  thermometer: 0.82, // S
+  stirrer: 0.9,
+  beaker: 1, // M
+  flask: 1, // M
+  burner: 1, // M
+  measuring_cylinder: 1.12,
+  balance: 1.2, // L
+  burette: 1.5, // XL / tall
+};
+export const benchScale = (equipmentType: string) => BENCH_SIZE_SCALE[equipmentType] ?? 1;
+
+// Friendly per-instance identity — "Test Tube A" / "Test Tube B" when more than one of a type is
+// on the bench, plain "Test Tube" otherwise. Lets the inspect panel (and the AI tutor context)
+// refer to a specific instance. Order follows the instances array order.
+export const friendlyEquipmentName = (
+  instances: { instanceId: string; equipmentType: string }[],
+  instanceId: string
+): string => {
+  const target = instances.find((e) => e.instanceId === instanceId);
+  if (!target) return "";
+  const base = LAB_EQUIPMENT_CATALOG.find((e) => e.key === target.equipmentType)?.label || target.equipmentType;
+  const sameType = instances.filter((e) => e.equipmentType === target.equipmentType);
+  if (sameType.length <= 1) return base;
+  const idx = sameType.findIndex((e) => e.instanceId === instanceId);
+  return `${base} ${String.fromCharCode(65 + idx)}`;
+};
 
 // pH meter LED colors, probe timings, and thermometer scale constants live in
 // probes.constants.ts instead of here — this file imports PhMeterArt/ThermometerArt (for the

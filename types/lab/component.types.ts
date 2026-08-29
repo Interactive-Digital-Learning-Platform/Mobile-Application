@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { LucideIcon } from "lucide-react-native";
 import { SharedValue } from "react-native-reanimated";
 import { ChemicalType, ReactionResultType } from "./chemical.types";
-import { EquipmentContentType, EquipmentInstanceType, LastMeasurementType, PhysicsInstanceType } from "./lab-run.types";
+import { EquipmentContentType, EquipmentInstanceType, LastMeasurementType, ObservableStateType, PhysicsInstanceType } from "./lab-run.types";
 import { HelpRevealType, HintNotificationType, SessionHistoryFilterType, SessionHistoryItemType } from "./session.types";
 import {
   BiologyLearningQuestionType,
@@ -29,6 +29,13 @@ export type EquipmentVisualProps = {
   color?: string;
   liquidColor?: string;
   fillLevel?: number; // 0 (empty) - 1 (full), fraction of the vessel's usable height
+  // Fill opacity 0..1 — container art animates `liquidColor` AND this whenever they change, so a
+  // colourless solution (low opacity) → coloured reaction product (higher opacity) reads clearly.
+  liquidOpacity?: number;
+  // A suspended solid / precipitate sitting in the liquid — container art draws a hazier,
+  // settling band near the vessel floor in this colour (spec §9).
+  precipitateColor?: string | null;
+  cloudiness?: number; // 0..1 — how milky/turbid the liquid looks
   on?: boolean; // heat_source-role art only (BurnerArt) — whether it's actively lit. Ignored elsewhere.
   temperature?: number; // probe:temp-role art only (ThermometerArt) — instance.temperature in °C. Ignored elsewhere.
 };
@@ -58,13 +65,26 @@ export type LabWorkspaceProps = {
   onInspectEquipment: (id: string) => void;
   probeMeasure: (probeId: string, targetId: string, onOutcome?: (measurement: LastMeasurementType) => void) => void;
   probeDetach: (probeId: string) => void;
-  // Instance currently being hovered over by a dragged chemical bottle — drives the dashed
-  // highlight on that one EquipmentContainer. See ChemicalBottle's onHoverChange.
+  // Instance currently being hovered over by a dragged chemical bottle (or transfer instrument) —
+  // drives the dashed highlight on that one EquipmentContainer. See ChemicalBottle's onHoverChange.
   hoveredEquipmentId?: string | null;
+  onHoverChange?: (instanceId: string | null) => void;
+  // Liquid-transfer instruments (dropper) — released over a container, and "make this the one the
+  // transfer action panel acts on". See DropperInstrument / TransferActionSheet.
+  onTransferInsert?: (instrumentId: string, containerId: string) => void;
+  onTransferActivate?: (instrumentId: string) => void;
   // Same registry used to hit-test dragged chemical bottles (every EquipmentContainer registers
   // itself via registerEquipmentRef) — reused here so one container dragged onto another can pour.
   resolveDropTarget: (x: number, y: number) => Promise<string | null>;
   onPour: (sourceId: string, targetId: string) => void;
+  // Set for ~1s after a pour so LabWorkspace can tilt the source vessel and draw the connecting
+  // stream between the two instances (it knows both their positions; EquipmentContainer doesn't).
+  // `nonce` changes per pour so a repeat pour of the same pair re-triggers the animation.
+  pourEvent?: { sourceId: string; targetId: string; nonce: number; color: string } | null;
+  // Container currently under a probe (pH meter) — gets a distinct "being measured" ring — plus
+  // the setter the probe calls to report it.
+  probeTargetId?: string | null;
+  onProbeTargetChange?: (targetId: string | null) => void;
   // Physics (Mechanics) bench state — a parallel array to `equipment` above, rendered via
   // PhysicsInstrument instead of EquipmentContainer (see PhysicsInstrumentProps). Empty for a
   // Chemistry LabRun, which never populates this array.
@@ -85,6 +105,9 @@ export type ProbeInstrumentProps = {
   onInspect?: () => void;
   probeMeasure: (probeId: string, targetId: string, onOutcome?: (measurement: LastMeasurementType) => void) => void;
   probeDetach: (probeId: string) => void;
+  // Reports which container the probe is currently in / measuring (null when withdrawn) so the
+  // bench can highlight it — "which one is being measured". Purely visual.
+  onTargetChange?: (targetId: string | null) => void;
 };
 
 // Action dispatchers a PhysicsInstrument needs — grouped into one object (rather than one prop
@@ -195,6 +218,10 @@ export type HintCenterPanelProps = {
   // Set once the student has actually pressed Help for the current step — the revealed answer
   // stays visible in the panel from then on (not just a one-time toast).
   helpReveal: HelpRevealType | null;
+  // Shown as an "Open Material Library" button when a queued hint carries
+  // suggestedAction === "open_material_library" (a required material is missing from the lab).
+  // Reveals WHERE to act, not WHAT to add.
+  onOpenMaterialLibrary?: () => void;
 };
 
 export type EducationalInfoPanelProps = {
@@ -205,6 +232,9 @@ export type EducationalInfoPanelProps = {
 export type EquipmentInspectPanelProps = {
   instance: EquipmentInstanceType | null;
   chemicalMap: Record<string, ChemicalType>;
+  // Friendly per-instance identity ("Test Tube A") from friendlyEquipmentName — falls back to the
+  // catalog label when absent.
+  friendlyName?: string;
   onClose: () => void;
   // Long-press-to-inspect doubles as "select this equipment" — removing it from here (rather
   // than a separate selection UI) reuses that existing gesture instead of adding a new one.
@@ -229,9 +259,24 @@ export type EquipmentContainerProps = {
   id: string;
   label: string;
   Visual: ComponentType<EquipmentVisualProps>;
+  // Bench render scale (see BENCH_SIZE_SCALE) so a dropper and a burette have believable relative
+  // sizes. Multiplies BOX/VISUAL_SIZE; overlays and the liquid hitbox are %-based so they follow.
+  scale?: number;
+  // Set on the SOURCE vessel for the ~800ms of a pour — it tilts toward the target by `pourAngle`
+  // degrees (sign = pour direction), then settles back. The connecting stream is drawn by
+  // LabWorkspace, which knows both vessels' positions.
+  isPouringOut?: boolean;
+  pourAngle?: number;
+  // A probe (pH meter) is resting in / measuring this container — a distinct pulsing ring so the
+  // student can see which vessel the reading belongs to.
+  isMeasuring?: boolean;
   position: { x: number; y: number };
   chemicals: ChemicalType[];
   contents: EquipmentContentType[];
+  // Server-authoritative observable appearance of the current contents (colour after any
+  // reaction / indicator result). The container renders this; it does not derive colour from
+  // `chemicals` itself. Absent → falls back to the last chemical's own appearance.
+  observableState?: ObservableStateType;
   capacity?: number;
   heated: boolean;
   isHeatSource: boolean;

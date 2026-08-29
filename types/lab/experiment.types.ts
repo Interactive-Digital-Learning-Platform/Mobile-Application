@@ -97,6 +97,75 @@ export type RequiredChemicalInfoType = {
   unit: string | null;
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DEV ONLY — full practical walkthrough (GET /api/experiments/:id/walkthrough)
+//
+// The complete solution to a practical, including every answer-bearing field the normal
+// endpoints withhold (expected equipment/chemicals, exact answers, hint ladders, transfer
+// specs). Backed by a dev-gated endpoint that responds 404 in production. Consumed only by
+// components/lab/dev/DevWalkthroughOverlay. Remove this block with that component before shipping.
+// ─────────────────────────────────────────────────────────────────────────────
+export type WalkthroughEquipmentType = { key: string; name: string };
+
+export type WalkthroughChemicalType = {
+  name: string;
+  symbol: string;
+  formula: string | null;
+  state?: string;
+  color?: string;
+  quantity?: number | null;
+  unit?: string | null;
+};
+
+export type WalkthroughHintType = { level: number; text: string };
+
+export type WalkthroughMicroStepType = {
+  microStepId: number;
+  studentPrompt: string;
+  expectedIntent: string;
+  expectedEquipment: WalkthroughEquipmentType[];
+  expectedChemicals: WalkthroughChemicalType[];
+  requiresReactionCheck: boolean;
+  requiresMeasurementCheck: boolean;
+  expectedMeasurement: { metric: string; expectedValue: number; tolerancePct: number } | null;
+  expectedTransfer: {
+    method: string | null;
+    instrumentCategory: string | null;
+    minDispenses: number;
+    sourceChemical: WalkthroughChemicalType | null;
+  } | null;
+  hints: WalkthroughHintType[];
+  exactAnswer: string;
+};
+
+export type WalkthroughStepType = {
+  stepId: number;
+  title: string;
+  instruction: string;
+  actionType: string;
+  expectedAction: string;
+  circuitBoardId: string | null;
+  requiredEquipment: WalkthroughEquipmentType[];
+  requiredChemicals: WalkthroughChemicalType[];
+  observationGoal: string;
+  exactAnswer: string;
+  hints: WalkthroughHintType[];
+  microSteps: WalkthroughMicroStepType[];
+};
+
+export type PracticalWalkthroughType = {
+  _id: string;
+  title: string;
+  subject: "Physics" | "Chemistry" | "Biology";
+  difficulty: "easy" | "medium" | "hard";
+  materials: string[];
+  requiredEquipment: WalkthroughEquipmentType[];
+  optionalEquipment: WalkthroughEquipmentType[];
+  requiredChemicals: WalkthroughChemicalType[];
+  expectedObservations: string[];
+  steps: WalkthroughStepType[];
+};
+
 export type PracticalInfoType = {
   _id: string;
   title: string;

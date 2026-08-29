@@ -1,7 +1,45 @@
+import Toast from "react-native-toast-message";
 import { useLabRun, useLogLabAction } from "@/hooks/lab/use-lab-run";
 import { EquipmentInstanceType, InterventionType, LastMeasurementType, ReactionResultType } from "@/types/lab";
 
-export type BenchActionOutcome = { reactionResult: ReactionResultType | null; intervention: InterventionType };
+// Surfaces a backend rejection (400/404/500) so a transfer action that can't proceed —
+// "the dropper is empty", "there's no liquid in that container" — isn't silently swallowed.
+const showActionError = (err: unknown) => {
+  const anyErr = err as { response?: { data?: { message?: string } }; message?: string };
+  Toast.show({
+    type: "error",
+    text1: "Can't do that yet",
+    text2: anyErr?.response?.data?.message || anyErr?.message || "Try again.",
+  });
+};
+
+// A visible observation the backend recorded on a container's observableState this action —
+// e.g. "The universal indicator turned red…" for an indicator colour change that isn't itself a
+// catalogued reaction. Surfaced by the workspace as an Observation banner (spec §23).
+export type BenchObservation = { instanceId: string; description: string; liquidColor: string | null } | null;
+
+export type BenchActionOutcome = {
+  reactionResult: ReactionResultType | null;
+  intervention: InterventionType;
+  observation?: BenchObservation;
+};
+
+// Finds a container whose observableState.description changed (lastChangedAt advanced) between the
+// pre-action bench snapshot and the server's post-action LabRun.
+const detectObservation = (
+  before: EquipmentInstanceType[],
+  after: EquipmentInstanceType[],
+): BenchObservation => {
+  for (const inst of after) {
+    const os = inst.observableState;
+    if (!os?.description || !os.lastChangedAt) continue;
+    const prev = before.find((e) => e.instanceId === inst.instanceId)?.observableState;
+    if (prev?.lastChangedAt !== os.lastChangedAt) {
+      return { instanceId: inst.instanceId, description: os.description, liquidColor: os.liquidColor ?? null };
+    }
+  }
+  return null;
+};
 
 // Thin action-dispatch layer over the real LabRun backend (see labRun.controller.js) — replaces
 // the old local-only useState prototype. Every call here is a real POST to /api/lab/runs/:id/action,
@@ -13,9 +51,9 @@ export const useLabWorkspace = (labRunId: string | undefined) => {
   const equipment = labRun?.equipment || [];
   const physicsEquipment = labRun?.physicsEquipment || [];
 
-  const createEquipment = (equipmentType: string, position: { x: number; y: number }) => {
+  const createEquipment = (equipmentType: string, position: { x: number; y: number }, capacity?: number) => {
     const instanceId = `${equipmentType}-${Date.now()}`;
-    logAction.mutate({ actionType: "create_equipment", instanceId, equipmentType, position });
+    logAction.mutate({ actionType: "create_equipment", instanceId, equipmentType, position, ...(capacity ? { capacity } : {}) });
   };
 
   // Physics (Mechanics) — routes into labRun.physicsEquipment on the server (see the
@@ -131,9 +169,17 @@ export const useLabWorkspace = (labRunId: string | undefined) => {
     unit?: string,
     onOutcome?: (outcome: BenchActionOutcome) => void
   ) => {
+    const before = equipment;
     logAction.mutate(
       { actionType: "add_chemical", instanceId, chemicalId, quantity, unit },
-      { onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }) }
+      {
+        onSuccess: (result) =>
+          onOutcome?.({
+            reactionResult: result.reactionResult,
+            intervention: result.intervention,
+            observation: detectObservation(before, result.labRun.equipment),
+          }),
+      }
     );
   };
 
@@ -146,17 +192,33 @@ export const useLabWorkspace = (labRunId: string | undefined) => {
     targetInstanceId: string,
     onOutcome?: (outcome: BenchActionOutcome) => void
   ) => {
+    const before = equipment;
     logAction.mutate(
       { actionType: "pour", instanceId, targetInstanceId },
-      { onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }) }
+      {
+        onSuccess: (result) =>
+          onOutcome?.({
+            reactionResult: result.reactionResult,
+            intervention: result.intervention,
+            observation: detectObservation(before, result.labRun.equipment),
+          }),
+      }
     );
   };
 
   const toggleHeat = (instanceId: string, onOutcome?: (outcome: BenchActionOutcome) => void) => {
     const instance = equipment.find((e) => e.instanceId === instanceId);
+    const before = equipment;
     logAction.mutate(
       { actionType: "heat", instanceId, heated: !instance?.isHeated },
-      { onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }) }
+      {
+        onSuccess: (result) =>
+          onOutcome?.({
+            reactionResult: result.reactionResult,
+            intervention: result.intervention,
+            observation: detectObservation(before, result.labRun.equipment),
+          }),
+      }
     );
   };
 
@@ -184,10 +246,86 @@ export const useLabWorkspace = (labRunId: string | undefined) => {
     logAction.mutate({ actionType: "probe_detach", instanceId: probeInstanceId });
   };
 
+  // --- Liquid-transfer instruments (dropper first) — see liquidTransferService.js / DropperInstrument.tsx
+  // The server decides source-vs-target from the instrument's own state; the client just says
+  // "the tip is now in/over this container". `onOutcome` surfaces the reaction/intervention a
+  // dispense can trigger, same as addChemical/pour.
+  const insertTransferTool = (
+    instanceId: string,
+    targetInstanceId: string,
+    onOutcome?: (outcome: BenchActionOutcome) => void
+  ) => {
+    logAction.mutate(
+      { actionType: "insert_transfer_tool", instanceId, targetInstanceId },
+      {
+        onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }),
+        onError: showActionError,
+      }
+    );
+  };
+
+  // Fill a transfer instrument straight from a reagent bottle (indicator/stock reagents come in a
+  // dropper bottle) — the student drags the material onto the dropper instead of a container.
+  const loadTransferTool = (
+    instanceId: string,
+    chemicalId: string,
+    onOutcome?: (outcome: BenchActionOutcome) => void
+  ) => {
+    logAction.mutate(
+      { actionType: "load_transfer_tool", instanceId, chemicalId },
+      {
+        onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }),
+        onError: showActionError,
+      }
+    );
+  };
+
+  const aspirate = (instanceId: string, onOutcome?: (outcome: BenchActionOutcome) => void) => {
+    logAction.mutate(
+      { actionType: "aspirate", instanceId },
+      {
+        onSuccess: (result) => onOutcome?.({ reactionResult: result.reactionResult, intervention: result.intervention }),
+        onError: showActionError,
+      }
+    );
+  };
+
+  const dispense = (
+    instanceId: string,
+    targetInstanceId: string | undefined,
+    onOutcome?: (outcome: BenchActionOutcome) => void
+  ) => {
+    const before = equipment;
+    logAction.mutate(
+      { actionType: "dispense", instanceId, targetInstanceId },
+      {
+        onSuccess: (result) =>
+          onOutcome?.({
+            reactionResult: result.reactionResult,
+            intervention: result.intervention,
+            observation: detectObservation(before, result.labRun.equipment),
+          }),
+        onError: showActionError,
+      }
+    );
+  };
+
+  // Non-blocking selection: pull a chemical into the live lab from the in-workspace Material
+  // Library (the student realised mid-experiment they need it). Adds to LabRun.materials only —
+  // never touches the Session's initial-selection record. It then shows up in "On Hand" and the
+  // student drags it onto a container like any other material.
+  const addMaterialToLab = (chemicalId: string, onDone?: () => void) => {
+    logAction.mutate(
+      { actionType: "add_material_to_lab", chemicalId },
+      { onSuccess: () => onDone?.(), onError: showActionError }
+    );
+  };
+
   return {
     labRun,
     isLoading,
     isError,
+    isActionPending: logAction.isPending,
     refetch,
     equipment,
     physicsEquipment,
@@ -195,10 +333,15 @@ export const useLabWorkspace = (labRunId: string | undefined) => {
     moveEquipment,
     removeEquipment,
     addChemical,
+    addMaterialToLab,
     pourLiquid,
     toggleHeat,
     probeMeasure,
     probeDetach,
+    insertTransferTool,
+    loadTransferTool,
+    aspirate,
+    dispense,
     createPhysicsEquipment,
     attachMass,
     setLength,

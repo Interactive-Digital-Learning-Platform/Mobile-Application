@@ -1,6 +1,8 @@
-import Svg, { Path, Line, Defs, ClipPath, Rect } from "react-native-svg";
+import { useId } from "react";
+import Svg, { Path, Line, Defs, ClipPath } from "react-native-svg";
 import { colors } from "@/constants/colors";
 import { EquipmentVisualProps } from "@/types/lab";
+import AnimatedLiquidRect from "./AnimatedLiquidRect";
 
 const VB_W = 44;
 const VB_H = 52;
@@ -8,26 +10,37 @@ const OUTLINE_D = "M17 4 L17 17 L8 45 Q6 50 11 50 L33 50 Q38 50 36 45 L27 17 L27
 const TOP_Y = 4;
 const BOTTOM_Y = 50;
 
-export default function FlaskArt({ size = 40, color = colors.primaryBlack, liquidColor, fillLevel = 0 }: EquipmentVisualProps) {
+export default function FlaskArt({
+  size = 40,
+  color = colors.primaryBlack,
+  liquidColor,
+  fillLevel = 0,
+  liquidOpacity = 0.82,
+  precipitateColor,
+  cloudiness = 0,
+}: EquipmentVisualProps) {
   const level = Math.max(0, Math.min(1, fillLevel));
   const liquidHeight = level * (BOTTOM_Y - TOP_Y);
+  const clipId = `fl-interior-${useId()}`;
 
   return (
     <Svg height={size} width={(size * VB_W) / VB_H} viewBox={`0 0 ${VB_W} ${VB_H}`}>
       <Defs>
-        <ClipPath id="interior">
+        <ClipPath id={clipId}>
           <Path d={`${OUTLINE_D} Z`} />
         </ClipPath>
       </Defs>
       {liquidColor && level > 0 && (
-        <Rect
+        <AnimatedLiquidRect
           x={0}
           y={BOTTOM_Y - liquidHeight}
           width={VB_W}
           height={liquidHeight}
-          fill={liquidColor}
-          opacity={0.8}
-          clipPath="url(#interior)"
+          color={liquidColor}
+          opacity={liquidOpacity}
+          clipPathId={clipId}
+          precipitateColor={precipitateColor}
+          cloudiness={cloudiness}
         />
       )}
       <Path d={OUTLINE_D} stroke={color} strokeWidth={2.5} strokeLinejoin="round" fill="none" />

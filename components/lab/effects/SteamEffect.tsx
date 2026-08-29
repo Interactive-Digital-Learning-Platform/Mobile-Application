@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-const Wisp = ({ delay, left }: { delay: number; left: number }) => {
+const Wisp = ({ delay, left }: { delay: number; left: `${number}%` }) => {
   const translateY = useSharedValue(0);
   const opacity = useSharedValue(0.6);
 
@@ -46,9 +46,9 @@ const Wisp = ({ delay, left }: { delay: number; left: number }) => {
 
 export default function SteamEffect() {
   return (
-    <View style={{ position: "absolute", top: 0, width: "100%" }} pointerEvents="none">
-      <Wisp delay={0} left={20} />
-      <Wisp delay={400} left={38} />
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0 }} pointerEvents="none">
+      <Wisp delay={0} left="28%" />
+      <Wisp delay={400} left="56%" />
     </View>
   );
 }

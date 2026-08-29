@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { ChevronDown, ChevronUp, Droplet, FlaskConical, Hammer, Lightbulb } from "lucide-react-native";
-import { colors } from "@/constants/colors";
-import { LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
+import { CheckCircle2, FlaskConical } from "lucide-react-native";
+import { ICON_COLORS } from "@/constants/quizStyles";
+import {
+  containerCapacityOptions,
+  defaultContainerCapacity,
+  friendlyEquipmentName,
+  LAB_EQUIPMENT_CATALOG,
+  resolveContainerAppearance,
+} from "@/constants/lab/equipment.constants";
+import { rendersAsTransferInstrument } from "@/constants/lab/transfer.constants";
 import { useExperiment } from "@/hooks/lab/use-experiments";
 import { useChemicals } from "@/hooks/lab/use-chemicals";
 import {
@@ -16,20 +23,37 @@ import {
   useCompleteSession,
 } from "@/hooks/lab/use-lab-session";
 import { useStartLabRun } from "@/hooks/lab/use-lab-run";
-import { BenchActionOutcome, useLabWorkspace } from "@/hooks/lab/use-lab-workspace";
+import { BenchActionOutcome, BenchObservation, useLabWorkspace } from "@/hooks/lab/use-lab-workspace";
 import { useDropTargetRegistry } from "@/hooks/lab/use-drop-target-registry";
-import CompoundBuilder from "@/components/lab/chemicals/CompoundBuilder";
 import LabWorkspace from "@/components/lab/LabWorkspace";
 import CircuitBoard from "@/components/lab/CircuitBoard";
-import ChemicalBottle from "@/components/lab/chemicals/ChemicalBottle";
-import EquipmentShelfItem from "@/components/lab/equipment/EquipmentShelfItem";
 import EducationalInfoPanel from "@/components/lab/panels/EducationalInfoPanel";
 import HintCenterPanel from "@/components/lab/panels/HintCenterPanel";
 import ChemicalInspectPanel from "@/components/lab/chemicals/ChemicalInspectPanel";
+import CompoundBuilder from "@/components/lab/chemicals/CompoundBuilder";
 import EquipmentInspectPanel from "@/components/lab/equipment/EquipmentInspectPanel";
-import { ChemicalType, HelpRevealType, HintNotificationType, ReactionResultType } from "@/types/lab";
-import Button from "@/components/ui/Button";
-import ProgressSteps, { ProgressStepsCaption } from "@/components/ui/ProgressSteps";
+import LabExperimentHeader from "@/components/lab/workspace/LabExperimentHeader";
+import LabEquipmentShelf from "@/components/lab/workspace/LabEquipmentShelf";
+import LabMaterialsDrawer from "@/components/lab/workspace/LabMaterialsDrawer";
+import BenchStage from "@/components/lab/workspace/BenchStage";
+import ContainerSizeSheet from "@/components/lab/workspace/ContainerSizeSheet";
+import TransferActionSheet from "@/components/lab/transfer/TransferActionSheet";
+import GuidedStepPanel from "@/components/lab/workspace/GuidedStepPanel";
+import LabActionBar from "@/components/lab/workspace/LabActionBar";
+import DevWalkthroughOverlay from "@/components/lab/dev/DevWalkthroughOverlay"; // DEV ONLY — remove before shipping
+import { ObservationBanner, ObservationChangeBanner, SafetyBanner, TutorInsightBanner } from "@/components/lab/workspace/LabInterventionBanners";
+import {
+  ChemicalType,
+  CurriculumReferenceType,
+  HelpRevealType,
+  HintNotificationType,
+  InterventionType,
+  ReactionResultType,
+} from "@/types/lab";
+
+// Server intervention types that are a safety concern rather than a nudge — these get the
+// distinct, must-acknowledge Safety banner; every other intervention type is a Tutor Insight.
+const SAFETY_INTERVENTION_TYPES = ["heating_empty_container", "unnecessary_heat"];
 
 export default function Workspace() {
   const { experimentId, sessionId } = useLocalSearchParams<{ experimentId: string; sessionId: string }>();
@@ -38,49 +62,51 @@ export default function Workspace() {
   const { data: allChemicals } = useChemicals({});
 
   const [currentStep, setCurrentStep] = useState<number | null>(null);
-  // Which Current Task within currentStep the student is on — server-authoritative, seeded once
-  // from session.currentMicroStep and then advanced from logAction's meta.currentMicroStep, same
-  // pattern as currentStep. Irrelevant (stays 1) for a step with no microSteps.
   const [currentMicroStep, setCurrentMicroStep] = useState<number | null>(null);
-  // AI hints are never shown automatically — they're queued here (auto-triggered by mistakes, or
-  // student-requested) and only surfaced when the student opens the Hint Center panel themselves.
-  // Cleared the instant the Current Task changes (see the effect below) — hints belong to the
-  // task that produced them, never carried forward to the next one.
   const [hintNotifications, setHintNotifications] = useState<HintNotificationType[]>([]);
   const [hintCenterOpen, setHintCenterOpen] = useState(false);
-  // Per Current Task (keyed by `${stepId}:${microStepId}`, see taskKey below): whether hint level
-  // 3 has been reached (gates the Help button) and, once pressed, the revealed answer — so
-  // re-visiting an earlier task doesn't lose either, but a new task always starts fresh.
   const [helpAvailableByStep, setHelpAvailableByStep] = useState<Record<string, boolean>>({});
   const [helpRevealByStep, setHelpRevealByStep] = useState<Record<string, HelpRevealType>>({});
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null);
   const [reactionResult, setReactionResult] = useState<ReactionResultType | null>(null);
-  // Physics measurement-check microSteps ("calculate g", "calculate density"...) ask the student
-  // to type in their computed answer, which is submitted as the action's `quantity` and checked
-  // server-side against the bench's own reading (see mechanicsEngine.js's resolvePhysicsMeasurement).
   const [measurementInput, setMeasurementInput] = useState("");
   const [stepStartedAt, setStepStartedAt] = useState(Date.now());
-  const [builderTarget, setBuilderTarget] = useState<ChemicalType | null>(null);
-  const [builtIds, setBuiltIds] = useState<string[]>([]);
-  const [builderDrawerOpen, setBuilderDrawerOpen] = useState(false);
   const [labRunId, setLabRunId] = useState<string | undefined>(undefined);
-  // Distinct from `reactionResult` above (that one's the guided-step "Mix" grading result) — this
-  // is a reaction firing live on the bench, from dragging chemicals or toggling heat.
   const [liveReactionResult, setLiveReactionResult] = useState<ReactionResultType | null>(null);
+  // A live reaction shows an "Observation detected" banner first; the Educational Info Panel only
+  // opens once the student taps "Explore why" — observe first, theory second.
+  const [showObservationInfo, setShowObservationInfo] = useState(false);
   const [inspectChemical, setInspectChemical] = useState<ChemicalType | null>(null);
   const [inspectEquipmentId, setInspectEquipmentId] = useState<string | null>(null);
-  // Visual-only drag-hover state (see ChemicalBottle/EquipmentShelfItem's onHoverChange) — never
-  // read by any mutation or drop-resolution logic, purely drives the dashed highlight overlays.
   const [hoveredEquipmentId, setHoveredEquipmentId] = useState<string | null>(null);
   const [isDraggingEquipmentOverBench, setIsDraggingEquipmentOverBench] = useState(false);
+  // Drives the pour choreography (source tilt + connecting stream) — LabWorkspace reads it.
+  const [pourEvent, setPourEvent] = useState<{ sourceId: string; targetId: string; nonce: number; color: string } | null>(null);
+  // Which container a probe (pH meter) is currently in — drives the "being measured" ring.
+  const [probeTargetId, setProbeTargetId] = useState<string | null>(null);
+  // The transfer instrument (dropper) the action panel is acting on, and how many drops it has
+  // released since it was last filled.
+  const [activeTransferId, setActiveTransferId] = useState<string | null>(null);
+  const [dropCount, setDropCount] = useState(0);
+  // A buildable compound the student picked in the in-lab Material Library but hasn't built yet —
+  // hands off to the Compound Builder, then adds the built compound to the lab inventory.
+  const [builderTarget, setBuilderTarget] = useState<ChemicalType | null>(null);
+  // Bumped to open the in-workspace Material Library from outside the drawer (Hint Center's
+  // "Open Material Library" action when a hint flags a missing material).
+  const [materialLibrarySignal, setMaterialLibrarySignal] = useState(0);
+  // Proactive intervention surfaces — a transient Tutor Insight banner, or a persistent Safety
+  // banner. The hint text is ALSO queued into the Hint Center (history), same as before.
+  const [tutorBanner, setTutorBanner] = useState<string | null>(null);
+  const [safetyBanner, setSafetyBanner] = useState<string | null>(null);
+  // A backend observableState change that isn't a catalogued reaction (e.g. an indicator colour
+  // change) — surfaced as a compact Observation banner so the text always matches the visual.
+  const [observationNote, setObservationNote] = useState<BenchObservation>(null);
 
   const logAction = useLogStepAction(sessionId);
   const requestHint = useRequestStepHint(sessionId);
   const requestHelp = useRequestStepHelp(sessionId);
   const completeSession = useCompleteSession(sessionId);
 
-  // The live bench — a LabRun scoped to this Session (not the student's freeform run), started
-  // once on entry. logLabAction/useLabRun handle it as the single source of truth from here on.
   const startLabRunMutation = useStartLabRun();
   const labRunStartedRef = useRef(false);
   const benchRef = useRef<View>(null);
@@ -96,14 +122,21 @@ export default function Workspace() {
   const {
     equipment: benchEquipment,
     physicsEquipment: benchPhysicsEquipment,
+    labRun,
     createEquipment,
     moveEquipment,
     removeEquipment,
     addChemical,
+    addMaterialToLab,
     pourLiquid,
     toggleHeat,
     probeMeasure,
     probeDetach,
+    insertTransferTool,
+    loadTransferTool,
+    aspirate,
+    dispense,
+    isActionPending,
     createPhysicsEquipment,
     attachMass,
     setLength,
@@ -118,11 +151,15 @@ export default function Workspace() {
     readMeter,
   } = useLabWorkspace(labRunId);
 
-  // A guided session's bench only ever populates one of equipment/physicsEquipment, decided by
-  // the experiment's subject — see physicsInstanceSchema in LabRun.js for why they're separate
-  // bench-state arrays rather than one shared shape.
   const isPhysicsExperiment = experiment?.subject === "Physics";
-  const createShelfEquipment = isPhysicsExperiment ? createPhysicsEquipment : createEquipment;
+  // Resizable containers ask for a capacity first (ContainerSizeSheet); everything else places
+  // straight away.
+  const [pendingContainer, setPendingContainer] = useState<{ equipmentType: string; position: { x: number; y: number } } | null>(null);
+  const handleShelfDrop = (equipmentType: string, position: { x: number; y: number }) => {
+    if (isPhysicsExperiment) return createPhysicsEquipment(equipmentType, position);
+    if (containerCapacityOptions(equipmentType).length > 0) return setPendingContainer({ equipmentType, position });
+    createEquipment(equipmentType, position);
+  };
   const physicsDispatch = {
     onMove: moveEquipment,
     attachMass,
@@ -134,15 +171,9 @@ export default function Workspace() {
     readMeasurement,
   };
   const circuitDispatch = { createAndPlaceComponent, removeComponent, setComponentValue, readMeter };
-  // Circuit-role instances (resistor/ammeter/voltmeter, placed via CircuitBoard) vs mechanics
-  // instances (pendulum/spring/etc., placed via LabWorkspace) — split so each renderer only ever
-  // sees its own kind, even though both live in the same labRun.physicsEquipment array server-side.
   const mechanicsPhysicsEquipment = benchPhysicsEquipment.filter((e) => !e.role);
   const circuitPhysicsEquipment = benchPhysicsEquipment.filter((e) => !!e.role);
   const { register: registerEquipmentRef, resolveDropTarget } = useDropTargetRegistry();
-  // Registers each container instance's *liquid* sub-rect specifically (not its whole body), so
-  // probe-role equipment (the pH meter) only triggers on actual overlap with poured liquid, not
-  // mere proximity to the container. See EquipmentContainer / PhMeterInstrument.
   const { register: registerLiquidRegion, resolveDropTarget: resolveLiquidRegion } = useDropTargetRegistry();
 
   useEffect(() => {
@@ -152,6 +183,19 @@ export default function Workspace() {
     }
   }, [session, currentStep]);
 
+  // Auto-dismiss the transient Tutor Insight banner; the Safety banner stays until acknowledged.
+  useEffect(() => {
+    if (!tutorBanner) return;
+    const t = setTimeout(() => setTutorBanner(null), 12000);
+    return () => clearTimeout(t);
+  }, [tutorBanner]);
+
+  useEffect(() => {
+    if (!observationNote) return;
+    const t = setTimeout(() => setObservationNote(null), 11000);
+    return () => clearTimeout(t);
+  }, [observationNote]);
+
   const chemicalMap = useMemo(() => {
     const map: Record<string, ChemicalType> = {};
     (allChemicals || []).forEach((c) => {
@@ -160,44 +204,54 @@ export default function Workspace() {
     return map;
   }, [allChemicals]);
 
-  // Compounds built via the Compound Builder never enter chemicalSelection.selected (building
-  // satisfies the requirement instead of tapping a chip) — merge both sources so the bench shows
-  // everything the student actually has, not just what they clicked.
+  // "On Hand" materials come from the LabRun's physical inventory (LabRun.materials) — seeded
+  // from the confirmed initial selection and grown by the in-lab Material Library. Fall back to
+  // the Session's selection for a legacy run whose inventory was never seeded (backward compat).
   const builtChemicalIds = (session?.builtCompounds || []).filter((b) => b.completedAt).map((b) => b.chemical);
   const confirmedChemicalIds = [...(session?.chemicalSelection?.selected || []), ...builtChemicalIds];
-  const confirmedChemicals = (allChemicals || []).filter((c) => confirmedChemicalIds.includes(c._id));
-  // Equipment selection is a preparation step, not a gate — the full catalog for this experiment's
-  // subject stays available here as an equipment drawer, so a student who under-picked (or
-  // discovers mid-experiment that they need something else) is never stuck without it. Scoped by
-  // subject so a Physics workspace's shelf doesn't offer "flask"/"burette".
+  const onHandChemicalIds =
+    labRun?.materials && labRun.materials.length > 0
+      ? labRun.materials.map((m) => m.chemical)
+      : confirmedChemicalIds;
+  const onHandChemicals = (allChemicals || []).filter((c) => onHandChemicalIds.includes(c._id));
   const availableEquipment = LAB_EQUIPMENT_CATALOG.filter(
     (e) => !!experiment && e.subjects.includes(experiment.subject as "Chemistry" | "Physics" | "Biology")
   );
-  const buildableConfirmed = confirmedChemicals.filter((c) => c.isBuildableFromElements);
   const step = experiment?.steps.find((s) => s.stepId === currentStep);
   const totalSteps = experiment?.steps.length || 0;
   const inspectEquipmentInstance = benchEquipment.find((e) => e.instanceId === inspectEquipmentId) || null;
-  // Electricity (Phase B): a circuit step mounts CircuitBoard.tsx instead of the free-bench
-  // LabWorkspace — see circuitBoards.constants.ts. Step-scoped, not experiment-scoped, since one
-  // practical (Series and Parallel Resistors) uses a different board across its steps.
   const currentBoardId = step?.circuitBoardId || null;
   const isCircuitStep = !!currentBoardId;
 
-  // Current Task resolution — mirrors how `step` above is resolved from Session position +
-  // Experiment content. `currentTask` is null for a step with no microSteps (unmigrated
-  // practicals), in which case the workspace falls back to showing just the Main Step, exactly
-  // as it did before this feature existed.
   const sortedMicroSteps = step?.microSteps?.length ? [...step.microSteps].sort((a, b) => a.microStepId - b.microStepId) : [];
   const usingMicroSteps = sortedMicroSteps.length > 0;
   const currentTask = usingMicroSteps ? sortedMicroSteps.find((ms) => ms.microStepId === currentMicroStep) || null : null;
-  // Whether the *current unit of work* (task if migrated, whole step otherwise) auto-completes
-  // from a live reaction firing on the bench, vs. needing an explicit "Mark as Done" tap.
+  const currentTaskIndex = usingMicroSteps
+    ? sortedMicroSteps.findIndex((ms) => ms.microStepId === currentMicroStep) + 1
+    : null;
   const isReactionCheckUnit = usingMicroSteps ? !!currentTask?.requiresReactionCheck : step?.actionType === "mix";
-  // Physics sibling of isReactionCheckUnit — a "calculate g/k/density" task, unmigrated (whole-
-  // step) practicals never set this (see resolveGradingTarget in session.controller.js).
   const isMeasurementCheckUnit = usingMicroSteps ? !!currentTask?.requiresMeasurementCheck : false;
   const taskKey = (stepId: number, microStepId: number | null) => `${stepId}:${microStepId ?? 0}`;
   const currentTaskKey = currentStep !== null ? taskKey(currentStep, usingMicroSteps ? currentMicroStep : null) : null;
+
+  // Contextual verification label — the backend verifies the live LabRun, so this is never
+  // "Mark as Done". Derived from task/step metadata, not hardcoded per experiment.
+  const checkLabel = useMemo(() => {
+    if (isCircuitStep) return "Check Circuit";
+    if (isReactionCheckUnit) return "Check Reaction";
+    if (isMeasurementCheckUnit) return "Check Measurement";
+    switch (step?.actionType) {
+      case "measure":
+        return "Check Measurement";
+      case "observe":
+      case "record":
+        return "Check Observation";
+      case "calculate":
+        return "Check Answer";
+      default:
+        return "Check My Work";
+    }
+  }, [isCircuitStep, isReactionCheckUnit, isMeasurementCheckUnit, step?.actionType]);
 
   const resolveBenchPosition = (absoluteX: number, absoluteY: number): Promise<{ x: number; y: number } | null> => {
     return new Promise((resolve) => {
@@ -212,10 +266,6 @@ export default function Workspace() {
     });
   };
 
-  const handleBuilt = (compoundId: string) => {
-    setBuiltIds((prev) => (prev.includes(compoundId) ? prev : [...prev, compoundId]));
-  };
-
   const resetStepUI = () => {
     setFeedback(null);
     setReactionResult(null);
@@ -223,27 +273,46 @@ export default function Workspace() {
     setStepStartedAt(Date.now());
   };
 
-  // Hard requirement: hints belong to the Current Task that produced them and must disappear the
-  // instant the task changes (whether the student solved it, the parent Main Step advanced, or —
-  // for an unmigrated step — the step itself advanced). Comparing against the previous position
-  // via a ref means this fires no matter *how* currentStep/currentMicroStep changed, without
-  // duplicating the reset call at every place those setters are used.
   const taskPositionRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentTaskKey === null) return;
     if (taskPositionRef.current !== null && taskPositionRef.current !== currentTaskKey) {
       setHintNotifications([]);
+      setTutorBanner(null);
+      setSafetyBanner(null);
+      setObservationNote(null);
+      setLiveReactionResult(null);
+      setShowObservationInfo(false);
+      setActiveTransferId(null);
     }
     taskPositionRef.current = currentTaskKey;
   }, [currentTaskKey]);
 
-  // Queues a hint into the Hint Center instead of surfacing it inline — the student sees a badge
-  // on the 💡 button and reads it only when they choose to open the panel.
-  const pushHintNotification = (message: string) => {
+  const pushHintNotification = (
+    message: string,
+    suggestedAction?: "open_material_library" | null,
+    curriculumReference?: CurriculumReferenceType | null,
+  ) => {
     setHintNotifications((prev) => [
       ...prev,
-      { id: `${Date.now()}-${prev.length}`, message, timestamp: new Date().toISOString(), read: false },
+      {
+        id: `${Date.now()}-${prev.length}`,
+        message,
+        timestamp: new Date().toISOString(),
+        read: false,
+        suggestedAction: suggestedAction ?? null,
+        curriculumReference: curriculumReference ?? null,
+      },
     ]);
+  };
+
+  // Proactive interventions: queue into the Hint Center (history) AND surface as a banner —
+  // Safety vs Tutor Insight by type. Student-requested hints do NOT come through here.
+  const surfaceIntervention = (intervention: InterventionType) => {
+    if (!intervention) return;
+    pushHintNotification(intervention.hint, intervention.suggestedAction, intervention.curriculumReference);
+    if (SAFETY_INTERVENTION_TYPES.includes(intervention.type)) setSafetyBanner(intervention.hint);
+    else setTutorBanner(intervention.hint);
   };
 
   const openHintCenter = () => {
@@ -257,7 +326,7 @@ export default function Workspace() {
       { stepId: currentStep, microStepId: usingMicroSteps ? currentMicroStep : null },
       {
         onSuccess: (data) => {
-          pushHintNotification(data.hintText);
+          pushHintNotification(data.hintText, data.suggestedAction, data.curriculumReference);
           if (data.helpAvailable) setHelpAvailableByStep((prev) => ({ ...prev, [currentTaskKey]: true }));
         },
       }
@@ -282,370 +351,308 @@ export default function Workspace() {
       {
         stepId: currentStep,
         microStepId: usingMicroSteps ? currentMicroStep : null,
-        // Placeholder claim only — the server always determines the real actionType itself, from
-        // what's actually on the live bench (session.labRunId) against the current Current Task's
-        // (or, for an unmigrated step, the whole step's) requiredEquipment/requiredChemicalsForStep,
-        // so a wrong guess here can never advance anything. See evaluateOnBench / logAction in
-        // session.controller.js.
         actionType: "correct",
         timeTaken: Math.round((Date.now() - stepStartedAt) / 1000),
-        // Only meaningful for a measurement-check task — the student's typed calculated answer,
-        // checked server-side against the bench's own reading (see resolvePhysicsMeasurement).
         ...(isMeasurementCheckUnit ? { quantity: parseFloat(measurementInput) } : {}),
       },
       {
         onSuccess: ({ data, meta }) => {
           setReactionResult(meta.reactionResult);
-          if (meta.intervention) pushHintNotification(meta.intervention.hint);
+          if (meta.intervention) surfaceIntervention(meta.intervention);
           if (meta.helpAvailable) setHelpAvailableByStep((prev) => ({ ...prev, [currentTaskKey]: true }));
 
           if (data.actionType === "correct") {
-            setFeedback({ ok: true, message: "Correct — well done." });
+            setFeedback({ ok: true, message: "Great work — task completed." });
             setTimeout(() => {
               if (meta.currentStep > totalSteps) {
                 completeSession.mutate(undefined, {
                   onSuccess: () => router.replace(`/(tabs)/lab/${experimentId}/report?sessionId=${sessionId}` as never),
                 });
               } else {
-                // Always sync both from the server's authoritative position — whether this
-                // advanced to a new Main Step (microStep resets to 1 server-side) or just the
-                // next Current Task within the same step, this is the single place that moves
-                // the student forward.
                 setCurrentStep(meta.currentStep);
                 setCurrentMicroStep(meta.currentMicroStep);
                 resetStepUI();
               }
             }, 1400);
           } else {
-            setFeedback({ ok: false, message: "That doesn't look right yet — try again." });
+            setFeedback({ ok: false, message: "That doesn't look right yet — take another look and try again." });
           }
         },
       }
     );
   };
 
-  // Only surface a genuine reaction — the bench checks on every add/heat, so most of those checks
-  // come back "no reaction" (two chemicals that just don't react is normal, not worth a popup).
-  // For a mix step, a reaction firing live is also exactly what the step is waiting on, so
-  // re-check with the server right away instead of making the student tap "Check" separately.
-  // Proactive Tutor flags (e.g. heating an empty container) land in the Hint Center too, same as
-  // mistake-triggered hints — not just from step mistakes.
-  const handleBenchOutcome = ({ reactionResult, intervention: benchIntervention }: BenchActionOutcome) => {
+  const handleBenchOutcome = ({ reactionResult, intervention: benchIntervention, observation }: BenchActionOutcome) => {
     if (reactionResult?.found) {
       setLiveReactionResult(reactionResult);
       if (isReactionCheckUnit) submitAction();
     }
-    if (benchIntervention) pushHintNotification(benchIntervention.hint);
+    if (benchIntervention) surfaceIntervention(benchIntervention);
+    // A pure observable change (indicator colour, precipitate) that isn't a catalogued reaction —
+    // the reaction banner already covers the reaction case.
+    if (observation && !reactionResult?.found) setObservationNote(observation);
   };
 
   const handleBenchToggleHeat = (instanceId: string) => {
     toggleHeat(instanceId, handleBenchOutcome);
   };
 
-  // Only a container-role instance (beaker, test tube, dropper, ...) can receive a pour — a
-  // burner/probe/stirrer/balance target is silently ignored (the source has already snapped back
-  // to its spot, see useDraggableBenchItem). Role lookup lives here rather than in
-  // EquipmentContainer since that component only knows this one instance, not the whole catalog.
+  // --- Liquid transfer (dropper) ---
+  const activeTransfer = activeTransferId ? benchEquipment.find((e) => e.instanceId === activeTransferId) ?? null : null;
+  useEffect(() => {
+    setDropCount(0);
+  }, [activeTransferId]);
+
+  const handleTransferInsert = (dropperId: string, containerId: string) => {
+    setActiveTransferId(dropperId);
+    insertTransferTool(dropperId, containerId, handleBenchOutcome);
+  };
+  // Container-role instances a filled dropper can be positioned over — powers the tap fallback in
+  // TransferActionSheet so a missed drag never strands the student on "move it over the container".
+  const transferTargets = benchEquipment
+    .filter((e) => {
+      if (e.instanceId === activeTransferId) return false;
+      if (rendersAsTransferInstrument(e.equipmentType)) return false; // another dropper isn't a target
+      const entry = LAB_EQUIPMENT_CATALOG.find((c) => c.key === e.equipmentType);
+      return entry?.role === "container";
+    })
+    .map((e) => ({ instanceId: e.instanceId, label: friendlyEquipmentName(benchEquipment, e.instanceId) || "the container" }));
+  const handleFill = () => {
+    if (!activeTransferId) return;
+    setDropCount(0);
+    aspirate(activeTransferId, handleBenchOutcome);
+  };
+  const handleDrop = () => {
+    if (!activeTransferId) return;
+    setDropCount((c) => c + 1);
+    dispense(activeTransferId, undefined, handleBenchOutcome);
+  };
+
   const handlePour = (sourceId: string, targetId: string) => {
     const target = benchEquipment.find((e) => e.instanceId === targetId);
     const targetEntry = target && LAB_EQUIPMENT_CATALOG.find((e) => e.key === target.equipmentType);
     if (targetEntry?.role !== "container") return;
+
+    // Capture the pour colour now (the server empties the source, so it's gone after the refetch)
+    // and let LabWorkspace play the tilt + stream. Purely visual — the server action is unchanged.
+    const src = benchEquipment.find((e) => e.instanceId === sourceId);
+    const srcChemicals = (src?.contents || []).map((c) => chemicalMap[c.chemical]).filter(Boolean);
+    const color =
+      resolveContainerAppearance(src?.observableState, srcChemicals)?.color || "#9CA3AF";
+    const nonce = Date.now();
+    setPourEvent({ sourceId, targetId, nonce, color });
+    setTimeout(() => setPourEvent((p) => (p?.nonce === nonce ? null : p)), 1000);
+
     pourLiquid(sourceId, targetId, handleBenchOutcome);
   };
 
   if (experimentError || sessionError) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white px-8" edges={["top", "bottom"]}>
-        <Text className="text-lg font-amedium text-center text-ink">Couldn&apos;t reach the server</Text>
-        <View className="mt-4 self-stretch">
-          <Button label="Retry" onPress={() => refetchSession()} variant="secondary" />
-        </View>
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-slate-50 px-8" edges={["top", "bottom"]}>
+        <Text className="text-base font-black text-center text-slate-800">Couldn&apos;t reach the server</Text>
+        <TouchableOpacity className="mt-4 bg-primary px-6 py-3 rounded-xl" activeOpacity={0.85} onPress={() => refetchSession()}>
+          <Text className="text-white text-sm font-bold">Retry</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
 
-  if (experimentLoading || sessionLoading || currentStep === null) {
+  if (experimentLoading || sessionLoading || currentStep === null || !step) {
     return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
-        <ActivityIndicator color={colors.primary} />
+      <SafeAreaView className="w-full flex-1 justify-center items-center bg-slate-50" edges={["top", "bottom"]}>
+        <ActivityIndicator color={ICON_COLORS.primary500} />
       </SafeAreaView>
     );
   }
 
-  if (!step) {
-    return (
-      <SafeAreaView className="w-full flex-1 justify-center items-center bg-white" edges={["top", "bottom"]}>
-        <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
+  const benchEmpty = benchEquipment.length === 0 && mechanicsPhysicsEquipment.length === 0;
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-white" edges={["top", "bottom"]}>
+    <SafeAreaView className="w-full flex-1 bg-slate-50" edges={["top", "bottom"]}>
+      <LabExperimentHeader title={experiment?.title ?? "Experiment"} onExit={() => router.back()} />
+
       {isCircuitStep ? (
-        // Electricity (Phase B): a fixed slot-based board, sibling to (not a mode of) LabWorkspace
-        // — it owns its own component shelf internally, unlike the chemistry/mechanics bench below.
         <View style={{ flex: 1, minHeight: 320 }}>
           <CircuitBoard boardId={currentBoardId as string} physicsEquipment={circuitPhysicsEquipment} dispatch={circuitDispatch} />
         </View>
       ) : (
         <>
-          {/* Equipment shelf — top. Draggable spawners: drop one onto the bench below to place a
-              brand new instance there (multiple of the same type are allowed). */}
-          <View className="py-3 border-b" style={{ borderColor: colors.borderColorLight }}>
-            <View className="flex-row items-center gap-1.5 px-4 mb-2">
-              <FlaskConical size={12} color="#979797" />
-              <Text className="font-amedium text-xs text-muted">EQUIPMENT SET — drag onto the bench</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-              {availableEquipment.map((e) => (
-                <EquipmentShelfItem
-                  key={e.key}
-                  equipmentType={e.key}
-                  label={e.label}
-                  Visual={e.Visual}
-                  resolveBenchPosition={resolveBenchPosition}
-                  onDroppedOnBench={createShelfEquipment}
-                  onHoverChange={setIsDraggingEquipmentOverBench}
-                />
-              ))}
-            </ScrollView>
-          </View>
+          <LabEquipmentShelf
+            items={availableEquipment}
+            resolveBenchPosition={resolveBenchPosition}
+            onDropped={handleShelfDrop}
+            onHoverChange={setIsDraggingEquipmentOverBench}
+          />
 
-          {/* Practical workspace — the live bench, with the materials shelf docked to its left as a
-              vertical sidebar instead of a horizontal strip below the step guidance (which used to
-              fight that section for vertical space and get covered by it on shorter screens). Row so
-              the sidebar and bench share this section's height; flex: 1 so the row claims whatever's
-              left over after the equipment shelf and guidance panel take what they need. */}
-          <View style={{ flex: 1, flexDirection: "row", minHeight: 320 }}>
-            {/* Materials sidebar — vertical scroll. Draggable bottles: drop one onto a bench container to add it. */}
-            <View className="border-r" style={{ width: 92, borderColor: colors.borderColorLight }}>
-              <View className="items-center pt-3 pb-2 px-1">
-                <Droplet size={14} color="#979797" />
-                <Text className="font-amedium text-[9px] text-muted text-center mt-1">MATERIALS</Text>
-              </View>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ alignItems: "center", paddingBottom: 12, gap: 12 }}>
-                {confirmedChemicals.map((c) => (
-                  <ChemicalBottle
-                    key={c._id}
-                    chemical={c}
-                    resolveDropTarget={resolveDropTarget}
-                    onDropped={(chemical, instanceId) => {
-                      const isSolid = chemical.state === "solid";
-                      addChemical(instanceId, chemical._id, isSolid ? 5 : 50, isSolid ? "g" : "mL", handleBenchOutcome);
-                    }}
-                    onInspect={setInspectChemical}
-                    onHoverChange={setHoveredEquipmentId}
-                  />
-                ))}
-              </ScrollView>
-            </View>
+          <BenchStage ref={benchRef} highlighted={isDraggingEquipmentOverBench}>
+            <LabWorkspace
+              equipment={benchEquipment}
+              chemicalMap={chemicalMap}
+              registerEquipmentRef={registerEquipmentRef}
+              registerLiquidRegion={registerLiquidRegion}
+              resolveLiquidRegion={resolveLiquidRegion}
+              onMoveEquipment={moveEquipment}
+              onToggleHeat={handleBenchToggleHeat}
+              onInspectEquipment={setInspectEquipmentId}
+              probeMeasure={probeMeasure}
+              probeDetach={probeDetach}
+              hoveredEquipmentId={hoveredEquipmentId}
+              onHoverChange={setHoveredEquipmentId}
+              resolveDropTarget={resolveDropTarget}
+              onPour={handlePour}
+              pourEvent={pourEvent}
+              probeTargetId={probeTargetId}
+              onProbeTargetChange={setProbeTargetId}
+              onTransferInsert={handleTransferInsert}
+              onTransferActivate={setActiveTransferId}
+              physicsEquipment={mechanicsPhysicsEquipment}
+              physicsDispatch={physicsDispatch}
+            />
 
-            <View
-              ref={benchRef}
-              className="bg-bg-soft flex-1"
-              style={{
-                borderBottomWidth: isDraggingEquipmentOverBench ? 2 : 1,
-                borderStyle: isDraggingEquipmentOverBench ? "dashed" : "solid",
-                borderColor: isDraggingEquipmentOverBench ? colors.primary : colors.borderColorLight,
+            {benchEmpty && (
+              <Animated.View
+                entering={FadeIn.duration(300)}
+                style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}
+                pointerEvents="none"
+              >
+                <FlaskConical size={28} color={ICON_COLORS.slate400} />
+                <Text className="text-[13px] text-slate-400 mt-2">Drag equipment here to begin</Text>
+              </Animated.View>
+            )}
+
+            <LabMaterialsDrawer
+              onHand={onHandChemicals}
+              catalog={allChemicals || []}
+              builtCompoundIds={builtChemicalIds}
+              busy={isActionPending}
+              openLibrarySignal={materialLibrarySignal}
+              onAddMaterial={(chemicalId) => addMaterialToLab(chemicalId)}
+              onBuildCompound={setBuilderTarget}
+              resolveDropTarget={resolveDropTarget}
+              onDropChemical={(chemical, instanceId) => {
+                const target = benchEquipment.find((e) => e.instanceId === instanceId);
+                // Dropped onto a dropper → fill the dropper straight from the reagent bottle
+                // (indicators / stock reagents come in a dropper bottle).
+                if (target && rendersAsTransferInstrument(target.equipmentType)) {
+                  setActiveTransferId(instanceId);
+                  loadTransferTool(instanceId, chemical._id, handleBenchOutcome);
+                  return;
+                }
+                const isSolid = chemical.state === "solid";
+                const cap = target?.capacity;
+                // Half-fill a sized vessel; fall back to the old fixed amount for fixed-size ones.
+                const amount = isSolid ? 5 : cap ? Math.max(2, Math.round(cap * 0.45)) : 50;
+                addChemical(instanceId, chemical._id, amount, isSolid ? "g" : "mL", handleBenchOutcome);
               }}
-            >
-              <LabWorkspace
-                equipment={benchEquipment}
-                chemicalMap={chemicalMap}
-                registerEquipmentRef={registerEquipmentRef}
-                registerLiquidRegion={registerLiquidRegion}
-                resolveLiquidRegion={resolveLiquidRegion}
-                onMoveEquipment={moveEquipment}
-                onToggleHeat={handleBenchToggleHeat}
-                onInspectEquipment={setInspectEquipmentId}
-                probeMeasure={probeMeasure}
-                probeDetach={probeDetach}
-                hoveredEquipmentId={hoveredEquipmentId}
-                resolveDropTarget={resolveDropTarget}
-                onPour={handlePour}
-                physicsEquipment={mechanicsPhysicsEquipment}
-                physicsDispatch={physicsDispatch}
+              onInspectChemical={setInspectChemical}
+              onHoverChange={setHoveredEquipmentId}
+            />
+
+            {pendingContainer && (
+              <ContainerSizeSheet
+                label={LAB_EQUIPMENT_CATALOG.find((e) => e.key === pendingContainer.equipmentType)?.label ?? "vessel"}
+                options={containerCapacityOptions(pendingContainer.equipmentType)}
+                onPick={(ml) => {
+                  createEquipment(pendingContainer.equipmentType, pendingContainer.position, ml);
+                  setPendingContainer(null);
+                }}
+                onCancel={() => {
+                  createEquipment(
+                    pendingContainer.equipmentType,
+                    pendingContainer.position,
+                    defaultContainerCapacity(pendingContainer.equipmentType)
+                  );
+                  setPendingContainer(null);
+                }}
               />
-              {benchEquipment.length === 0 && mechanicsPhysicsEquipment.length === 0 && (
-                <Animated.View
-                  entering={FadeIn.duration(300)}
-                  style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-                  pointerEvents="none"
-                >
-                  <FlaskConical size={28} color="#979797" />
-                  <Text className="font-aregular text-sm text-muted mt-2">Drag equipment here to begin</Text>
-                </Animated.View>
-              )}
-            </View>
-          </View>
+            )}
+
+            {activeTransfer && !pendingContainer && (
+              <TransferActionSheet
+                instance={activeTransfer}
+                chemicalMap={chemicalMap}
+                dropCount={dropCount}
+                busy={isActionPending}
+                targets={transferTargets}
+                onFill={handleFill}
+                onDispense={handleDrop}
+                onPositionOver={(containerId) => handleTransferInsert(activeTransfer.instanceId, containerId)}
+                onClose={() => setActiveTransferId(null)}
+              />
+            )}
+          </BenchStage>
         </>
       )}
 
-      {/* Experiment area — step guidance, hints, and results. Bounded (not flex) and internally
-          scrollable so it never competes with the lab bench above for vertical space. */}
-      <ScrollView style={{ maxHeight: 220 }} className="px-4 pt-4" showsVerticalScrollIndicator={false}>
-        <ProgressSteps totalSteps={totalSteps} currentStep={currentStep} />
-        <ProgressStepsCaption totalSteps={totalSteps} currentStep={currentStep} />
-        <Text className="text-xl font-amedium mt-2 text-ink">{step.title}</Text>
-        <Text className="font-aregular text-muted mt-1">{step.instruction}</Text>
+      {safetyBanner && <SafetyBanner message={safetyBanner} onAcknowledge={() => setSafetyBanner(null)} />}
+      {tutorBanner && !safetyBanner && <TutorInsightBanner message={tutorBanner} onDismiss={() => setTutorBanner(null)} />}
+      {observationNote && !safetyBanner && !liveReactionResult?.found && (
+        <ObservationChangeBanner
+          description={observationNote.description}
+          swatchColor={observationNote.liquidColor}
+          onDismiss={() => setObservationNote(null)}
+        />
+      )}
+      {liveReactionResult?.found && !showObservationInfo && !safetyBanner && (
+        <ObservationBanner
+          reactionName={liveReactionResult.reaction.name}
+          onExplore={() => setShowObservationInfo(true)}
+          onDismiss={() => setLiveReactionResult(null)}
+        />
+      )}
 
-        {/* CURRENT TASK — the one action the student needs to figure out right now. Deliberately
-            never shows the rest of step.microSteps (future tasks stay hidden, per the "student
-            reasons about the answer" design) — only the single entry matching currentMicroStep.
-            Absent entirely for a step with no microSteps, where the Main Step above is the whole
-            picture, exactly as before this feature existed. */}
-        {currentTask && (
-          <View className="mt-3 p-3 rounded-2xl bg-indigo-50">
-            <Text className="font-amedium text-xs text-indigo-500">CURRENT TASK</Text>
-            <Text className="font-amedium text-indigo-900 mt-1">{currentTask.studentPrompt}</Text>
-          </View>
-        )}
+      <ScrollView style={{ maxHeight: 210 }} className="bg-white px-4 pt-3" showsVerticalScrollIndicator={false}>
+        <GuidedStepPanel
+          stepTitle={step.title}
+          stepInstruction={step.instruction}
+          totalSteps={totalSteps}
+          currentStep={currentStep}
+          taskPrompt={currentTask?.studentPrompt ?? null}
+          taskIndex={currentTaskIndex}
+          taskTotal={usingMicroSteps ? sortedMicroSteps.length : null}
+          measurement={
+            isMeasurementCheckUnit ? { value: measurementInput, onChange: setMeasurementInput } : null
+          }
+        />
 
         {isReactionCheckUnit && (
-          <View className="mt-4 p-3 rounded-2xl bg-blue-50">
-            <Text className="font-amedium text-blue-900">Perform this on the bench above</Text>
-            <Text className="font-aregular text-blue-800 mt-1">
-              Drag the right materials into your equipment — this completes automatically once
-              the reaction actually happens.
+          <View className="mt-3 p-3 rounded-2xl bg-blue-50">
+            <Text className="text-[13px] font-bold text-blue-900">Perform this on the bench above</Text>
+            <Text className="text-[12px] text-blue-800 leading-4 mt-1">
+              Add the right materials to your equipment — this completes automatically when the reaction happens.
             </Text>
           </View>
         )}
 
-        {isMeasurementCheckUnit && (
-          <View className="mt-4 p-3 rounded-2xl bg-blue-50">
-            <Text className="font-amedium text-blue-900 mb-2">Enter your calculated answer</Text>
-            <TextInput
-              className="px-3 py-2.5 rounded-xl border font-aregular bg-white"
-              style={{ borderColor: colors.borderColorLight, color: colors.primaryBlack }}
-              keyboardType="decimal-pad"
-              value={measurementInput}
-              onChangeText={setMeasurementInput}
-              placeholder="e.g. 9.8"
-            />
-          </View>
-        )}
-
         {feedback && (
-          <View className={`mt-4 p-3 rounded-2xl ${feedback.ok ? "bg-emerald-50" : "bg-amber-50"}`}>
-            <Text className={`font-amedium ${feedback.ok ? "text-emerald-800" : "text-amber-900"}`}>{feedback.message}</Text>
+          <View className={`mt-3 p-3 rounded-2xl flex-row items-center gap-2 ${feedback.ok ? "bg-emerald-50" : "bg-amber-50"}`}>
+            {feedback.ok && <CheckCircle2 size={16} color="#059669" />}
+            <Text className={`text-[13px] font-bold flex-1 ${feedback.ok ? "text-emerald-800" : "text-amber-900"}`}>
+              {feedback.message}
+              {feedback.ok ? "  ·  Preparing your next task…" : ""}
+            </Text>
           </View>
         )}
 
         {reactionResult?.found && (
-          <View className="mt-4 p-4 rounded-2xl bg-slate-100">
-            <Text className="font-amedium">{reactionResult.reaction.name}</Text>
-            <Text className="font-aregular mt-1" style={{ color: colors.primary }}>{reactionResult.reaction.balancedEquation}</Text>
-            <Text className="font-aregular text-muted mt-1">{reactionResult.reaction.educationalInfo.explanation}</Text>
+          <View className="mt-3 p-3.5 rounded-2xl bg-slate-100">
+            <Text className="text-[13px] font-bold text-slate-800">{reactionResult.reaction.name}</Text>
+            <Text className="text-[13px] font-semibold text-primary mt-1">{reactionResult.reaction.balancedEquation}</Text>
+            <Text className="text-[12px] text-slate-500 leading-4 mt-1">{reactionResult.reaction.educationalInfo.explanation}</Text>
           </View>
         )}
+
+        <View className="h-3" />
       </ScrollView>
 
-      {/* Compound Builder drawer — collapsed by default, lets a student build/rebuild a
-          buildable compound mid-experiment without leaving the workspace. */}
-      {buildableConfirmed.length > 0 && (
-        <View className="border-t" style={{ borderColor: colors.borderColorLight }}>
-          <Pressable
-            onPress={() => setBuilderDrawerOpen((v) => !v)}
-            className="flex-row items-center justify-between px-4 py-3"
-          >
-            <View className="flex-row items-center gap-2">
-              <Hammer size={16} color="#FC6E20" />
-              <Text className="font-amedium text-sm" style={{ color: colors.primaryBlack }}>
-                Compound Builder
-              </Text>
-            </View>
-            {builderDrawerOpen ? (
-              <ChevronUp size={18} color={colors.primaryBlack} />
-            ) : (
-              <ChevronDown size={18} color={colors.primaryBlack} />
-            )}
-          </Pressable>
-
-          {builderDrawerOpen && (
-            <View className="px-4 pb-4 gap-2">
-              {buildableConfirmed.map((c) => (
-                <Pressable
-                  key={c._id}
-                  onPress={() => setBuilderTarget(c)}
-                  className="flex-row items-center justify-between px-3 py-2 rounded-2xl border"
-                  style={{ borderColor: builtIds.includes(c._id) ? "#10B981" : colors.borderColorLight }}
-                >
-                  <Text className="font-amedium text-sm text-ink">{c.name}</Text>
-                  <Text
-                    className="font-aregular text-xs"
-                    style={{ color: builtIds.includes(c._id) ? "#059669" : "#979797" }}
-                  >
-                    {builtIds.includes(c._id) ? "Built ✓" : "Tap to build"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-      )}
-
-      <View className="p-4 flex-row gap-3">
-        <View style={{ position: "relative" }}>
-          {/* Single entry point for all AI guidance — opens the Hint Center rather than revealing
-              anything inline; the badge is the only thing that appears unprompted. */}
-          <Pressable
-            onPress={openHintCenter}
-            className="px-4 py-3 rounded-2xl border items-center justify-center border-border"
-          >
-            <Lightbulb size={20} color={colors.primary} />
-          </Pressable>
-
-          {unreadHintCount > 0 && (
-            <View
-              style={{
-                position: "absolute",
-                top: -4,
-                right: -4,
-                minWidth: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: colors.primary,
-                alignItems: "center",
-                justifyContent: "center",
-                paddingHorizontal: 4,
-                borderWidth: 2,
-                borderColor: "white",
-              }}
-            >
-              <Text style={{ color: "white", fontSize: 10, fontWeight: "700" }}>
-                {unreadHintCount > 9 ? "9+" : unreadHintCount}
-              </Text>
-            </View>
-          )}
-        </View>
-        <View className="flex-1">
-          <Button
-            label={
-              logAction.isPending
-                ? "Checking..."
-                : isReactionCheckUnit
-                  ? "Check"
-                  : isMeasurementCheckUnit
-                    ? "Submit Answer"
-                    : "Mark as Done"
-            }
-            onPress={submitAction}
-            disabled={logAction.isPending || (isMeasurementCheckUnit && measurementInput.trim() === "")}
-            size="lg"
-          />
-        </View>
-      </View>
-
-      {builderTarget && (
-        <CompoundBuilder
-          experimentId={experimentId}
-          sessionId={sessionId}
-          compoundId={builderTarget._id}
-          onClose={() => setBuilderTarget(null)}
-          onBuilt={handleBuilt}
-        />
-      )}
+      <LabActionBar
+        checkLabel={checkLabel}
+        onCheck={submitAction}
+        checking={logAction.isPending}
+        checkDisabled={isMeasurementCheckUnit && measurementInput.trim() === ""}
+        onOpenHints={openHintCenter}
+        unreadHintCount={unreadHintCount}
+      />
 
       <HintCenterPanel
         visible={hintCenterOpen}
@@ -657,18 +664,52 @@ export default function Workspace() {
         onRequestHelp={handleRequestHelp}
         requestingHelp={requestHelp.isPending}
         helpReveal={(currentTaskKey && helpRevealByStep[currentTaskKey]) || null}
+        onOpenMaterialLibrary={() => {
+          setHintCenterOpen(false);
+          setMaterialLibrarySignal((n) => n + 1);
+        }}
       />
 
-      <EducationalInfoPanel result={liveReactionResult} onClose={() => setLiveReactionResult(null)} />
+      <EducationalInfoPanel
+        result={showObservationInfo ? liveReactionResult : null}
+        onClose={() => {
+          setShowObservationInfo(false);
+          setLiveReactionResult(null);
+        }}
+      />
 
       <ChemicalInspectPanel chemical={inspectChemical} onClose={() => setInspectChemical(null)} />
 
       <EquipmentInspectPanel
         instance={inspectEquipmentInstance}
         chemicalMap={chemicalMap}
+        friendlyName={inspectEquipmentId ? friendlyEquipmentName(benchEquipment, inspectEquipmentId) : undefined}
         onClose={() => setInspectEquipmentId(null)}
         onRemove={removeEquipment}
       />
+
+      {/* DEV ONLY — floating cheat sheet showing exactly how to complete this practical.
+          Renders nothing outside __DEV__. Remove before shipping (grep "DevWalkthrough"). */}
+      <DevWalkthroughOverlay
+        experimentId={experimentId}
+        currentStep={currentStep}
+        currentMicroStep={usingMicroSteps ? currentMicroStep : null}
+      />
+
+      {/* Buildable compound picked from the in-lab Material Library — build it, then bring the
+          built compound into the live lab. Progress/session/micro-step are untouched throughout. */}
+      {builderTarget && (
+        <CompoundBuilder
+          experimentId={experimentId}
+          sessionId={sessionId}
+          compoundId={builderTarget._id}
+          onClose={() => setBuilderTarget(null)}
+          onBuilt={(compoundId) => {
+            addMaterialToLab(compoundId);
+            setBuilderTarget(null);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }

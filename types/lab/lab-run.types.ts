@@ -1,4 +1,6 @@
 import { ReactionResultType } from "./chemical.types";
+import { TransferStateType } from "./transfer.types";
+import type { CurriculumReferenceType } from "./session.types";
 
 // --- Lab domain types: bench state, equipment instances, run actions ---
 
@@ -13,6 +15,24 @@ export type LastMeasurementType = {
   measuredAt: string | null;
 } | null;
 
+// Authoritative observable appearance of a container's current contents, computed server-side by
+// services/appearanceService.js after every contents change (spec §11/§12). The client renders
+// this as-is and animates the transition when `lastChangedAt` advances — it never recomputes
+// chemistry itself.
+export type ObservableStateType = {
+  liquidColor: string | null;
+  opacity: number | null;
+  phase?: string | null;
+  hasPrecipitate: boolean;
+  precipitateColor: string | null;
+  gasProduced: boolean;
+  cloudiness: number;
+  temperatureChange?: "exothermic" | "endothermic" | null;
+  description: string | null;
+  source?: "reaction" | "indicator" | "chemical" | "solid" | "default" | null;
+  lastChangedAt: string | null;
+} | null;
+
 export type EquipmentInstanceType = {
   instanceId: string;
   equipmentType: string;
@@ -20,9 +40,14 @@ export type EquipmentInstanceType = {
   contents: EquipmentContentType[];
   temperature: number;
   isHeated: boolean;
+  observableState?: ObservableStateType;
+  // Student-chosen vessel size in mL (e.g. a 5 / 10 / 20 mL test tube). null → catalog default.
+  capacity?: number | null;
   // Probe-role equipment only (e.g. pH meter) — see PhMeterInstrument.tsx.
   probeTargetId?: string | null;
   lastMeasurement?: LastMeasurementType;
+  // Liquid-transfer instruments only (dropper/pipette/burette) — see DropperInstrument.tsx.
+  transfer?: TransferStateType | null;
 };
 
 // Mechanics-only bench instance (pendulum, spring, stopwatch, balance/measuring_cylinder reused
@@ -51,9 +76,22 @@ export type PhysicsInstanceType = {
   } | null;
 };
 
+// One chemical physically available in the live lab — the LabRun "material inventory". Seeded
+// from the student's confirmed initial selection (wasInitiallySelected: true), then grown by the
+// in-workspace Material Library (add_material_to_lab). Distinct from Session.chemicalSelection,
+// which stays the untouched record of the initial plan. See labMaterialSchema in LabRun.js.
+export type LabMaterialType = {
+  chemical: string;
+  wasInitiallySelected: boolean;
+  addedAt: string;
+  addedDuringStep?: number | null;
+  addedDuringMicroStep?: number | null;
+};
+
 export type LabActionType = {
   actionType:
     | "create_equipment"
+    | "add_material_to_lab"
     | "move_equipment"
     | "remove_equipment"
     | "add_chemical"
@@ -67,6 +105,10 @@ export type LabActionType = {
     | "reset"
     | "probe_measure"
     | "probe_detach"
+    | "insert_transfer_tool"
+    | "load_transfer_tool"
+    | "aspirate"
+    | "dispense"
     | "attach_mass"
     | "set_pendulum_length"
     | "set_length"
@@ -97,16 +139,22 @@ export type LogLabActionRequestType =
       instanceId: string;
       equipmentType: string;
       position?: { x: number; y: number };
+      capacity?: number; // containers only — student-chosen vessel size in mL
       category?: "physics"; // omit for chemistry — see logLabAction's create_equipment case
     }
   | { actionType: "move_equipment"; instanceId: string; position: { x: number; y: number } }
   | { actionType: "remove_equipment"; instanceId: string }
   | { actionType: "add_chemical"; instanceId: string; chemicalId: string; quantity?: number; unit?: string }
+  | { actionType: "add_material_to_lab"; chemicalId: string }
   | { actionType: "pour"; instanceId: string; targetInstanceId: string }
   | { actionType: "reset"; instanceId: string }
   | { actionType: "heat"; instanceId: string; heated?: boolean; temperature?: number }
   | { actionType: "probe_measure"; instanceId: string; targetInstanceId: string }
   | { actionType: "probe_detach"; instanceId: string }
+  | { actionType: "insert_transfer_tool"; instanceId: string; targetInstanceId: string }
+  | { actionType: "load_transfer_tool"; instanceId: string; chemicalId: string }
+  | { actionType: "aspirate"; instanceId: string }
+  | { actionType: "dispense"; instanceId: string; targetInstanceId?: string }
   | { actionType: "attach_mass"; instanceId: string; quantity: number }
   | { actionType: "set_pendulum_length" | "set_length"; instanceId: string; quantity: number }
   | { actionType: "set_release_angle"; instanceId: string; quantity: number }
@@ -127,6 +175,9 @@ export type LabRunType = {
   startedAt: string;
   endedAt?: string | null;
   equipment: EquipmentInstanceType[];
+  // Chemical material inventory (non-blocking selection). Absent/empty on a legacy run not yet
+  // seeded — consumers fall back to Session.chemicalSelection (see workspace.tsx).
+  materials?: LabMaterialType[];
   physicsEquipment: PhysicsInstanceType[];
   // Electricity (Phase B) only — which slot board is active and what's placed where. Absent/null
   // boardId for a mechanics or chemistry LabRun.
@@ -147,11 +198,18 @@ export type InterventionType = {
     | "repeated_mistake"
     | "equipment_hint"
     | "chemical_hint"
-    | "circuit_hint";
+    | "circuit_hint"
+    | "transfer_contamination";
   hint: string;
   // Only set for equipment_hint/chemical_hint/circuit_hint (the step-level mismatch hints) — the
   // escalating 1-3 level shown, mirrors requestHint's hintLevel. Used to gate the Help reveal button.
   level?: number | null;
+  // "open_material_library" when a chemical_hint fires because the required material isn't in the
+  // lab at all — lets the client offer a recovery action. Never names the material.
+  suggestedAction?: "open_material_library" | null;
+  // Textbook lesson/page pointer — set when the student has struggled on this step (2+ errors) and
+  // a confident curriculum match exists. Same shape/source as the hint ladder's.
+  curriculumReference?: CurriculumReferenceType | null;
 } | null;
 
 // POST /api/lab/runs/:id/action now checks for a reaction continuously (add_chemical/heat), so

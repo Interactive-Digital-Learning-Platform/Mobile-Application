@@ -50,6 +50,24 @@ export default function Report() {
           </View>
         </View>
 
+        {report.practicalReference && (
+          <Section title="Textbook Reference">
+            <Text className="font-amedium text-ink">
+              {report.practicalReference.lessonTitle}
+              {report.practicalReference.sectionTitle ? ` — ${report.practicalReference.sectionTitle}` : ""}
+            </Text>
+            <Text className="font-aregular text-muted mt-0.5">
+              {report.practicalReference.bookTitle ? `${report.practicalReference.bookTitle} · ` : ""}
+              {report.practicalReference.pageStart
+                ? report.practicalReference.pageEnd &&
+                  report.practicalReference.pageEnd !== report.practicalReference.pageStart
+                  ? `pp. ${report.practicalReference.pageStart}–${report.practicalReference.pageEnd}`
+                  : `p. ${report.practicalReference.pageStart}`
+                : ""}
+            </Text>
+          </Section>
+        )}
+
         <Section title="Final Understanding Assessment">
           <Text className="font-aregular text-muted">{report.finalUnderstandingAssessment}</Text>
         </Section>
@@ -62,6 +80,27 @@ export default function Report() {
           <Section title="Concepts to Improve">
             {report.conceptsToImprove.map((c, i) => (
               <Text key={i} className="font-aregular text-muted">• {c}</Text>
+            ))}
+          </Section>
+        )}
+
+        {report.followUpReading && report.followUpReading.length > 0 && (
+          <Section title="Follow-up Reading">
+            {report.followUpReading.map((r, i) => (
+              <View key={i} className={i > 0 ? "mt-2" : undefined}>
+                <Text className="font-amedium text-ink">
+                  {r.lessonTitle}
+                  {r.sectionTitle ? ` — ${r.sectionTitle}` : ""}
+                </Text>
+                <Text className="font-aregular text-muted">
+                  {r.bookTitle ? `${r.bookTitle} · ` : ""}
+                  {r.pageStart
+                    ? r.pageEnd && r.pageEnd !== r.pageStart
+                      ? `pp. ${r.pageStart}–${r.pageEnd}`
+                      : `p. ${r.pageStart}`
+                    : ""}
+                </Text>
+              </View>
             ))}
           </Section>
         )}

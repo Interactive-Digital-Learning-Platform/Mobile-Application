@@ -6,3 +6,4 @@ export * from "./compound-builder.types";
 export * from "./tutor.types";
 export * from "./biology.types";
 export * from "./component.types";
+export * from "./transfer.types";

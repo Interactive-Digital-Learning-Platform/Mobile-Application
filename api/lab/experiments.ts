@@ -1,5 +1,11 @@
 import { labClient } from "@/api/apiClients";
-import { PracticalCatalogItemType, PracticalDetailType, PracticalInfoType, PracticalSummaryType } from "@/types/lab";
+import {
+  PracticalCatalogItemType,
+  PracticalDetailType,
+  PracticalInfoType,
+  PracticalSummaryType,
+  PracticalWalkthroughType,
+} from "@/types/lab";
 
 // --- Experiments (practicals) ---
 
@@ -25,5 +31,13 @@ export const fetchExperimentById = async (id: string): Promise<PracticalDetailTy
 
 export const fetchExperimentInfo = async (id: string): Promise<PracticalInfoType> => {
   const response = await labClient.get(`/experiments/${id}/info`);
+  return response.data.data;
+};
+
+// DEV ONLY — full practical solution for developer testing (see PracticalWalkthroughType).
+// The backend endpoint responds 404 in production. Remove with components/lab/dev/DevWalkthroughOverlay
+// before shipping.
+export const fetchExperimentWalkthrough = async (id: string): Promise<PracticalWalkthroughType> => {
+  const response = await labClient.get(`/experiments/${id}/walkthrough`);
   return response.data.data;
 };

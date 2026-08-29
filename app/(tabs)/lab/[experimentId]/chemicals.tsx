@@ -89,8 +89,8 @@ const ElementCard = ({
       style={[cardStyle(selected), style]}
     >
       <SelectDot selected={selected} />
-      <View style={{ height: 108, alignItems: "center", justifyContent: "center", marginTop: 4 }}>
-        <MaterialArtwork chemical={item} size={102} />
+      <View style={{ height: 126, alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+        <MaterialArtwork chemical={item} size={120} />
       </View>
       <Text className="text-[13px] font-bold text-center text-slate-800 mt-2" numberOfLines={2} style={{ minHeight: 32, lineHeight: 16 }}>
         {item.name}
@@ -217,30 +217,27 @@ export default function ChemicalSelection() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
+  // Non-blocking: the selection is a planning step, not a gate. Whatever the analysis says, the
+  // student proceeds into the workspace — they can bring in anything they missed from the in-lab
+  // Material Library, and Current-Task grading always reads the live bench, never this list. The
+  // correct/missing/unnecessary comparison is still recorded server-side for the report.
   const handleSubmit = () => {
     submitMutation.mutate(selected, {
       onSuccess: (data) => {
         setResult(data);
-        if (data.complete) {
-          setTimeout(() => {
-            router.replace(`/(tabs)/lab/${experimentId}/workspace?sessionId=${sessionId}` as never);
-          }, 900);
-        }
+        setTimeout(
+          () => router.replace(`/(tabs)/lab/${experimentId}/workspace?sessionId=${sessionId}` as never),
+          data.complete ? 700 : 1100
+        );
       },
     });
   };
 
   const handleBuilt = (compoundId: string) => {
     setBuiltIds((prev) => (prev.includes(compoundId) ? prev : [...prev, compoundId]));
-    if (selected.length > 0) handleSubmit();
   };
 
-  // Once only a build is outstanding, resubmitting the same selection can't help — the button
-  // reflects that instead of inviting a dead click.
-  const incompleteResult = result && !result.complete ? result : null;
-  const blockedOnBuildsOnly = !!incompleteResult && incompleteResult.missingCount === 0 && incompleteResult.missingBuildsCount > 0;
-  const outstandingBuilds = incompleteResult?.missingBuildsCount ?? 0;
-  const canConfirm = selected.length > 0 && !submitMutation.isPending && !blockedOnBuildsOnly;
+  const canConfirm = (selected.length > 0 || builtIds.length > 0) && !submitMutation.isPending;
 
   return (
     <SafeAreaView className="w-full flex-1 bg-slate-50" edges={["top", "bottom"]}>
@@ -365,22 +362,22 @@ export default function ChemicalSelection() {
         </ScrollView>
       )}
 
-      {/* Feedback */}
+      {/* Feedback — non-blocking: a gentle note, the student still proceeds either way. */}
       {result && !result.complete && (
         <View className="mx-4 mb-1 p-3 rounded-2xl bg-amber-50 flex-row gap-2">
           <Lightbulb size={15} color="#B45309" strokeWidth={2} />
           <View className="flex-1">
-            <Text className="text-[13px] font-bold text-amber-900">
-              {blockedOnBuildsOnly ? "Finish building to continue" : "Not quite complete yet"}
+            <Text className="text-[13px] font-bold text-amber-900">Noted — entering the workspace…</Text>
+            <Text className="text-[12px] text-amber-800 leading-4 mt-0.5">
+              {result.hint || "You can add anything else you need from the Material Library inside the lab."}
             </Text>
-            <Text className="text-[12px] text-amber-800 leading-4 mt-0.5">{result.hint}</Text>
           </View>
         </View>
       )}
       {result?.complete && (
         <View className="mx-4 mb-1 p-3 rounded-2xl bg-emerald-50 flex-row items-center gap-2">
           <CheckCircle2 size={16} color="#059669" />
-          <Text className="text-[13px] font-bold text-emerald-800">Materials confirmed — entering the workspace…</Text>
+          <Text className="text-[13px] font-bold text-emerald-800">Materials recorded — entering the workspace…</Text>
         </View>
       )}
 
@@ -396,11 +393,7 @@ export default function ChemicalSelection() {
           className={`py-3.5 rounded-xl items-center ${canConfirm ? "bg-primary" : "bg-slate-200"}`}
         >
           <Text className={`text-base font-bold ${canConfirm ? "text-white" : "text-slate-400"}`}>
-            {submitMutation.isPending
-              ? "Checking…"
-              : blockedOnBuildsOnly
-                ? `Build ${outstandingBuilds} more compound${outstandingBuilds > 1 ? "s" : ""} to continue`
-                : "Confirm Selection"}
+            {submitMutation.isPending ? "Saving…" : "Enter the Lab"}
           </Text>
         </TouchableOpacity>
       </View>

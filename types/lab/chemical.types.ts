@@ -27,7 +27,19 @@ export type ChemicalType = {
   chemicalType: ChemicalKind;
   isBuildableFromElements?: boolean;
   state: ChemicalState;
+  // CARD / bottle-tint artwork colour only — NOT how the substance looks as the liquid in a
+  // vessel. For that, use `appearance` (data-driven, from the backend) via
+  // resolveLiquidAppearance() — never read `color` for bench liquid rendering.
   color: string;
+  // How the material actually looks as the substance in a test tube / beaker. Backend-authored
+  // (src/data/chemicalAppearance.js). Absent only on a legacy chemical not yet migrated — callers
+  // fall back to a category/state guess.
+  appearance?: {
+    solutionColor?: string | null;
+    opacity?: number | null;
+    phase?: "solution" | "liquid" | "solid" | "gas" | "powder" | "crystals" | "metal" | null;
+    texture?: "clear" | "cloudy" | "opaque" | "metallic" | "granular" | null;
+  } | null;
   concentration?: string | null;
   phValue?: number | null;
   safetyClassification: SafetyClassification;

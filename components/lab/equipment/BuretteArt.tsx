@@ -2,6 +2,7 @@ import { useId } from "react";
 import Svg, { Rect, Line, Circle, Defs, ClipPath } from "react-native-svg";
 import { colors } from "@/constants/colors";
 import { EquipmentVisualProps } from "@/types/lab";
+import AnimatedLiquidRect from "./AnimatedLiquidRect";
 
 const VB_W = 26;
 const VB_H = 64;
@@ -10,12 +11,19 @@ const TUBE_Y = 2;
 const TUBE_W = 6;
 const TUBE_H = 44;
 
-export default function BuretteArt({ size = 40, color = colors.primaryBlack, liquidColor, fillLevel = 0 }: EquipmentVisualProps) {
+export default function BuretteArt({
+  size = 40,
+  color = colors.primaryBlack,
+  liquidColor,
+  fillLevel = 0,
+  liquidOpacity = 0.8,
+  precipitateColor,
+  cloudiness = 0,
+}: EquipmentVisualProps) {
   const level = Math.max(0, Math.min(1, fillLevel));
   const liquidHeight = level * TUBE_H;
   // Each instance needs its own clip id — a hardcoded id collides across every dropper/pipette/
-  // burette rendered on the bench at once, so the liquid rect can end up clipped by a completely
-  // different equipment's (differently-scaled) clip shape instead of its own.
+  // burette rendered on the bench at once.
   const clipId = `burette-interior-${useId()}`;
 
   return (
@@ -26,14 +34,16 @@ export default function BuretteArt({ size = 40, color = colors.primaryBlack, liq
         </ClipPath>
       </Defs>
       {liquidColor && level > 0 && (
-        <Rect
+        <AnimatedLiquidRect
           x={TUBE_X}
           y={TUBE_Y + TUBE_H - liquidHeight}
           width={TUBE_W}
           height={liquidHeight}
-          fill={liquidColor}
-          opacity={0.8}
-          clipPath={`url(#${clipId})`}
+          color={liquidColor}
+          opacity={liquidOpacity}
+          clipPathId={clipId}
+          precipitateColor={precipitateColor}
+          cloudiness={cloudiness}
         />
       )}
       <Rect x={TUBE_X} y={TUBE_Y} width={TUBE_W} height={TUBE_H} stroke={color} strokeWidth={2.2} fill="none" />

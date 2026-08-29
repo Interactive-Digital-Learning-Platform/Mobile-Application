@@ -1,5 +1,5 @@
 import { Modal, ScrollView, Text, View } from "react-native";
-import { Sparkles, Unlock } from "lucide-react-native";
+import { BookOpen, FlaskConical, Sparkles, Unlock } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { HintCenterPanelProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
@@ -27,7 +27,13 @@ export default function HintCenterPanel({
   onRequestHelp,
   requestingHelp,
   helpReveal,
+  onOpenMaterialLibrary,
 }: HintCenterPanelProps) {
+  // The most recent hint told the student a material is missing — offer the recovery path (where
+  // to act, not what to add). Keyed to the LATEST hint only, so it disappears as soon as any newer
+  // guidance supersedes it (e.g. after the material is added and the next hint re-evaluates).
+  const latestHint = notifications[notifications.length - 1];
+  const showMaterialLibraryAction = !!onOpenMaterialLibrary && latestHint?.suggestedAction === "open_material_library";
   return (
     <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <View className="flex-1 justify-end" style={{ backgroundColor: "rgba(15,23,42,0.5)" }}>
@@ -49,6 +55,17 @@ export default function HintCenterPanel({
                   {i > 0 && <View className="h-px my-3" style={{ backgroundColor: colors.borderColorLight }} />}
                   <Text className="font-amedium text-xs text-muted">{formatTime(n.timestamp)}</Text>
                   <Text className="font-aregular text-ink mt-1">{n.message}</Text>
+                  {n.curriculumReference && (
+                    <View
+                      className="flex-row gap-2 mt-2 p-2.5 rounded-xl"
+                      style={{ backgroundColor: colors.borderColorLight }}
+                    >
+                      <BookOpen size={14} color={colors.primary} style={{ marginTop: 2 }} />
+                      <Text className="flex-1 font-aregular text-xs text-ink">
+                        {n.curriculumReference.displayText}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               ))
             )}
@@ -57,37 +74,69 @@ export default function HintCenterPanel({
               <View className="mt-3 p-3 rounded-2xl bg-amber-50">
                 <View className="flex-row items-center gap-1.5">
                   <Unlock size={14} color="#92400E" />
-                  <Text className="font-amedium text-xs text-amber-900">ANSWER REVEALED</Text>
+                  <Text className="font-amedium text-xs text-amber-900">WHAT TO DO</Text>
                 </View>
-                {helpReveal.equipment.length > 0 && (
-                  <Text className="font-aregular text-amber-900 mt-2">
-                    Equipment: {helpReveal.equipment.join(", ")}
+
+                {helpReveal.actionSteps && helpReveal.actionSteps.length > 0 ? (
+                  <View className="mt-2 gap-1.5">
+                    {helpReveal.actionSteps.map((s, i) => (
+                      <View key={i} className="flex-row gap-2">
+                        <Text className="font-amedium text-amber-900">{i + 1}.</Text>
+                        <Text className="flex-1 font-aregular text-amber-900">{s}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text className="font-amedium text-amber-900 mt-2">
+                    {helpReveal.actionInstruction || helpReveal.explanation}
                   </Text>
                 )}
-                {helpReveal.chemicals.length > 0 && (
-                  <Text className="font-aregular text-amber-900 mt-1">
-                    Chemicals: {helpReveal.chemicals.map((c) => c.name).join(", ")}
+
+                {/* Supporting detail, secondary to the action itself. */}
+                {(helpReveal.equipment.length > 0 || helpReveal.chemicals.length > 0) && (
+                  <Text className="font-aregular text-xs text-amber-800 mt-2">
+                    Uses:{" "}
+                    {[...helpReveal.equipment, ...helpReveal.chemicals.map((c) => c.name)].join(", ")}
                   </Text>
                 )}
-                <Text className="font-aregular text-amber-900 mt-1">{helpReveal.explanation}</Text>
               </View>
             )}
           </ScrollView>
 
           <View className="mt-4 gap-2">
+            {showMaterialLibraryAction && (
+              <View className="flex-row items-center gap-2 p-3 rounded-2xl bg-primary/10">
+                <FlaskConical size={16} color={colors.primary} />
+                <Text className="flex-1 font-aregular text-xs text-ink">
+                  Missing something? You can bring another material into the lab.
+                </Text>
+              </View>
+            )}
+            {showMaterialLibraryAction && (
+              <Button
+                label="Open Material Library"
+                onPress={() => onOpenMaterialLibrary?.()}
+                variant="primary"
+              />
+            )}
             <Button
               label={requestingHint ? "Asking..." : "Ask for a Hint"}
               onPress={onRequestHint}
               disabled={requestingHint}
-              variant="primary"
+              variant={showMaterialLibraryAction ? "secondary" : "primary"}
             />
             {helpAvailable && !helpReveal && (
-              <Button
-                label={requestingHelp ? "Revealing..." : "Help — Show Me the Answer"}
-                onPress={onRequestHelp}
-                disabled={requestingHelp}
-                variant="secondary"
-              />
+              <View className="gap-1.5">
+                <Text className="font-aregular text-xs text-muted">
+                  We&apos;ll show you exactly what action to perform. Using this help may reduce your task score.
+                </Text>
+                <Button
+                  label={requestingHelp ? "Revealing..." : "Show Me What To Do"}
+                  onPress={onRequestHelp}
+                  disabled={requestingHelp}
+                  variant="secondary"
+                />
+              </View>
             )}
             <Button label="Close" onPress={onClose} variant="secondary" />
           </View>

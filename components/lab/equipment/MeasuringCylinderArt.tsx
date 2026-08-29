@@ -1,6 +1,8 @@
+import { useId } from "react";
 import Svg, { Rect, Line, Path, Defs, ClipPath } from "react-native-svg";
 import { colors } from "@/constants/colors";
 import { EquipmentVisualProps } from "@/types/lab";
+import AnimatedLiquidRect from "./AnimatedLiquidRect";
 
 const VB_W = 30;
 const VB_H = 60;
@@ -14,26 +16,32 @@ export default function MeasuringCylinderArt({
   color = colors.primaryBlack,
   liquidColor,
   fillLevel = 0,
+  liquidOpacity = 0.8,
+  precipitateColor,
+  cloudiness = 0,
 }: EquipmentVisualProps) {
   const level = Math.max(0, Math.min(1, fillLevel));
   const liquidHeight = level * BODY_H;
+  const clipId = `mc-interior-${useId()}`;
 
   return (
     <Svg height={size} width={(size * VB_W) / VB_H} viewBox={`0 0 ${VB_W} ${VB_H}`}>
       <Defs>
-        <ClipPath id="interior">
+        <ClipPath id={clipId}>
           <Rect x={BODY_X} y={BODY_Y} width={BODY_W} height={BODY_H} />
         </ClipPath>
       </Defs>
       {liquidColor && level > 0 && (
-        <Rect
+        <AnimatedLiquidRect
           x={BODY_X}
           y={BODY_Y + BODY_H - liquidHeight}
           width={BODY_W}
           height={liquidHeight}
-          fill={liquidColor}
-          opacity={0.8}
-          clipPath="url(#interior)"
+          color={liquidColor}
+          opacity={liquidOpacity}
+          clipPathId={clipId}
+          precipitateColor={precipitateColor}
+          cloudiness={cloudiness}
         />
       )}
       <Path d="M9 4 L7 4" stroke={color} strokeWidth={2} strokeLinecap="round" />
