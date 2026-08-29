@@ -12,7 +12,7 @@ import { FlashList, FlashListRef } from "@shopify/flash-list";
 import { Send, Sparkles, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { LabTutorChatProps, MessageType } from "@/types/lab";
-import Message from "@/components/Message";
+import LabTutorMessage from "@/components/lab/chat/LabTutorMessage";
 import { useLabTutor } from "@/hooks/lab/use-lab-tutor";
 
 export default function LabTutorChat({ labRunId, visible, onClose }: LabTutorChatProps) {
@@ -48,7 +48,7 @@ export default function LabTutorChat({ labRunId, visible, onClose }: LabTutorCha
             ref={listRef}
             data={messages}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <Message key={item.id} message={item} />}
+            renderItem={({ item }) => <LabTutorMessage key={item.id} message={item} />}
             contentContainerClassName="px-4"
             ListEmptyComponent={
               <Text className="font-aregular text-muted text-center mt-10">
