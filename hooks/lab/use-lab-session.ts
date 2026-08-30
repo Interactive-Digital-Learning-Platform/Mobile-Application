@@ -9,6 +9,7 @@ import {
   requestStepHelp,
   completeSession,
   fetchSessionReport,
+  fetchLabNoteContext,
   fetchSessionHistory,
   fetchSessionStats,
 } from "@/api/lab";
@@ -66,6 +67,15 @@ export const useSessionReport = (sessionId: string | undefined) => {
   return useQuery({
     queryKey: ["sessionReport", sessionId],
     queryFn: () => fetchSessionReport(sessionId as string),
+    enabled: !!sessionId,
+  });
+};
+
+// Lab → Notes handoff context (Phase 4). Used by the Notes-owned "from a practical" screen.
+export const useLabNoteContext = (sessionId: string | undefined) => {
+  return useQuery({
+    queryKey: ["labNoteContext", sessionId],
+    queryFn: () => fetchLabNoteContext(sessionId as string),
     enabled: !!sessionId,
   });
 };

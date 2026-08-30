@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { ClipboardList } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { useSessionHistory } from "@/hooks/lab/use-lab-session";
@@ -56,7 +57,19 @@ export default function PracticalHistory() {
           keyExtractor={(item: SessionHistoryItemType) => item._id}
           contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => <PracticalHistoryListItem item={item} />}
+          renderItem={({ item }) => (
+            <PracticalHistoryListItem
+              item={item}
+              onPress={
+                item.experimentId
+                  ? () =>
+                      router.push(
+                        `/(tabs)/lab/${item.experimentId!._id}/report?sessionId=${item._id}` as never,
+                      )
+                  : undefined
+              }
+            />
+          )}
           ListEmptyComponent={
             <View className="flex-1 justify-center items-center px-8 mt-16">
               <View className="w-16 h-16 rounded-full bg-primary/10 justify-center items-center mb-4">

@@ -3,6 +3,7 @@ import {
   EquipmentSelectionResultType,
   HelpRevealType,
   HintResponseType,
+  LabNoteContextType,
   LabReportType,
   LogStepActionRequestType,
   LogStepActionResponseType,
@@ -76,8 +77,21 @@ export const requestStepHelp = async (
 
 export const completeSession = async (
   sessionId: string,
-): Promise<{ score: number; totalTime: number }> => {
+): Promise<{
+  score: number;
+  performanceScore?: number;
+  timeScore?: number | null;
+  totalTime: number;
+  totalActiveTime?: number;
+}> => {
   const response = await labClient.post(`/sessions/${sessionId}/complete`);
+  return response.data.data;
+};
+
+// Lab → Notes handoff (Phase 4). The Notes feature calls this by sessionId to build a
+// personalized revision note — the Lab side never generates the note itself.
+export const fetchLabNoteContext = async (sessionId: string): Promise<LabNoteContextType> => {
+  const response = await labClient.get(`/sessions/${sessionId}/note-context`);
   return response.data.data;
 };
 
