@@ -14,6 +14,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ChevronLeft,
+  ChevronRight,
   Play,
   Pause,
   BookOpen,
