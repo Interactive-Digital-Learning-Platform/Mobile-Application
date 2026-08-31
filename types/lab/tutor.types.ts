@@ -91,6 +91,22 @@ export type LabReportType = {
     suggestions: string[]; // legacy rule-based tips
   };
   conceptsToImprove: string[];
+  // "What We Noticed" — misconceptions the Bayesian model inferred from the student's bench
+  // actions (backend studentModelService). Only present for a treatment-arm session with the
+  // model driving the diagnosis; null/absent otherwise. `probability` 0–1, `signalCount` = how
+  // many bench actions pointed to it, `firstSeenStep` = the step it first showed up on.
+  misconceptionInsight?: {
+    cluster: string | null;
+    items: {
+      code: string;
+      title: string | null;
+      description: string | null;
+      correctionStrategy: string | null;
+      probability: number;
+      signalCount: number;
+      firstSeenStep: number | null;
+    }[];
+  } | null;
   // Curriculum placement of the whole practical — "this practical is covered by <lesson>, pp. A–B
   // of the <textbook>". Shown regardless of performance. null until the curriculum map is synced.
   practicalReference?: {
