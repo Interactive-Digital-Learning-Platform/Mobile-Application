@@ -98,7 +98,7 @@ export default function AIChat() {
                 size={28}
                 color="#ffffff"
               />
-              <Text className="text-white font-amedium text-2xl">Kit AI</Text>
+              <Text className="text-white font-amedium text-2xl">Nous</Text>
               <View className="h-auto flex-row items-right rounded-full -mr-2">
                 <EllipsisVertical color="#ffffff" size={28} />
               </View>

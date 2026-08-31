@@ -4,6 +4,7 @@ import {
   attachmentResponseSchema,
   conversationResponseSchema,
   messageHistoryResponseSchema,
+  messageResponseSchema,
   SSEEvent,
   sseEventSchema,
 } from "@/schemas/chatSchemas";
@@ -50,6 +51,14 @@ export const fetchMessageHistory = async (conversationID: string) => {
   );
 
   return messageHistoryResponseSchema.parse(response.data);
+};
+
+export const fetchMessageById = async (messageID: string) => {
+  const response = await assistantClient.get(
+    `/conversations/messages/${messageID}`,
+  );
+
+  return messageResponseSchema.parse(response.data);
 };
 
 type UploadAttachmentArgs = {
@@ -195,6 +204,7 @@ export const streamMessage = async ({
         } else if (parsed.type === "done") {
           callbacks.onDone(parsed.message_id, {
             translationFailed: parsed.translation_failed,
+            sources: parsed.sources,
           });
           es.close();
           complete(() => resolve());
