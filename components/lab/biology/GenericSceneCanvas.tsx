@@ -25,7 +25,7 @@ export default function GenericSceneCanvas({ stage, stageIndex, timelinePosition
       ))}
       {!stage.sceneElements?.length && (
         <View className="flex-1 items-center justify-center">
-          <Text className="font-aregular text-muted">Nothing to show for this stage.</Text>
+          <Text className="text-slate-500">Nothing to show for this stage.</Text>
         </View>
       )}
     </View>

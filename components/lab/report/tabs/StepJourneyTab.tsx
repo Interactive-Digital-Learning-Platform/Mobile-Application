@@ -14,7 +14,7 @@ export default function StepJourneyTab({
   insights: ReportInsights;
 }) {
   return (
-    <View className="gap-4 pt-4">
+    <View className="gap-3.5 pt-3.5">
       <LabJourneyTimeline journey={insights.journey} />
       {insights.guidance && <GuidanceImpactCard guidance={insights.guidance} />}
       <TimeBreakdownChart rows={insights.timeBreakdown} report={report} />

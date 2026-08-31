@@ -98,8 +98,8 @@ export default function AnimatedSceneAsset({ element, timelinePosition, stageInd
         )}
       </Pressable>
       {showLabel && (
-        <View className="mt-1 bg-ink/80 rounded-full px-2 py-0.5">
-          <Text className="text-white text-[10px] font-amedium">{visual.label}</Text>
+        <View className="mt-1 bg-slate-900/80 rounded-full px-2 py-0.5">
+          <Text className="text-white text-[10px] font-semibold">{visual.label}</Text>
         </View>
       )}
     </Animated.View>

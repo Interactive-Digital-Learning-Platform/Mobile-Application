@@ -28,7 +28,7 @@ export default function VisualizationTimeline({
           <Pressable key={i} onPress={() => onJumpToStage(i)} className="flex-1" hitSlop={6}>
             <View
               className={`h-1.5 rounded-full overflow-hidden ${
-                isDone ? "bg-emerald-500" : isCurrent ? "bg-primary/20" : "bg-border"
+                isDone ? "bg-emerald-500" : isCurrent ? "bg-primary/20" : "bg-slate-200"
               }`}
             >
               {isCurrent && <StageFill timelinePosition={timelinePosition} stageIndex={i} />}

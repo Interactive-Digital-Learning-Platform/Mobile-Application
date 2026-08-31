@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
-import { ChevronDown, Info, X, type LucideIcon } from "lucide-react-native";
+import { ChevronDown, ChevronRight, Info, X, type LucideIcon } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 
 // Small, un-"named" building blocks shared by the report components. The screen-level pieces
@@ -113,6 +113,62 @@ export function AccordionRow({
           {children}
         </Animated.View>
       )}
+    </View>
+  );
+}
+
+// Inline "reveal more" — a compact trigger row + the body it hides. Controlled so a parent list
+// can keep only one open at a time. Used to push explanatory prose off the default view.
+export function Disclosure({
+  open,
+  onToggle,
+  label,
+  openLabel,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  openLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <View>
+      <Pressable
+        onPress={onToggle}
+        className="flex-row items-center gap-1 py-1.5 min-h-[36px]"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+      >
+        <Text className="text-[12px] font-bold text-slate-500">{open ? openLabel ?? "Show less" : label}</Text>
+        {open ? (
+          <ChevronDown size={13} color={ICON_COLORS.slate400} strokeWidth={2.6} />
+        ) : (
+          <ChevronRight size={13} color={ICON_COLORS.slate400} strokeWidth={2.6} />
+        )}
+      </Pressable>
+      {open && (
+        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
+          {children}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+// Confidence as a bar + a word, so students don't have to interpret a raw percentage.
+const CONFIDENCE_BUCKET = (pct: number) =>
+  pct >= 80 ? { word: "High", bar: "bg-violet-500" } : pct >= 50 ? { word: "Medium", bar: "bg-violet-400" } : { word: "Low", bar: "bg-violet-300" };
+
+export function ConfidenceMeter({ pct }: { pct: number }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const bucket = CONFIDENCE_BUCKET(clamped);
+  return (
+    <View className="flex-row items-center gap-2">
+      <View className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <View className={`h-full rounded-full ${bucket.bar}`} style={{ width: `${clamped}%` }} />
+      </View>
+      <Text className="text-[11px] font-bold text-violet-600">{bucket.word}</Text>
     </View>
   );
 }

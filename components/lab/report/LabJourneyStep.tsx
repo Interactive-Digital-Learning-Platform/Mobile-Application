@@ -7,30 +7,27 @@ import { JourneyStep } from "@/types/lab";
 import { fmtDuration } from "@/utils/lab/report";
 import { EvidenceChip } from "./primitives";
 
+// One task = its label + a compact chip row. No per-task prose — the one improvement line lives
+// once at the step level.
 function TaskRow({ task }: { task: JourneyStep["tasks"][number] }) {
-  const chips: string[] = [];
-  if (task.hintsRequested > 0) chips.push(`${task.hintsRequested} hint${task.hintsRequested > 1 ? "s" : ""}`);
-  if (task.helpUsed) chips.push("Answer shown");
-  if (task.mistakes > 0) chips.push(`${task.mistakes} mistake${task.mistakes > 1 ? "s" : ""}`);
-  if (task.scoreImpact > 0) chips.push(`−${task.scoreImpact} marks`);
-
   return (
-    <View className="mt-2.5">
-      <View className="flex-row items-start gap-2">
-        <View className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5" />
-        <View className="flex-1">
-          <Text className="text-[12px] text-slate-700 leading-4">{task.label}</Text>
-          <Text className="text-[11px] text-slate-400 mt-0.5">
-            Score {task.score} · {fmtDuration(task.timeSpentSeconds)}
-          </Text>
-          {chips.length > 0 && (
-            <View className="flex-row flex-wrap gap-1.5 mt-1.5">
-              {chips.map((c) => (
-                <EvidenceChip key={c} label={c} />
-              ))}
-            </View>
+    <View className="flex-row items-start gap-2 mt-2.5">
+      <View className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5" />
+      <View className="flex-1">
+        <Text className="text-[12px] text-slate-700 leading-4" numberOfLines={2}>
+          {task.label}
+        </Text>
+        <View className="flex-row flex-wrap gap-1.5 mt-1.5">
+          <EvidenceChip label={`Score ${task.score}`} />
+          <EvidenceChip label={fmtDuration(task.timeSpentSeconds)} />
+          {task.hintsRequested > 0 && (
+            <EvidenceChip label={`${task.hintsRequested} hint${task.hintsRequested > 1 ? "s" : ""}`} tone="warning" />
           )}
-          {task.advice && <Text className="text-[11px] text-slate-500 leading-4 mt-1 italic">{task.advice}</Text>}
+          {task.helpUsed && <EvidenceChip label="Answer shown" tone="danger" />}
+          {task.mistakes > 0 && (
+            <EvidenceChip label={`${task.mistakes} mistake${task.mistakes > 1 ? "s" : ""}`} tone="warning" />
+          )}
+          {task.scoreImpact > 0 && <EvidenceChip label={`−${task.scoreImpact} marks`} tone="danger" />}
         </View>
       </View>
     </View>
@@ -102,23 +99,21 @@ export default function LabJourneyStep({
             )}
           </View>
 
-          <Text className="text-[11px] text-slate-400 mt-1.5">{meta.join(" · ")}</Text>
+          {!open && (
+            <Text className="text-[11px] text-slate-400 mt-1.5" numberOfLines={1}>
+              {meta.join(" · ")}
+            </Text>
+          )}
 
           {open && (
-            <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} className="mt-3 pt-3 border-t border-slate-100">
-              {step.tasks.length > 0 ? (
-                <>
-                  <Text className="text-[11px] font-bold text-slate-500 mb-1">Task breakdown</Text>
-                  {step.tasks.map((t) => (
-                    <TaskRow key={t.microStepId} task={t} />
-                  ))}
-                </>
-              ) : (
-                <Text className="text-[12px] text-slate-400">This step has no separate tasks recorded.</Text>
-              )}
-
-              <View className="flex-row flex-wrap gap-1.5 mt-3">
-                <EvidenceChip label={`Time ${fmtDuration(step.timeSpentSeconds)}`} />
+            <Animated.View
+              entering={FadeIn.duration(160)}
+              exiting={FadeOut.duration(120)}
+              className="mt-3 pt-3 border-t border-slate-100"
+            >
+              <View className="flex-row flex-wrap gap-1.5">
+                <EvidenceChip label={`Score ${step.score}`} />
+                <EvidenceChip label={fmtDuration(step.timeSpentSeconds)} />
                 {step.retries > 0 && (
                   <EvidenceChip label={`${step.retries} attempt${step.retries > 1 ? "s" : ""}`} tone="warning" />
                 )}
@@ -131,6 +126,15 @@ export default function LabJourneyStep({
                 )}
                 {step.scoreImpact > 0 && <EvidenceChip label={`−${step.scoreImpact} marks`} tone="danger" />}
               </View>
+
+              {step.tasks.length > 0 ? (
+                <View className="mt-3">
+                  <Text className="text-[11px] font-bold text-slate-500">Task breakdown</Text>
+                  {step.tasks.map((t) => (
+                    <TaskRow key={t.microStepId} task={t} />
+                  ))}
+                </View>
+              ) : null}
 
               {step.advice && (
                 <Text className="text-[12px] text-slate-600 leading-5 mt-3">{step.advice}</Text>

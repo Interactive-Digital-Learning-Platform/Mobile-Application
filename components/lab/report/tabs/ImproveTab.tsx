@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View } from "react-native";
 import { Target } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -21,14 +22,21 @@ export default function ImproveTab({
   sessionId: string;
   experimentId: string;
 }) {
+  const [openMission, setOpenMission] = useState<string | null>(null);
+
   return (
-    <View className="gap-4 pt-4">
+    <View className="gap-3.5 pt-3.5">
       <View>
         <SectionHeading title="Learning Missions" icon={Target} iconColor={ICON_COLORS.primary500} />
         {insights.missions.length > 0 ? (
           <View className="gap-2">
             {insights.missions.map((m) => (
-              <LearningMissionCard key={m.key} mission={m} />
+              <LearningMissionCard
+                key={m.key}
+                mission={m}
+                open={openMission === m.key}
+                onToggle={() => setOpenMission((cur) => (cur === m.key ? null : m.key))}
+              />
             ))}
           </View>
         ) : (

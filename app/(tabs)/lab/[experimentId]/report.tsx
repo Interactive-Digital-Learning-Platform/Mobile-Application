@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { router, useLocalSearchParams } from "expo-router";
-import { ChevronLeft } from "lucide-react-native";
+import { ChevronLeft, FlaskConical } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { useSessionReport } from "@/hooks/lab/use-lab-session";
 import { ReportTabKey } from "@/types/lab";
@@ -46,45 +46,53 @@ export default function Report() {
   }
 
   return (
-    <SafeAreaView className="w-full flex-1 bg-slate-50" edges={["top"]}>
-      <View className="flex-row items-center gap-3 px-4 py-2.5">
+    <SafeAreaView className="w-full flex-1 bg-primary" edges={["top"]}>
+      <View className="flex-row items-center gap-3 px-4 pt-2 pb-4">
         <Pressable
-          className="w-9 h-9 rounded-full bg-white border border-slate-200 justify-center items-center"
+          className="w-10 h-10 rounded-full bg-white/20 border border-white/30 justify-center items-center"
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <ChevronLeft size={18} color={ICON_COLORS.slate500} strokeWidth={2.5} />
+          <ChevronLeft size={19} color={ICON_COLORS.white} strokeWidth={2.5} />
         </Pressable>
-        <Text className="text-[13px] font-black uppercase tracking-wide text-primary">Lab Achievement Report</Text>
+        <View className="flex-1">
+          <Text className="text-[17px] font-black text-white">Your Lab Report</Text>
+          <Text className="text-[11px] font-medium text-white/70">Wins, progress and your next mission</Text>
+        </View>
+        <View className="w-10 h-10 rounded-2xl bg-white/15 items-center justify-center">
+          <FlaskConical size={19} color={ICON_COLORS.white} strokeWidth={2.1} />
+        </View>
       </View>
 
-      <ScrollView
-        className="flex-1 px-4"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 28 }}
-      >
-        <ReportPerformanceHero report={report} insights={insights} />
+      <View className="flex-1 bg-slate-50 rounded-t-[28px] overflow-hidden">
+        <ScrollView
+          className="flex-1 px-4"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 16, paddingBottom: 28 }}
+        >
+          <ReportPerformanceHero report={report} insights={insights} />
 
-        <View className="mt-4">
-          <ReportTabSwitcher value={tab} onChange={setTab} />
-        </View>
+          <View className="mt-4">
+            <ReportTabSwitcher value={tab} onChange={setTab} />
+          </View>
 
-        <Animated.View key={tab} entering={FadeIn.duration(200)}>
-          {tab === "overview" && <OverviewTab report={report} insights={insights} />}
-          {tab === "journey" && <StepJourneyTab report={report} insights={insights} />}
-          {tab === "improve" && (
-            <ImproveTab
-              report={report}
-              insights={insights}
-              sessionId={sessionId ?? ""}
-              experimentId={experimentId ?? ""}
-            />
-          )}
-        </Animated.View>
-      </ScrollView>
+          <Animated.View key={tab} entering={FadeIn.duration(200)}>
+            {tab === "overview" && <OverviewTab report={report} insights={insights} />}
+            {tab === "journey" && <StepJourneyTab report={report} insights={insights} />}
+            {tab === "improve" && (
+              <ImproveTab
+                report={report}
+                insights={insights}
+                sessionId={sessionId ?? ""}
+                experimentId={experimentId ?? ""}
+              />
+            )}
+          </Animated.View>
+        </ScrollView>
 
-      <ReportBottomActions experimentId={experimentId ?? ""} />
+        <ReportBottomActions experimentId={experimentId ?? ""} />
+      </View>
     </SafeAreaView>
   );
 }
