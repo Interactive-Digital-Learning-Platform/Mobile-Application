@@ -2,7 +2,11 @@ import { ViewStyle, TextStyle, ImageSourcePropType } from "react-native";
 import { LucideIcon } from "lucide-react-native";
 import { RefObject } from "react";
 import { FlashListRef } from "@shopify/flash-list";
-import { ChatInputValues, SourceCitationType } from "@/schemas/chatSchemas";
+import {
+  ChatInputValues,
+  GeneratedDocumentType,
+  SourceCitationType,
+} from "@/schemas/chatSchemas";
 
 
 export type customButtonType = {
@@ -102,6 +106,7 @@ export type MessageType = {
   sources? : SourceCitationType[],
   tokens?: number,
   attachments?: ChatAttachment[],
+  documents?: GeneratedDocumentType[],
   translationFailed?: boolean,
   isTranslated?: boolean,
   translatedContent?: string
@@ -112,7 +117,11 @@ export type StreamCallbacks = {
   onToken: (token: string) => void;
   onDone: (
     messageID: string,
-    meta?: { translationFailed?: boolean; sources?: SourceCitationType[] },
+    meta?: {
+      translationFailed?: boolean;
+      sources?: SourceCitationType[];
+      documents?: GeneratedDocumentType[];
+    },
   ) => void;
   onError: (error: string) => void;
 }

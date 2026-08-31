@@ -109,6 +109,7 @@ export function useChat(): UseChatReturn {
       createdAt: new Date(message.created_at),
       type: "text" as const,
       sources: message.sources,
+      documents: message.documents?.length ? message.documents : undefined,
       isTranslated: message.is_translated,
       translatedContent: message.translated_content ?? undefined,
       attachments: message.attachments?.length
@@ -342,6 +343,9 @@ export function useChat(): UseChatReturn {
                 isLoading: false,
                 translationFailed: meta?.translationFailed ?? false,
                 sources: meta?.sources ?? msg.sources,
+                documents: meta?.documents?.length
+                  ? meta.documents
+                  : msg.documents,
               }));
 
               hasPendingMessagesRef.current = false;

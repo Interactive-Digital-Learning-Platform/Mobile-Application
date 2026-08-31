@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { ChevronRight, FileText } from "lucide-react-native";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import MessageAttachment from "@/components/chat/MessageAttachment";
+import GeneratedDocumentAttachment from "@/components/chat/GeneratedDocumentAttachment";
 import { chatMarkdownItInstance, chatMarkdownStyle } from "@/constants/markdownStyles";
 import { stripInlineCitations } from "@/utils/chatText";
 
@@ -149,6 +150,18 @@ export default function Message({ message }: { message: MessageType }) {
             )}
           </View>
         )}
+        {!isUser &&
+          !message.isLoading &&
+          (message.documents?.length ?? 0) > 0 && (
+            <View style={{ marginTop: 8, gap: 8, alignItems: "flex-start" }}>
+              {message.documents!.map((doc) => (
+                <GeneratedDocumentAttachment
+                  key={doc.document_id}
+                  document={doc}
+                />
+              ))}
+            </View>
+          )}
         {!isTyping && timeLabel !== "" && (
           <Text
             className={`text-xs ${isUser ? "font-aregular" : "font-alight"} mt-1`}

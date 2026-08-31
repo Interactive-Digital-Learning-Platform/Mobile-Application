@@ -205,6 +205,7 @@ export const streamMessage = async ({
           callbacks.onDone(parsed.message_id, {
             translationFailed: parsed.translation_failed,
             sources: parsed.sources,
+            documents: parsed.documents,
           });
           es.close();
           complete(() => resolve());
