@@ -220,7 +220,6 @@ export default function Profile() {
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
-  const { signOut } = useAuth();
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
@@ -236,33 +235,6 @@ export default function Profile() {
     error: feedbackError,
     refetch: refetchFeedback,
   } = useAnalyticsFeedbackQuery(true);
-
-  const handleLogout = () => {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Log Out",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsLoggingOut(true);
-              await signOut();
-              queryClient.clear();
-              router.replace("/(auth)/sign-in");
-            } catch (err) {
-              console.error("Logout error:", err);
-              Alert.alert("Error", "Failed to log out. Please try again.");
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const onRefresh = async () => {
     setRefreshing(true);
