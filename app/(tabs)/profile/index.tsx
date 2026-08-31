@@ -8,7 +8,9 @@ import {
   RefreshControl,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle } from "react-native-svg";
 import {
   User,
@@ -24,10 +26,10 @@ import {
   Target,
   Heart,
   LogOut,
+  CalendarDays,
 } from "lucide-react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
-import { useUser, useAuth } from "@clerk/expo";
-import { router } from "expo-router";
+import { useUser, useClerk } from "@clerk/expo";
 import {
   useUserMeQuery,
   useAnalyticsMeQuery,
@@ -44,11 +46,16 @@ import SectionHeader from "@/components/profile/SectionHeader";
 import PerformanceSummarySection from "@/components/profile/PerformanceSummarySection";
 import ProgressTrendSection from "@/components/profile/ProgressTrendSection";
 import TopicPerformanceSection from "@/components/profile/TopicPerformanceSection";
+import SkillMasterySection from "@/components/profile/SkillMasterySection";
 import GrowthSection from "@/components/profile/GrowthSection";
 import RecommendationsSection from "@/components/profile/RecommendationsSection";
 import DifficultyProgressSection from "@/components/profile/DifficultyProgressSection";
 
 const CARD_CLASS = "bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3";
+
+
+const BANNER_HEIGHT = 60;
+const AVATAR_SIZE = 88;
 
 function AccuracyRing({ accuracy }: { accuracy: number }) {
   const SIZE = 114;
@@ -208,13 +215,15 @@ function FeedbackSkeleton() {
 }
 
 export default function Profile() {
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const { signOut } = useAuth();
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
   const {
     data: analytics,
     isLoading: analyticsLoading,
@@ -264,6 +273,31 @@ export default function Profile() {
     setRefreshing(false);
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            setSigningOut(true);
+            try {
+              await signOut();
+              queryClient.clear();
+              router.replace("/");
+            } catch {
+              setSigningOut(false);
+              Alert.alert("Couldn't log out", "Please check your connection and try again.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const visibleSubjects = analytics ? filterTestSubjects(analytics.subjects) : [];
   const visibleStrongSubjects = analytics ? filterTestSubjectNames(analytics.strong_subjects) : [];
   const visibleWeakSubjects = analytics ? filterTestSubjectNames(analytics.weak_subjects) : [];
@@ -273,42 +307,39 @@ export default function Profile() {
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : null;
 
+  const bannerVisualHeight = insets.top + BANNER_HEIGHT;
+
   return (
-    <SafeAreaView edges={["top"]} className="flex-1 bg-primary">
-      <SafeAreaView className=" px-[30px] bg-primary flex flex-row z-20 rounded-b-[40px] w-[100%] items-center justify-between absolute ">
-        <View >
-          <Text className="text-white text-2xl  font-bold">
-            Hi {displayName}
-          </Text>
-          {joinDate && (
-            <Text className="text-white font-normal">
-              Member since {joinDate}
-            </Text>
-          )}
+    <SafeAreaView edges={["left", "right"]} className="flex-1 bg-white">
+      <View className="absolute top-0 left-0 right-0 z-20">
+        <LinearGradient
+          colors={[ICON_COLORS.primary400, ICON_COLORS.primary600]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ height: bannerVisualHeight }}
+        />
+        <View
+          className="absolute left-5 rounded-full bg-primary-100 border-[4px] border-white items-center justify-center shadow-md shadow-black/10"
+          style={{ top: bannerVisualHeight - AVATAR_SIZE / 2, width: AVATAR_SIZE, height: AVATAR_SIZE }}
+        >
+          <User size={36} color={ICON_COLORS.primary500} strokeWidth={1.8} />
         </View>
-        <View className="flex-row items-center gap-2.5">
-          <TouchableOpacity
-            onPress={handleLogout}
-            disabled={isLoggingOut}
-            className="h-[46px] w-[46px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center"
-            activeOpacity={0.7}
-            accessibilityLabel="Log Out"
-          >
-            {isLoggingOut ? (
-              <ActivityIndicator size="small" color={ICON_COLORS.white} />
-            ) : (
-              <LogOut size={20} color={ICON_COLORS.white} strokeWidth={2} />
-            )}
-          </TouchableOpacity>
-          <View className="h-[60px] w-[60px] rounded-full bg-white/20 border-2 border-white/40 items-center justify-center">
-            <User size={26} color={ICON_COLORS.white} strokeWidth={1.8} />
-          </View>
-        </View>
-      </SafeAreaView>
+      </View>
+
       <ScrollView showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />} className="bg-white">
-      
-        <View className="bg-white mt-[130px] ">
+
+        <View style={{ marginTop: bannerVisualHeight + AVATAR_SIZE / 2 + 12 }} className="bg-white">
+
+          <View className="px-5 mb-4">
+            <Text className="text-slate-800 text-xl font-black">{displayName}</Text>
+            {joinDate && (
+              <View className="flex-row items-center gap-1.5 mt-1">
+                <CalendarDays size={13} color={ICON_COLORS.slate400} strokeWidth={2} />
+                <Text className="text-slate-400 text-[13px] font-medium">Joined {joinDate}</Text>
+              </View>
+            )}
+          </View>
 
         <View >
           {analyticsLoading ? (
@@ -394,6 +425,8 @@ export default function Profile() {
               <ProgressTrendSection trend={analytics.performance_trend} />
 
               <TopicPerformanceSection subjects={visibleSubjects} />
+
+              <SkillMasterySection subjects={visibleSubjects} />
 
               <GrowthSection growth={analytics.growth} />
 
@@ -486,31 +519,28 @@ export default function Profile() {
             ) : null}
           </View>
 
-          {/* Temporary Dev Logout Button */}
-          <View className="px-4 mt-4 mb-12">
+          <View className="px-4 mt-1 mb-6">
             <TouchableOpacity
-              onPress={handleLogout}
-              disabled={isLoggingOut}
-              className="bg-rose-50 border border-rose-200 rounded-[18px] py-3.5 px-4 flex-row items-center justify-center gap-2"
+              className="flex-row items-center justify-center gap-2 bg-white border border-rose-100 rounded-2xl py-3.5"
               activeOpacity={0.8}
+              disabled={signingOut}
+              onPress={handleLogout}
             >
-              {isLoggingOut ? (
-                <ActivityIndicator size="small" color="#e11d48" />
+              {signingOut ? (
+                <ActivityIndicator size="small" color={ICON_COLORS.rose500} />
               ) : (
-                <>
-                  <LogOut size={18} color="#e11d48" strokeWidth={2} />
-                  <Text className="text-rose-600 font-bold text-sm">
-                    Log Out (Temporary)
-                  </Text>
-                </>
+                <LogOut size={16} color={ICON_COLORS.rose500} strokeWidth={2.2} />
               )}
+              <Text className="text-rose-500 font-black text-[13px]">
+                {signingOut ? "Logging out…" : "Log Out"}
+              </Text>
             </TouchableOpacity>
           </View>
 
         </View>
         </View>
       </ScrollView>
-    
+
     </SafeAreaView>
   );
 }

@@ -3,7 +3,8 @@ import ModeSwitcher, { QuizMode } from "@/components/quiz-componets/ModeSwitcher
 import PracticeList from "@/components/quiz-componets/PracticeList";
 import OnlineList from "@/components/quiz-componets/OnlineList";
 import { Text, View, Image, TouchableOpacity } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useUser } from "@clerk/expo";
 import {
@@ -14,6 +15,16 @@ import { ICON_COLORS } from "@/constants/quizStyles";
 
 export default function QuizHome() {
   const [mode, setMode] = useState<QuizMode>("practice");
+  // Lets a caller force this tab open on a specific mode (e.g.
+  // BattleResultsPopup's "Practice" button, which needs the Practice tab
+  // specifically, not whatever mode this screen happened to be left on --
+  // this tab navigator stays mounted in the background while the battle
+  // stack is open on top of it, so `mode` otherwise wouldn't reset on its
+  // own just from navigating back here).
+  const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
+  useEffect(() => {
+    if (modeParam === "practice" || modeParam === "online") setMode(modeParam);
+  }, [modeParam]);
   const { user } = useUser();
   const displayName = user?.username ?? "...";
 

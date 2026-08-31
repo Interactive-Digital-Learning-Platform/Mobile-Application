@@ -1,6 +1,6 @@
 import { View, Text } from "react-native";
 import { CheckCircle2, XCircle } from "lucide-react-native";
-import { OPTION_LABELS } from "@/constants/quizHelpers";
+import { OPTION_LABELS, formatMathText } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface QuestionLike {
@@ -69,7 +69,7 @@ export default function AnswerReviewCard({
 
       <View className="px-4 pt-3 pb-2">
         <Text className="text-slate-800 text-sm font-bold leading-5">
-          {question.question}
+          {formatMathText(question.question)}
         </Text>
       </View>
 
@@ -116,7 +116,7 @@ export default function AnswerReviewCard({
                 </Text>
               </View>
               <Text className={`flex-1 text-xs font-medium leading-4 ${textColor}`}>
-                {opt}
+                {formatMathText(opt)}
               </Text>
               {isCorrectOpt && (
                 <CheckCircle2 size={14} color={ICON_COLORS.emerald500} strokeWidth={2.5} />

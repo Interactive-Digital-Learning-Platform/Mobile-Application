@@ -1,3 +1,7 @@
+// {subject: [lesson, ...]} for a grade — empty for grades without curriculum
+// data, in which case the client falls back to the static SUBJECTS list.
+export type CurriculumMap = Record<string, string[]>;
+
 export interface GenerateQuizRequest {
   grade?: number;
   subject?: string;
@@ -68,6 +72,7 @@ export interface QuizLatestProgress {
 export interface QuizSessionSummary {
   session_id: number;
   subject: string;
+  grade: number | null;
   difficulty: string;
   question_count: number;
   created_at: string;
@@ -198,6 +203,17 @@ export interface SubjectDifficultyPerformance {
   completed_sessions: number;
 }
 
+// Bayesian Knowledge Tracing state (SkillBKTState) — a read-only P(know)
+// signal, independent of mastery_score/mastery_level (a different,
+// weighted-average formula) and of adaptive_mastery on SubjectAnalytics (the
+// CEWM system that actually drives difficulty).
+export interface BKTMasteryDetail {
+  p_know: number;
+  mastery_label: "not_started" | "learning" | "mastered";
+  opportunities: number;
+  last_updated: string | null;
+}
+
 export interface TopicAnalytics {
   topic: string;
   total_attempted: number;
@@ -219,6 +235,7 @@ export interface TopicAnalytics {
   mastery_score?: number | null;
   mastery_level?: string;
   mastery_components?: MasteryComponents | null;
+  bkt_mastery?: BKTMasteryDetail | null;
 }
 
 export interface EffortComponents {
@@ -308,6 +325,8 @@ export interface SubjectAnalytics {
   mastery_level?: string;
   mastery_components?: MasteryComponents | null;
   adaptive_mastery?: AdaptiveMasteryDetail | null;
+  mastered_skill_count?: number;
+  total_skill_count?: number;
 }
 
 export interface UserAnalyticsResponse {

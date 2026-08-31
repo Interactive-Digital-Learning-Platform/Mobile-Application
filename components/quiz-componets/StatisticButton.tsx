@@ -64,10 +64,10 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   );
 
   const sessions  = analytics?.total_sessions ?? 0;
-  const accuracy  = analytics ? `${Math.round(analytics.overall_accuracy)}%` : "—";
+  const accuracy  = analytics ? `${Math.round(analytics.overall_accuracy)}%` : "0%";
   const avgTime   = analytics
     ? `${analytics.overall_avg_response_time.toFixed(1)}s`
-    : "—";
+    : "0s";
 
   // Battle profile is one row per subject with no server-side aggregate, so
   // the summary shown here is rolled up across all of them: total matches
@@ -77,11 +77,11 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const subjects = battleProfile?.subjects ?? [];
   const totalMatches = subjects.reduce((sum, s) => sum + s.matches_played, 0);
   const totalWins = subjects.reduce((sum, s) => sum + s.wins, 0);
-  const winRate = totalMatches > 0 ? `${Math.round((totalWins / totalMatches) * 100)}%` : "—";
+  const winRate = totalMatches > 0 ? `${Math.round((totalWins / totalMatches) * 100)}%` : "0%";
   const topSubject = subjects.length > 0
     ? subjects.reduce((best, s) => (s.rating > best.rating ? s : best))
     : null;
-  const bestLeague = topSubject?.league ?? "-";
+  const bestLeague = topSubject?.league ?? "Unranked";
 
   const isLoading = mode === "practice" ? isAnalyticsLoading : isBattleLoading;
 

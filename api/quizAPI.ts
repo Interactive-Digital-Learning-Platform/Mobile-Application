@@ -2,6 +2,7 @@ import { quizClient } from "@/api/apiClients";
 import {
   AIFeedbackResponse,
   AnswerItem,
+  CurriculumMap,
   DraftAnswer,
   GenerateQuizRequest,
   GenerateQuizResponse,
@@ -29,6 +30,13 @@ export async function syncUser(username?: string): Promise<UserOut> {
     "/user/sync",
     username ? { username } : {}
   );
+  return data;
+}
+
+export async function fetchCurriculum(grade: number): Promise<CurriculumMap> {
+  const { data } = await quizClient.get<CurriculumMap>("/quiz/curriculum", {
+    params: { grade },
+  });
   return data;
 }
 

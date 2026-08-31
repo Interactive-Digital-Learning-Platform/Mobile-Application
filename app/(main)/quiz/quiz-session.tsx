@@ -31,7 +31,7 @@ import {
 } from "lucide-react-native";
 
 import { getDifficultyStyle, getSubjectIcon, formatSubjectLabel, ICON_COLORS } from "@/constants/quizStyles";
-import { OPTION_LABELS, formatTime } from "@/constants/quizHelpers";
+import { OPTION_LABELS, formatTime, formatMathText } from "@/constants/quizHelpers";
 import TimesUpModel from "@/components/quiz-componets/TimesUpModel";
 import ExitQuizModal from "@/components/quiz-componets/ExitQuizModal";
 import QuizOptionButton from "@/components/quiz-componets/QuizOptionButton";
@@ -653,7 +653,7 @@ export default function QuizSession() {
             )}
           </View>
         ) : null}
-        <Text className="font-bold text-slate-800 leading-6 text-xl">{q?.question}</Text>
+        <Text className="font-bold text-slate-800 leading-6 text-xl">{formatMathText(q?.question ?? "")}</Text>
       </View>
 
       <View className="w-full flex-1 py-2 px-4">

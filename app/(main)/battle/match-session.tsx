@@ -13,7 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock, Flame, WifiOff, X, XCircle } from "lucide-react-native";
 import Toast from "react-native-toast-message";
-import { OPTION_LABELS } from "@/constants/quizHelpers";
+import { OPTION_LABELS, formatMathText } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { LEAGUE_STYLES } from "@/constants/battleStyles";
 import BattleProgressBar from "@/components/quiz-componets/BattleProgressBar";
@@ -578,7 +578,7 @@ export default function BattleMatchSessionScreen() {
               </View>
             )}
             <Text className="font-bold text-slate-800 leading-6 text-xl">
-              {matchState.question?.question}
+              {formatMathText(matchState.question?.question ?? "")}
             </Text>
           </Animated.View>
 

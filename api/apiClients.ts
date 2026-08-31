@@ -43,10 +43,15 @@ export const quizClient = create({
   headers: {
     "Content-Type": "application/json",
   },
-  // AI generation (with retry backoff) and quiz submission (several
-  // sequential DB round-trips against Neon) have both been measured taking
-  // 18s+ on a 10-question quiz, so the timeout is generous.
-  timeout: 45_000,
+  // AI generation retries transient Groq errors (429/5xx) at two levels —
+  // the groq SDK's own internal retry (honors Retry-After, seen waiting 27s
+  // for a single attempt) and groq_service.py's own wrapper retry on top of
+  // that — so a rate-limited request can legitimately take 60-90s+ to
+  // finish. A shorter client timeout used to abort and show a false
+  // failure while the backend kept going and committed a real QuizSession
+  // anyway, so this needs to comfortably outlast that worst case rather
+  // than the old "typical case" 45s.
+  timeout: 120_000,
 });
 
 // quizClient is the only client here that needs a Bearer token — the quiz
