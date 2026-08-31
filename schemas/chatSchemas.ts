@@ -19,20 +19,23 @@ const tokenEventSchema = z.object({
   token: z.string(),
 });
 
+export const sourceCitationSchema = z.object({
+  filename: z.string().nullish(),
+  page: z.number().nullish(),
+  score: z.number().nullish(),
+  title: z.string().nullish(),
+  url: z.string().nullish(),
+  provider: z.string().nullish(),
+  snippet: z.string().nullish(),
+});
+
+export type SourceCitationType = z.infer<typeof sourceCitationSchema>;
+
 const doneEventSchema = z.object({
   type: z.literal("done"),
   message_id: z.string(),
   translation_failed: z.boolean().optional().default(false),
-  sources: z
-    .array(
-      z.object({
-        filename: z.string().optional(),
-        page: z.number().nullish(),
-        score: z.number().nullish(),
-      }),
-    )
-    .catch([])
-    .default([]),
+  sources: z.array(sourceCitationSchema).catch([]).default([]),
 });
 
 const errorEventSchema = z.object({
@@ -48,12 +51,6 @@ export const sseEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export type SSEEvent = z.infer<typeof sseEventSchema>;
-
-export const sourceCitationSchema = z.object({
-  filename: z.string(),
-  page: z.number(),
-  score: z.number(),
-});
 
 export const attachmentStatusSchema = z.enum([
   "uploaded",

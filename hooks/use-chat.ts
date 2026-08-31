@@ -23,6 +23,10 @@ import { FlashListRef } from "@shopify/flash-list";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// Streamed tokens are flushed into React state at most once per this interval so
+// the Markdown body re-renders ~20x/sec while streaming instead of once per token.
+const STREAM_FLUSH_INTERVAL_MS = 50;
+
 export function useChat(): UseChatReturn {
   const { user } = useUser();
   const queryClient = useQueryClient();
@@ -38,6 +42,7 @@ export function useChat(): UseChatReturn {
   const activeAssistantIDRef = useRef<string | null>(null);
   const isSendingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<MessageType[]>([]);
 
@@ -61,6 +66,9 @@ export function useChat(): UseChatReturn {
 
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+      }
+      if (streamFlushRef.current) {
+        clearTimeout(streamFlushRef.current);
       }
     };
   }, [clearEmbeddedPolls]);
@@ -229,6 +237,24 @@ export function useChat(): UseChatReturn {
       activeAssistantIDRef.current = assistantLocalID;
       tokenBufferRef.current = "";
 
+      const flushAssistantContent = () => {
+        const buffered = tokenBufferRef.current;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.localID === assistantLocalID && msg.content !== buffered
+              ? { ...msg, content: buffered }
+              : msg,
+          ),
+        );
+      };
+
+      const cancelScheduledFlush = () => {
+        if (streamFlushRef.current) {
+          clearTimeout(streamFlushRef.current);
+          streamFlushRef.current = null;
+        }
+      };
+
       const sendableAttachment =
         attachment && attachment.serverID && attachment.status !== "failed"
           ? attachment
@@ -297,31 +323,32 @@ export function useChat(): UseChatReturn {
             },
             onToken: (token) => {
               tokenBufferRef.current += token;
-              const buffered = tokenBufferRef.current;
 
-              setMessages(
-                (prevMessages) => prevMessages.map((msg) =>
-                  msg.localID === assistantLocalID ?
-                    {
-                      ...msg,
-                      content: buffered
-                    } : msg,
-                )
-              );
-
-              scrollToLatestMessage();
+              if (streamFlushRef.current == null) {
+                streamFlushRef.current = setTimeout(() => {
+                  streamFlushRef.current = null;
+                  flushAssistantContent();
+                  scrollToLatestMessage();
+                }, STREAM_FLUSH_INTERVAL_MS);
+              }
             },
             onDone: (serverMessageID, meta) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
+                content: tokenBufferRef.current || msg.content,
                 serverID: serverMessageID || msg.serverID,
                 isLoading: false,
                 translationFailed: meta?.translationFailed ?? false,
+                sources: meta?.sources ?? msg.sources,
               }));
 
               hasPendingMessagesRef.current = false;
             },
             onError: (error) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
                 content: error,
@@ -334,6 +361,8 @@ export function useChat(): UseChatReturn {
           },
         });
       } catch (error) {
+        cancelScheduledFlush();
+
         updateMessage(assistantLocalID, (msg) => ({
           ...msg,
           content: "Something went wrong. Please try again! " + error,
@@ -343,6 +372,7 @@ export function useChat(): UseChatReturn {
 
         hasPendingMessagesRef.current = false;
       } finally {
+        cancelScheduledFlush();
         setIsStreaming(false);
         isSendingRef.current = false;
         tokenBufferRef.current = "";
@@ -362,9 +392,19 @@ export function useChat(): UseChatReturn {
   const stopStreaming = useCallback(() => {
     abortControllerRef.current?.abort();
 
+    if (streamFlushRef.current) {
+      clearTimeout(streamFlushRef.current);
+      streamFlushRef.current = null;
+    }
+
     const activeID = activeAssistantIDRef.current;
+    const buffered = tokenBufferRef.current;
     if (activeID) {
-      updateMessage(activeID, (msg) => ({ ...msg, isLoading: false }));
+      updateMessage(activeID, (msg) => ({
+        ...msg,
+        content: buffered || msg.content,
+        isLoading: false,
+      }));
     }
 
     hasPendingMessagesRef.current = false;
