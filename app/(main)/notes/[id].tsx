@@ -35,6 +35,7 @@ import {
   Clock,
   Minimize2,
   Info,
+  ShieldCheck,
 } from "lucide-react-native";
 import Svg, { Circle } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
@@ -81,6 +82,7 @@ interface CoverageScores {
 interface ConceptFinding {
   conceptId: string;
   conceptName: string;
+  status?: "present" | "partial" | "missing";
   found: boolean;
   decisionConfidence: number;
   matchMethod: "keyword" | "semantic" | "not_found";
@@ -97,13 +99,14 @@ interface ExplainableGap {
   outcomeDescription: string;
   status: "achieved" | "partially_achieved" | "not_achieved";
   evidence: string;
-  missingConcepts: Array<{
+  missingConcepts: {
     id: string;
     name: string;
     weight: number;
     severity: "high" | "medium" | "low";
     category: string;
-  }>;
+    status?: "partial" | "missing";
+  }[];
   recommendation: string;
   findingStatus?: "covered_in_note" | "not_found_in_note" | "confirmed_learning_gap";
   verificationStatus?: "not_required" | "pending" | "verified";
@@ -173,6 +176,158 @@ interface MaterialsOverview {
   generatedTypes: string[];
   missingCount: number;
 }
+
+type StudentCheckStatus = "needs_input" | "support_requested" | "understood" | "mixed";
+
+interface GapConceptView {
+  id?: string;
+  name: string;
+  weight: number;
+  severity: "high" | "medium" | "low";
+  category?: string;
+  coverageStatus: "partial" | "missing";
+  finding?: ConceptFinding;
+}
+
+interface LearningFindingView {
+  id: string;
+  outcome: string;
+  outcomeStatus: "partially_achieved" | "not_achieved";
+  concepts: GapConceptView[];
+  severity: "high" | "medium" | "low";
+  evidence: string;
+  recommendation: string;
+  studentStatus: StudentCheckStatus;
+  supportRequestedCount: number;
+  understoodCount: number;
+  needsInputCount: number;
+  detectionConfidence?: number;
+  priorityScore: number;
+}
+
+const normalizeConceptName = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/^needs further coverage in this note:\s*/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const toNoteCoverageEvidence = (value: string) =>
+  value
+    .replace(/student demonstrated understanding of/gi, "the uploaded note contains evidence for")
+    .replace(/student fully covered/gi, "the uploaded note fully covers")
+    .replace(/needs work on/gi, "does not fully evidence")
+    .replace(/missed by student/gi, "not evidenced in this upload");
+
+const findConceptFinding = (
+  conceptId: string | undefined,
+  conceptName: string,
+  findings: ConceptFinding[],
+) => {
+  const normalizedName = normalizeConceptName(conceptName);
+  return findings.find(
+    (finding) =>
+      (!!conceptId && finding.conceptId === conceptId) ||
+      normalizeConceptName(finding.conceptName) === normalizedName,
+  );
+};
+
+const buildLearningFindings = (analysis?: Analysis): LearningFindingView[] => {
+  if (!analysis) return [];
+
+  const conceptFindings = analysis.conceptFindings ?? [];
+  const severityRank = { low: 1, medium: 2, high: 3 } as const;
+  const explainable = analysis.explainableGaps ?? [];
+
+  const source = explainable.length > 0
+    ? explainable.map((gap) => ({
+        id: gap.outcomeId,
+        outcome: gap.outcomeDescription,
+        outcomeStatus: gap.status === "not_achieved" ? "not_achieved" as const : "partially_achieved" as const,
+        evidence: toNoteCoverageEvidence(gap.evidence),
+        recommendation: gap.recommendation,
+        concepts: gap.missingConcepts.map((concept) => ({
+          id: concept.id,
+          name: concept.name,
+          weight: concept.weight ?? 1,
+          severity: concept.severity ?? "medium",
+          category: concept.category,
+          coverageStatus: concept.status ?? "missing",
+          finding: findConceptFinding(concept.id, concept.name, conceptFindings),
+        })),
+      }))
+    : analysis.learningGaps.map((gap, index) => ({
+        id: `legacy-${index}`,
+        outcome: gap.concept.replace(/^Needs further coverage in this note:\s*/i, ""),
+        outcomeStatus: "partially_achieved" as const,
+        evidence: "No sufficient note evidence was found for this curriculum concept.",
+        recommendation: gap.suggestion,
+        concepts: gap.concept
+          .replace(/^Needs further coverage in this note:\s*/i, "")
+          .split(/[,/]/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name) => ({
+            name,
+            weight: gap.severity === "high" ? 5 : gap.severity === "medium" ? 3 : 1,
+            severity: gap.severity,
+            coverageStatus: "missing" as const,
+            finding: findConceptFinding(undefined, name, conceptFindings),
+          })),
+      }));
+
+  return source
+    .map((gap) => {
+      const supportRequestedCount = gap.concepts.filter(
+        (concept) => concept.finding?.studentVerification === "needs_help",
+      ).length;
+      const understoodCount = gap.concepts.filter(
+        (concept) => concept.finding?.studentVerification === "understood",
+      ).length;
+      const verifiableCount = gap.concepts.filter((concept) => concept.finding && !concept.finding.found).length;
+      const needsInputCount = Math.max(0, verifiableCount - supportRequestedCount - understoodCount);
+      const studentStatus: StudentCheckStatus = supportRequestedCount > 0 && understoodCount > 0
+        ? "mixed"
+        : supportRequestedCount > 0
+        ? "support_requested"
+        : needsInputCount > 0
+        ? "needs_input"
+        : understoodCount > 0
+        ? "understood"
+        : "needs_input";
+      const severity = gap.concepts.reduce<"high" | "medium" | "low">(
+        (highest, concept) =>
+          severityRank[concept.severity] > severityRank[highest] ? concept.severity : highest,
+        "low",
+      );
+      const confidences = gap.concepts
+        .map((concept) => concept.finding?.decisionConfidence)
+        .filter((value): value is number => typeof value === "number");
+      const detectionConfidence = confidences.length > 0
+        ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+        : undefined;
+      const highestWeight = Math.max(1, ...gap.concepts.map((concept) => concept.weight));
+      const frequentlyTested = gap.concepts.some((concept) => concept.finding?.isFrequentlyTested);
+      const statusPriority = supportRequestedCount > 0 ? 300 : needsInputCount > 0 ? 200 : 100;
+      const priorityScore =
+        statusPriority +
+        highestWeight * 10 +
+        (frequentlyTested ? 15 : 0) +
+        (detectionConfidence ?? 0) * 10;
+
+      return {
+        ...gap,
+        severity,
+        studentStatus,
+        supportRequestedCount,
+        understoodCount,
+        needsInputCount,
+        detectionConfidence,
+        priorityScore,
+      };
+    })
+    .sort((a, b) => b.priorityScore - a.priorityScore);
+};
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
@@ -554,6 +709,7 @@ export default function NoteDetail() {
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [verifyingConceptId, setVerifyingConceptId] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<{ conceptId: string; message: string } | null>(null);
   const [ocrExpanded, setOcrExpanded] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
@@ -566,6 +722,7 @@ export default function NoteDetail() {
   const [contextGrade, setContextGrade] = useState<10 | 11 | undefined>();
   const [coverageExpanded, setCoverageExpanded] = useState(false);
   const [expandedGapIndices, setExpandedGapIndices] = useState<Record<number, boolean>>({});
+  const [expandedLearningFindingIds, setExpandedLearningFindingIds] = useState<Record<string, boolean>>({});
   // Guard: ensure auto-generate fires only once per screen mount
   const hasTriggeredGeneration = React.useRef(false);
 
@@ -573,6 +730,20 @@ export default function NoteDetail() {
   const isProcessing = status === "uploaded" || status === "processing";
   const isFailed = status === "failed";
   const isAnalyzed = status === "analyzed";
+  const learningFindings = React.useMemo(
+    () => buildLearningFindings(note?.analysis),
+    [note?.analysis],
+  );
+  const learningDecisionSummary = React.useMemo(
+    () => ({
+      needsInput: learningFindings.filter((finding) => finding.studentStatus === "needs_input").length,
+      supportRequested: learningFindings.filter(
+        (finding) => finding.studentStatus === "support_requested" || finding.studentStatus === "mixed",
+      ).length,
+      understood: learningFindings.filter((finding) => finding.studentStatus === "understood").length,
+    }),
+    [learningFindings],
+  );
 
   const toggleGapExpand = useCallback((index: number) => {
     setExpandedGapIndices((prev) => ({
@@ -587,6 +758,14 @@ export default function NoteDetail() {
       animated: true,
     });
   }, []);
+
+  const openLearningFinding = useCallback((findingId: string) => {
+    setExpandedLearningFindingIds((previous) => ({
+      ...previous,
+      [findingId]: true,
+    }));
+    setTimeout(scrollToGaps, 50);
+  }, [scrollToGaps]);
 
   // ── Fetch note ──────────────────────────────────────────────────────────────
   const fetchNote = useCallback(async () => {
@@ -608,6 +787,7 @@ export default function NoteDetail() {
   ) => {
     if (!note) return;
     try {
+      setVerificationError(null);
       setVerifyingConceptId(conceptId);
       const response = await notesApi.verifyConceptFinding(note._id, conceptId, status);
       if (response.success && response.data?.note) {
@@ -615,6 +795,10 @@ export default function NoteDetail() {
       }
     } catch (error) {
       console.error("Failed to save concept verification:", error);
+      setVerificationError({
+        conceptId,
+        message: "Your response could not be saved. Check the connection and try again.",
+      });
     } finally {
       setVerifyingConceptId(null);
     }
@@ -1012,10 +1196,10 @@ export default function NoteDetail() {
                     </View>
                     <Text style={styles.aiMotivationBody}>
                       {score >= 80
-                        ? `Outstanding work! You've mastered ${coveredCount} syllabus outcomes. Complete quick revision cards to solidify full retention.`
+                        ? `Strong note coverage: this upload evidences ${coveredCount} syllabus concepts. Use the revision summary to consolidate what you recorded.`
                         : score >= 50
-                        ? `Great start! You've evidenced ${coveredCount} core concepts. Focus on the ${attentionCount} note-coverage findings below before you revise this lesson.`
-                        : `Building momentum! Your notes cover ${coveredCount} foundational concepts. Use the personalized study flashcards and structured notes to fill the missing syllabus areas.`}
+                        ? `Good foundation: this upload evidences ${coveredCount} core concepts. Check the ${attentionCount} coverage findings below before choosing what to study.`
+                        : `This upload evidences ${coveredCount} foundational concepts. Review each coverage finding and tell us what you know before personalised support is created.`}
                     </Text>
                   </View>
 
@@ -1028,17 +1212,17 @@ export default function NoteDetail() {
                     >
                       <Target size={14} color="#475569" strokeWidth={2} />
                       <Text style={styles.summarySecondaryBtnText}>
-                        View {attentionCount} Gap{attentionCount !== 1 ? "s" : ""}
+                        Check {attentionCount} Finding{attentionCount !== 1 ? "s" : ""}
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.summaryPrimaryBtn}
-                      onPress={() => navigateToMaterial("structured_notes")}
+                      onPress={() => navigateToMaterial("revision_summary")}
                       activeOpacity={0.85}
                     >
                       <Zap size={14} color="#FFFFFF" strokeWidth={2} />
-                      <Text style={styles.summaryPrimaryBtnText}>Start Revision</Text>
+                      <Text style={styles.summaryPrimaryBtnText}>Review Summary</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1046,25 +1230,565 @@ export default function NoteDetail() {
             })()}
 
             {/* ── 2. Priority Learning Gap Card (Improvement 2) ── */}
-            {note.analysis.learningGaps.length > 0 && (() => {
+            {learningFindings.length > 0 && (() => {
+              const topFinding = learningFindings[0];
+              const topSupportConcept = topFinding.concepts.find(
+                (concept) => concept.finding?.studentVerification === "needs_help",
+              );
+              const structuredNotesReady = materialsOverview?.generatedTypes.includes("structured_notes") ?? false;
+              const flashcardsReady = materialsOverview?.generatedTypes.includes("flashcards") ?? false;
+              const topNeedsSupport =
+                topFinding.studentStatus === "support_requested" || topFinding.studentStatus === "mixed";
+              const topStatus = topNeedsSupport
+                ? {
+                    label: "Support requested",
+                    description: "Your response has created a personalised study priority.",
+                    color: "#7C3AED",
+                    background: "#F5F3FF",
+                    border: "#DDD6FE",
+                    icon: Brain,
+                  }
+                : topFinding.studentStatus === "understood"
+                ? {
+                    label: "Note improvement only",
+                    description: "You understand this; improve the note without treating it as a knowledge gap.",
+                    color: "#047857",
+                    background: "#ECFDF5",
+                    border: "#A7F3D0",
+                    icon: CheckCircle2,
+                  }
+                : {
+                    label: "Needs your input",
+                    description: "Check your understanding before the system recommends remediation.",
+                    color: "#C2410C",
+                    background: "#FFF7ED",
+                    border: "#FED7AA",
+                    icon: Target,
+                  };
+              const TopStatusIcon = topStatus.icon;
+
+              return (
+                <>
+                  <View style={[styles.learningDecisionCard, { borderColor: topStatus.border }]}>
+                    <View style={styles.learningDecisionHeader}>
+                      <View style={styles.learningDecisionTitleWrap}>
+                        <View style={[styles.learningDecisionIcon, { backgroundColor: topStatus.background }]}>
+                          <TopStatusIcon size={18} color={topStatus.color} strokeWidth={2.2} />
+                        </View>
+                        <View style={styles.learningDecisionTitleCopy}>
+                          <Text style={styles.learningDecisionEyebrow}>NEXT LEARNING DECISION</Text>
+                          <Text style={styles.learningDecisionStatus}>{topStatus.label}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.learningDecisionBadge, { backgroundColor: topStatus.background }]}>
+                        <Text style={[styles.learningDecisionBadgeText, { color: topStatus.color }]}>
+                          {topFinding.severity === "high" ? "HIGH" : topFinding.severity === "medium" ? "MEDIUM" : "LOW"} CURRICULUM PRIORITY
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.learningDecisionOutcome}>{topFinding.outcome}</Text>
+                    <Text style={styles.learningDecisionDescription}>{topStatus.description}</Text>
+
+                    <View style={styles.learningEvidenceStrip}>
+                      <View style={styles.learningEvidenceItem}>
+                        <FileText size={14} color="#64748B" />
+                        <View>
+                          <Text style={styles.learningEvidenceValue}>
+                            {topFinding.concepts.length}
+                          </Text>
+                          <Text style={styles.learningEvidenceLabel}>concepts to check</Text>
+                        </View>
+                      </View>
+                      <View style={styles.learningEvidenceDivider} />
+                      <View style={styles.learningEvidenceItem}>
+                        <ShieldCheck size={14} color="#64748B" />
+                        <View>
+                          <Text style={styles.learningEvidenceValue}>
+                            {typeof topFinding.detectionConfidence === "number"
+                              ? `${Math.round(topFinding.detectionConfidence * 100)}%`
+                              : "—"}
+                          </Text>
+                          <Text style={styles.learningEvidenceLabel}>detection confidence</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.learningDecisionSteps}>
+                      <View style={[styles.learningDecisionStep, styles.learningDecisionStepDone]}>
+                        <Text style={styles.learningDecisionStepNumberDone}>1</Text>
+                        <Text style={styles.learningDecisionStepTextDone}>Evidence checked</Text>
+                      </View>
+                      <View style={styles.learningDecisionStepLine} />
+                      <View
+                        style={[
+                          styles.learningDecisionStep,
+                          topFinding.studentStatus !== "needs_input" && styles.learningDecisionStepDone,
+                        ]}
+                      >
+                        <Text
+                          style={
+                            topFinding.studentStatus !== "needs_input"
+                              ? styles.learningDecisionStepNumberDone
+                              : styles.learningDecisionStepNumber
+                          }
+                        >
+                          2
+                        </Text>
+                        <Text
+                          style={
+                            topFinding.studentStatus !== "needs_input"
+                              ? styles.learningDecisionStepTextDone
+                              : styles.learningDecisionStepText
+                          }
+                        >
+                          Student check
+                        </Text>
+                      </View>
+                      <View style={styles.learningDecisionStepLine} />
+                      <View
+                        style={[
+                          styles.learningDecisionStep,
+                          topNeedsSupport && styles.learningDecisionStepDone,
+                        ]}
+                      >
+                        <Text
+                          style={topNeedsSupport ? styles.learningDecisionStepNumberDone : styles.learningDecisionStepNumber}
+                        >
+                          3
+                        </Text>
+                        <Text
+                          style={topNeedsSupport ? styles.learningDecisionStepTextDone : styles.learningDecisionStepText}
+                        >
+                          Targeted support
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.learningDecisionPrimaryButton,
+                        topNeedsSupport && !structuredNotesReady && styles.learningDecisionPrimaryButtonDisabled,
+                      ]}
+                      disabled={topNeedsSupport && !structuredNotesReady}
+                      onPress={() =>
+                        topNeedsSupport
+                          ? navigateToMaterial(
+                              "structured_notes",
+                              topFinding.id,
+                              topSupportConcept?.name ?? topFinding.concepts[0]?.name,
+                            )
+                          : topFinding.studentStatus === "understood"
+                          ? navigateToMaterial(
+                              "revision_summary",
+                              topFinding.id,
+                              topFinding.concepts[0]?.name,
+                            )
+                          : openLearningFinding(topFinding.id)
+                      }
+                      activeOpacity={0.85}
+                    >
+                      {topNeedsSupport && !structuredNotesReady ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : topNeedsSupport ? (
+                        <BookOpen size={16} color="#FFFFFF" />
+                      ) : (
+                        <Target size={16} color="#FFFFFF" />
+                      )}
+                      <Text style={styles.learningDecisionPrimaryButtonText}>
+                        {topNeedsSupport
+                          ? structuredNotesReady
+                            ? "Continue personalised learning"
+                            : "Preparing personalised support"
+                          : topFinding.studentStatus === "understood"
+                          ? "Improve this note"
+                          : "Check my understanding"}
+                      </Text>
+                      {(!topNeedsSupport || structuredNotesReady) && (
+                        <ChevronRight size={16} color="#FFFFFF" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <View
+                    style={styles.section}
+                    onLayout={(event) => {
+                      gapsSectionY.current = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <View style={styles.learningFindingsHeader}>
+                      <View style={styles.learningFindingsHeaderCopy}>
+                        <Text style={styles.learningFindingsTitle}>Coverage Findings & Study Decisions</Text>
+                        <Text style={styles.learningFindingsSubtitle}>
+                          Evidence from this upload becomes a learning priority only after your input.
+                        </Text>
+                      </View>
+                      <View style={styles.gapCountPill}>
+                        <Text style={styles.gapCountPillText}>{learningFindings.length}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.learningDecisionSummaryRow}>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipPending]}>
+                        <Target size={13} color="#C2410C" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#C2410C" }]}>
+                          {learningDecisionSummary.needsInput} need input
+                        </Text>
+                      </View>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipSupport]}>
+                        <Brain size={13} color="#7C3AED" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#7C3AED" }]}>
+                          {learningDecisionSummary.supportRequested} support
+                        </Text>
+                      </View>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipUnderstood]}>
+                        <CheckCircle2 size={13} color="#047857" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#047857" }]}>
+                          {learningDecisionSummary.understood} understood
+                        </Text>
+                      </View>
+                    </View>
+
+                    {(note.analysis.ocrLowQualityWarning || note.analysis.noteScope?.scope !== "complete_lesson_note") && (
+                      <View style={styles.learningReliabilityNotice}>
+                        <Info size={14} color="#475569" />
+                        <Text style={styles.learningReliabilityNoticeText}>
+                          {note.analysis.ocrLowQualityWarning
+                            ? "Image readability was limited, so verify these findings before acting on them."
+                            : "This appears to be a partial or specialised note. Missing concepts may exist on other pages."}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.learningFindingList}>
+                      {(gapsExpanded ? learningFindings : learningFindings.slice(0, 3)).map(
+                        (finding, findingIndex) => {
+                          const isExpanded = !!expandedLearningFindingIds[finding.id];
+                          const hasSupport =
+                            finding.studentStatus === "support_requested" || finding.studentStatus === "mixed";
+                          const isUnderstood = finding.studentStatus === "understood";
+                          const findingStatusConfig = hasSupport
+                            ? { label: "Support requested", color: "#7C3AED", background: "#F5F3FF" }
+                            : isUnderstood
+                            ? { label: "Understood", color: "#047857", background: "#ECFDF5" }
+                            : { label: "Needs your input", color: "#C2410C", background: "#FFF7ED" };
+                          const supportConcept = finding.concepts.find(
+                            (concept) => concept.finding?.studentVerification === "needs_help",
+                          );
+
+                          return (
+                            <View key={finding.id} style={styles.learningFindingCard}>
+                              <View style={styles.learningFindingCardTopRow}>
+                                <Text style={styles.learningFindingIndex}>FINDING {findingIndex + 1}</Text>
+                                <View
+                                  style={[
+                                    styles.learningFindingStatusBadge,
+                                    { backgroundColor: findingStatusConfig.background },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.learningFindingStatusBadgeText,
+                                      { color: findingStatusConfig.color },
+                                    ]}
+                                  >
+                                    {findingStatusConfig.label}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <Text style={styles.learningFindingOutcome}>{finding.outcome}</Text>
+                              <View style={styles.learningFindingMetaRow}>
+                                <Text style={styles.learningFindingMetaText}>
+                                  {finding.concepts.length} concept{finding.concepts.length === 1 ? "" : "s"} to check
+                                </Text>
+                                <View style={styles.learningFindingMetaDot} />
+                                <Text style={styles.learningFindingMetaText}>
+                                  {finding.severity} curriculum priority
+                                </Text>
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.learningFindingExpandButton}
+                                onPress={() =>
+                                  setExpandedLearningFindingIds((previous) => ({
+                                    ...previous,
+                                    [finding.id]: !previous[finding.id],
+                                  }))
+                                }
+                                activeOpacity={0.75}
+                              >
+                                <Text style={styles.learningFindingExpandButtonText}>
+                                  {isExpanded ? "Hide evidence and actions" : "Review evidence and decide"}
+                                </Text>
+                                {isExpanded ? (
+                                  <ChevronUp size={16} color={colors.primary} />
+                                ) : (
+                                  <ChevronDown size={16} color={colors.primary} />
+                                )}
+                              </TouchableOpacity>
+
+                              {isExpanded && (
+                                <View style={styles.learningFindingDrawer}>
+                                  <View style={styles.learningEvidenceCard}>
+                                    <View style={styles.learningEvidenceCardHeader}>
+                                      <FileText size={14} color="#475569" />
+                                      <Text style={styles.learningEvidenceCardTitle}>What the system observed</Text>
+                                    </View>
+                                    <Text style={styles.learningEvidenceCardText}>{finding.evidence}</Text>
+                                    <Text style={styles.learningEvidenceMethodText}>
+                                      Detection confidence: {typeof finding.detectionConfidence === "number"
+                                        ? `${Math.round(finding.detectionConfidence * 100)}%`
+                                        : "not available"}. This measures the note analysis—not your knowledge.
+                                    </Text>
+                                  </View>
+
+                                  <Text style={styles.learningConceptListTitle}>CHECK EACH CONCEPT</Text>
+                                  <View style={styles.learningConceptList}>
+                                    {finding.concepts.map((concept) => {
+                                      const verification = concept.finding?.studentVerification ?? "unverified";
+                                      const canVerify = Boolean(
+                                        concept.finding &&
+                                          (concept.finding.status !== "present" || !concept.finding.found),
+                                      );
+                                      const isVerifying = verifyingConceptId === concept.finding?.conceptId;
+
+                                      return (
+                                        <View key={concept.id ?? concept.name} style={styles.learningConceptCard}>
+                                          <View style={styles.learningConceptHeader}>
+                                            <View style={styles.learningConceptHeaderCopy}>
+                                              <Text style={styles.learningConceptName}>{concept.name}</Text>
+                                              <Text style={styles.learningConceptMeta}>
+                                                {concept.coverageStatus === "partial" ? "Partly evidenced" : "Not evidenced"}
+                                                {concept.category ? ` · ${concept.category}` : ""}
+                                                {` · importance ${concept.weight}/5`}
+                                              </Text>
+                                            </View>
+                                            {concept.finding?.isFrequentlyTested && (
+                                              <View style={styles.learningExamBadge}>
+                                                <Star size={11} color="#B45309" fill="#FDE68A" />
+                                                <Text style={styles.learningExamBadgeText}>Exam relevant</Text>
+                                              </View>
+                                            )}
+                                          </View>
+
+                                          {canVerify ? (
+                                            <>
+                                              <Text style={styles.learningSelfCheckPrompt}>
+                                                Be honest: could you explain this concept without looking at the note?
+                                              </Text>
+                                              <View style={styles.learningSelfCheckButtons}>
+                                                <TouchableOpacity
+                                                  style={[
+                                                    styles.learningSelfCheckButton,
+                                                    styles.learningSelfCheckKnowButton,
+                                                    verification === "understood" && styles.learningSelfCheckKnowButtonSelected,
+                                                  ]}
+                                                  disabled={Boolean(verifyingConceptId)}
+                                                  onPress={() =>
+                                                    concept.finding &&
+                                                    verifyConceptFinding(concept.finding.conceptId, "understood")
+                                                  }
+                                                  activeOpacity={0.8}
+                                                >
+                                                  {isVerifying ? (
+                                                    <ActivityIndicator size="small" color="#047857" />
+                                                  ) : (
+                                                    <CheckCircle2 size={15} color="#047857" />
+                                                  )}
+                                                  <Text style={styles.learningSelfCheckKnowText}>
+                                                    {verification === "understood" ? "I know this ✓" : "I know this"}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                  style={[
+                                                    styles.learningSelfCheckButton,
+                                                    styles.learningSelfCheckSupportButton,
+                                                    verification === "needs_help" && styles.learningSelfCheckSupportButtonSelected,
+                                                  ]}
+                                                  disabled={Boolean(verifyingConceptId)}
+                                                  onPress={() =>
+                                                    concept.finding &&
+                                                    verifyConceptFinding(concept.finding.conceptId, "needs_help")
+                                                  }
+                                                  activeOpacity={0.8}
+                                                >
+                                                  {isVerifying ? (
+                                                    <ActivityIndicator size="small" color="#7C3AED" />
+                                                  ) : (
+                                                    <Brain size={15} color="#7C3AED" />
+                                                  )}
+                                                  <Text style={styles.learningSelfCheckSupportText}>
+                                                    {verification === "needs_help" ? "Support requested ✓" : "I need support"}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              </View>
+                                              {concept.finding && verificationError?.conceptId === concept.finding.conceptId && (
+                                                <Text style={styles.learningVerificationErrorText}>
+                                                  {verificationError.message}
+                                                </Text>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <Text style={styles.learningVerificationUnavailable}>
+                                              Student self-check is unavailable for this legacy finding.
+                                            </Text>
+                                          )}
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+
+                                  <View style={styles.learningRecommendationCard}>
+                                    <View style={styles.learningRecommendationHeader}>
+                                      <BookOpen size={14} color="#475569" />
+                                      <Text style={styles.learningRecommendationTitle}>Recommended next step</Text>
+                                    </View>
+                                    <Text style={styles.learningRecommendationText}>{finding.recommendation}</Text>
+                                  </View>
+
+                                  {hasSupport ? (
+                                    <View style={styles.personalisedSupportCard}>
+                                      <View style={styles.personalisedSupportHeader}>
+                                        <Sparkles size={16} color="#7C3AED" />
+                                        <View style={styles.personalisedSupportHeaderCopy}>
+                                          <Text style={styles.personalisedSupportTitle}>Personalised support plan</Text>
+                                          <Text style={styles.personalisedSupportSubtitle}>
+                                            Built only from concepts you marked for support.
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      {structuredNotesReady || flashcardsReady ? (
+                                        <View style={styles.personalisedSupportActions}>
+                                          {structuredNotesReady && (
+                                            <TouchableOpacity
+                                              style={styles.personalisedSupportPrimaryButton}
+                                              onPress={() =>
+                                                navigateToMaterial(
+                                                  "structured_notes",
+                                                  finding.id,
+                                                  supportConcept?.name ?? finding.concepts[0]?.name,
+                                                )
+                                              }
+                                            >
+                                              <BookOpen size={15} color="#FFFFFF" />
+                                              <Text style={styles.personalisedSupportPrimaryText}>Learn concept</Text>
+                                            </TouchableOpacity>
+                                          )}
+                                          {flashcardsReady && (
+                                            <TouchableOpacity
+                                              style={styles.personalisedSupportSecondaryButton}
+                                              onPress={() =>
+                                                navigateToMaterial(
+                                                  "flashcards",
+                                                  finding.id,
+                                                  supportConcept?.name ?? finding.concepts[0]?.name,
+                                                )
+                                              }
+                                            >
+                                              <Layers size={15} color="#7C3AED" />
+                                              <Text style={styles.personalisedSupportSecondaryText}>Practice cards</Text>
+                                            </TouchableOpacity>
+                                          )}
+                                        </View>
+                                      ) : (
+                                        <View style={styles.personalisedSupportPreparing}>
+                                          <ActivityIndicator size="small" color="#7C3AED" />
+                                          <Text style={styles.personalisedSupportPreparingText}>
+                                            Preparing targeted notes and practice cards…
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  ) : isUnderstood ? (
+                                    <View style={styles.understoodDecisionCard}>
+                                      <CheckCircle2 size={16} color="#047857" />
+                                      <View style={styles.understoodDecisionCopy}>
+                                        <Text style={styles.understoodDecisionText}>
+                                          Recorded as a note-coverage omission, not a student-confirmed support need.
+                                        </Text>
+                                        <TouchableOpacity
+                                          style={styles.understoodDecisionAction}
+                                          onPress={() =>
+                                            navigateToMaterial(
+                                              "revision_summary",
+                                              finding.id,
+                                              finding.concepts[0]?.name,
+                                            )
+                                          }
+                                        >
+                                          <Text style={styles.understoodDecisionActionText}>Improve my note</Text>
+                                          <ChevronRight size={13} color="#047857" />
+                                        </TouchableOpacity>
+                                      </View>
+                                    </View>
+                                  ) : (
+                                    <View style={styles.pendingDecisionCard}>
+                                      <Target size={15} color="#C2410C" />
+                                      <Text style={styles.pendingDecisionText}>
+                                        Complete the self-check above to unlock the right next step.
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        },
+                      )}
+                    </View>
+
+                    {learningFindings.length > 3 && (
+                      <TouchableOpacity
+                        style={styles.viewAllGapsBtn}
+                        onPress={() => setGapsExpanded(!gapsExpanded)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.viewAllGapsText}>
+                          {gapsExpanded ? "Show fewer findings" : `View all ${learningFindings.length} findings`}
+                        </Text>
+                        {gapsExpanded ? (
+                          <ChevronUp size={14} color={colors.primary} />
+                        ) : (
+                          <ChevronDown size={14} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    <View style={styles.learningResearchNote}>
+                      <ShieldCheck size={15} color="#475569" />
+                      <Text style={styles.learningResearchNoteText}>
+                        Research-safe interpretation: absence from one note is evidence about note coverage only. A support request is student-reported and should later be validated with practice or a diagnostic assessment.
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              );
+            })()}
+
+            {false && (note?.analysis?.learningGaps.length ?? 0) > 0 && (() => {
+              const legacyAnalysis = note?.analysis;
+              if (!legacyAnalysis) return null;
               const topGap =
-                note.analysis.learningGaps.find((g) => g.severity === "high") ||
-                note.analysis.learningGaps.find((g) => g.severity === "medium") ||
-                note.analysis.learningGaps[0];
+                legacyAnalysis!.learningGaps.find((g) => g.severity === "high") ||
+                legacyAnalysis!.learningGaps.find((g) => g.severity === "medium") ||
+                legacyAnalysis!.learningGaps[0];
 
               const topExplainableGap =
-                note.analysis.explainableGaps?.find(
+                legacyAnalysis!.explainableGaps?.find(
                   (eg) =>
                     eg.outcomeDescription === topGap.concept ||
                     eg.missingConcepts.some((mc) => topGap.concept.includes(mc.name))
-                ) || note.analysis.explainableGaps?.[0];
+                ) || legacyAnalysis!.explainableGaps?.[0];
+
+              if (!topExplainableGap) return null;
 
               const isHigh = topGap.severity === "high";
               const isMedium = topGap.severity === "medium";
 
               const missingList =
-                topExplainableGap && topExplainableGap.missingConcepts.length > 0
-                  ? topExplainableGap.missingConcepts.map((c) => c.name)
+                topExplainableGap && topExplainableGap!.missingConcepts.length > 0
+                  ? topExplainableGap!.missingConcepts.map((c) => c.name)
                   : topGap.concept.split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
               const outcomeStatusText =
@@ -1121,7 +1845,7 @@ export default function NoteDetail() {
                       <Text style={styles.whyGapTitle}>Why this is a gap</Text>
                     </View>
                     <Text style={styles.whyGapExplanation}>
-                      {topExplainableGap && topExplainableGap.missingConcepts.length > 0
+                      {topExplainableGap && topExplainableGap!.missingConcepts.length > 0
                         ? `Key required concepts are missing from your handwritten notes for this learning outcome.`
                         : `Your notes have incomplete coverage for this core syllabus requirement.`}
                     </Text>
@@ -1167,7 +1891,7 @@ export default function NoteDetail() {
                         <View style={styles.explainerSection}>
                           <Text style={styles.explainerSubhead}>Evidence found in your notes:</Text>
                           <View style={styles.explainerQuoteBox}>
-                            <Text style={styles.explainerQuoteText}>"{topExplainableGap.evidence}"</Text>
+                            <Text style={styles.explainerQuoteText}>{topExplainableGap!.evidence}</Text>
                           </View>
                         </View>
                       ) : null}
@@ -1212,7 +1936,7 @@ export default function NoteDetail() {
             })()}
 
             {/* ── 3. Note Coverage Findings ── */}
-            {note.analysis.learningGaps.length > 0 && (
+            {false && (note?.analysis?.learningGaps.length ?? 0) > 0 && (
               <View
                 style={styles.section}
                 onLayout={(e) => {
@@ -1226,20 +1950,20 @@ export default function NoteDetail() {
                     <Text style={styles.gapsSectionTitle}>Not Covered in This Note</Text>
                   </View>
                   <View style={styles.gapCountPill}>
-                    <Text style={styles.gapCountPillText}>{note.analysis.learningGaps.length}</Text>
+                    <Text style={styles.gapCountPillText}>{note!.analysis!.learningGaps.length}</Text>
                   </View>
                 </View>
 
                 <Text style={styles.sectionSubtitle}>
-                  {note.analysis.noteScope?.scope === "complete_lesson_note"
+                  {note!.analysis!.noteScope?.scope === "complete_lesson_note"
                     ? "These are curriculum concepts not found in this lesson note. They are not assumed to be knowledge gaps."
                     : "This upload appears to be a partial or specialised note. These concepts were not found here and are not assumed to be knowledge gaps."}
                 </Text>
 
                 <View style={styles.gapsList}>
                 {(gapsExpanded
-                  ? note.analysis.learningGaps
-                  : note.analysis.learningGaps.slice(0, 3)
+                  ? note!.analysis!.learningGaps
+                  : note!.analysis!.learningGaps.slice(0, 3)
                 ).map((gap, i) => {
                   const isCardExpanded = !!expandedGapIndices[i];
                   const isHigh = gap.severity === "high";
@@ -1428,7 +2152,7 @@ export default function NoteDetail() {
                 })}
                 </View>
 
-                {note.analysis.learningGaps.length > 3 && (
+                {note!.analysis!.learningGaps.length > 3 && (
                   <TouchableOpacity
                     style={styles.viewAllGapsBtn}
                     onPress={() => setGapsExpanded(!gapsExpanded)}
@@ -1437,7 +2161,7 @@ export default function NoteDetail() {
                     <Text style={styles.viewAllGapsText}>
                       {gapsExpanded
                         ? "Show less"
-                        : `View all ${note.analysis.learningGaps.length} findings`}
+                        : `View all ${note!.analysis!.learningGaps.length} findings`}
                     </Text>
                     {gapsExpanded
                       ? <ChevronUp size={14} color={colors.primary} />
@@ -2042,7 +2766,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
 
   // ── Failed state card ────────────────────────────────────────────────────
-  failedCard: {
+  failedCardLegacy: {
     margin: 20,
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -2056,7 +2780,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  failedIconWrap: {
+  failedIconWrapLegacy: {
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -2065,26 +2789,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
-  failedTitle: {
+  failedTitleLegacy: {
     fontSize: 18,
     fontWeight: "700",
     color: "#991B1B",
     marginBottom: 8,
   },
-  failedText: {
+  failedTextLegacy: {
     fontSize: 13.5,
     color: "#6B7280",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 20,
   },
-  failedRetryBtn: {
+  failedRetryBtnLegacy: {
     backgroundColor: "#DC2626",
     paddingHorizontal: 20,
     paddingVertical: 11,
     borderRadius: 12,
   },
-  failedRetryText: {
+  failedRetryTextLegacy: {
     color: "#fff",
     fontWeight: "600",
     fontSize: 13.5,
@@ -2429,7 +3153,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
   },
-  heroScoreRingWrap: {
+  heroScoreRingWrapLegacy: {
     width: 106,
     height: 106,
     position: "relative",
@@ -2437,17 +3161,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  heroScoreRingInner: {
+  heroScoreRingInnerLegacy: {
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
   },
-  heroScorePct: {
+  heroScorePctLegacy: {
     fontSize: 20,
     fontWeight: "900",
     lineHeight: 24,
   },
-  heroScoreLabel: {
+  heroScoreLabelLegacy: {
     fontSize: 9,
     fontWeight: "600",
     color: "#64748B",
@@ -2524,12 +3248,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  summaryActionsRow: {
+  summaryActionsRowLegacy: {
     flexDirection: "row",
     gap: 10,
     marginTop: 2,
   },
-  summarySecondaryBtn: {
+  summarySecondaryBtnLegacy: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -2541,13 +3265,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 14,
   },
-  summarySecondaryBtnText: {
+  summarySecondaryBtnTextLegacy: {
     fontSize: 12.5,
     fontWeight: "700",
     color: "#334155",
     letterSpacing: -0.2,
   },
-  summaryPrimaryBtn: {
+  summaryPrimaryBtnLegacy: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -2555,7 +3279,7 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.primary,
     paddingVertical: 12,
-    paddingHorizontal: 10,ght: 24,
+    paddingHorizontal: 10,
     letterSpacing: -0.3,
   },
   summaryBodyRow: {
@@ -2884,6 +3608,490 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   // Each gap card: white, clean, left border indicates priority
+  learningDecisionCard: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 18,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  learningDecisionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  learningDecisionTitleWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  learningDecisionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  learningDecisionTitleCopy: { flex: 1 },
+  learningDecisionEyebrow: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: "#64748B",
+  },
+  learningDecisionStatus: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  learningDecisionBadge: {
+    maxWidth: 100,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 9,
+  },
+  learningDecisionBadgeText: {
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight: "900",
+    textAlign: "center",
+    color: "#475569",
+  },
+  learningDecisionOutcome: {
+    marginTop: 15,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#172033",
+  },
+  learningDecisionDescription: {
+    marginTop: 5,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  learningEvidenceStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 15,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  learningEvidenceItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  learningEvidenceDivider: {
+    width: 1,
+    height: 30,
+    marginHorizontal: 10,
+    backgroundColor: "#E2E8F0",
+  },
+  learningEvidenceValue: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#334155",
+  },
+  learningEvidenceLabel: {
+    marginTop: 1,
+    fontSize: 9.5,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  learningDecisionSteps: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+  },
+  learningDecisionStep: {
+    flex: 1,
+    alignItems: "center",
+    gap: 5,
+  },
+  learningDecisionStepDone: {},
+  learningDecisionStepLine: {
+    width: 14,
+    height: 1,
+    marginBottom: 19,
+    backgroundColor: "#CBD5E1",
+  },
+  learningDecisionStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    color: "#94A3B8",
+    fontSize: 11,
+    lineHeight: 21,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  learningDecisionStepNumberDone: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FC6E20",
+    color: "#FFFFFF",
+    fontSize: 11,
+    lineHeight: 24,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  learningDecisionStepText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  learningDecisionStepTextDone: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#C2410C",
+    textAlign: "center",
+  },
+  learningDecisionPrimaryButton: {
+    minHeight: 46,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#FC6E20",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  learningDecisionPrimaryButtonDisabled: { opacity: 0.65 },
+  learningDecisionPrimaryButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  learningFindingsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  learningFindingsHeaderCopy: { flex: 1 },
+  learningFindingsTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: "#172033",
+  },
+  learningFindingsSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  learningDecisionSummaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 12,
+  },
+  learningSummaryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  learningSummaryChipPending: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA" },
+  learningSummaryChipSupport: { backgroundColor: "#F5F3FF", borderColor: "#DDD6FE" },
+  learningSummaryChipUnderstood: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
+  learningSummaryChipText: { fontSize: 10.5, fontWeight: "800" },
+  learningReliabilityNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  learningReliabilityNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  learningFindingList: { gap: 11, marginTop: 14 },
+  learningFindingCard: {
+    padding: 15,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.035,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  learningFindingCardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  learningFindingIndex: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.65,
+    color: "#94A3B8",
+  },
+  learningFindingStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  learningFindingStatusBadgeText: { fontSize: 9.5, fontWeight: "900" },
+  learningFindingOutcome: {
+    marginTop: 9,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  learningFindingMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 7,
+    gap: 6,
+  },
+  learningFindingMetaText: { fontSize: 10.5, fontWeight: "600", color: "#64748B" },
+  learningFindingMetaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#CBD5E1" },
+  learningFindingExpandButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  learningFindingExpandButtonText: { fontSize: 11.5, fontWeight: "800", color: colors.primary },
+  learningFindingDrawer: { gap: 13, marginTop: 14 },
+  learningEvidenceCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  learningEvidenceCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  learningEvidenceCardTitle: { fontSize: 11.5, fontWeight: "800", color: "#475569" },
+  learningEvidenceCardText: {
+    marginTop: 7,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#334155",
+  },
+  learningEvidenceMethodText: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  learningConceptListTitle: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: "#64748B",
+  },
+  learningConceptList: { gap: 9 },
+  learningConceptCard: {
+    padding: 12,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  learningConceptHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  learningConceptHeaderCopy: { flex: 1 },
+  learningConceptName: { fontSize: 13, lineHeight: 18, fontWeight: "800", color: "#1E293B" },
+  learningConceptMeta: { marginTop: 3, fontSize: 9.5, lineHeight: 14, fontWeight: "600", color: "#94A3B8" },
+  learningExamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: "#FFFBEB",
+  },
+  learningExamBadgeText: { fontSize: 8.5, fontWeight: "800", color: "#B45309" },
+  learningSelfCheckPrompt: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  learningSelfCheckButtons: { flexDirection: "row", gap: 8, marginTop: 9 },
+  learningSelfCheckButton: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  learningSelfCheckKnowButton: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" },
+  learningSelfCheckKnowButtonSelected: { backgroundColor: "#DCFCE7", borderColor: "#22C55E" },
+  learningSelfCheckSupportButton: { backgroundColor: "#FAF5FF", borderColor: "#E9D5FF" },
+  learningSelfCheckSupportButtonSelected: { backgroundColor: "#EDE9FE", borderColor: "#8B5CF6" },
+  learningSelfCheckKnowText: { fontSize: 10.5, fontWeight: "800", color: "#047857" },
+  learningSelfCheckSupportText: { fontSize: 10.5, fontWeight: "800", color: "#7C3AED" },
+  learningVerificationErrorText: {
+    marginTop: 7,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  learningVerificationUnavailable: {
+    marginTop: 9,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  learningRecommendationCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  learningRecommendationHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  learningRecommendationTitle: { fontSize: 11.5, fontWeight: "800", color: "#92400E" },
+  learningRecommendationText: { marginTop: 6, fontSize: 11.5, lineHeight: 17, fontWeight: "500", color: "#78350F" },
+  personalisedSupportCard: {
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+  },
+  personalisedSupportHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  personalisedSupportHeaderCopy: { flex: 1 },
+  personalisedSupportTitle: { fontSize: 12.5, fontWeight: "900", color: "#5B21B6" },
+  personalisedSupportSubtitle: { marginTop: 2, fontSize: 10.5, lineHeight: 15, fontWeight: "600", color: "#7C3AED" },
+  personalisedSupportActions: { flexDirection: "row", gap: 8, marginTop: 11 },
+  personalisedSupportPrimaryButton: {
+    flex: 1,
+    minHeight: 41,
+    borderRadius: 11,
+    backgroundColor: "#7C3AED",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  personalisedSupportPrimaryText: { fontSize: 10.5, fontWeight: "800", color: "#FFFFFF" },
+  personalisedSupportSecondaryButton: {
+    flex: 1,
+    minHeight: 41,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#C4B5FD",
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  personalisedSupportSecondaryText: { fontSize: 10.5, fontWeight: "800", color: "#7C3AED" },
+  personalisedSupportPreparing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    padding: 9,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+  personalisedSupportPreparingText: { flex: 1, fontSize: 10.5, lineHeight: 15, fontWeight: "700", color: "#6D28D9" },
+  understoodDecisionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 11,
+    borderRadius: 11,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  understoodDecisionCopy: { flex: 1 },
+  understoodDecisionText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "700", color: "#047857" },
+  understoodDecisionAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 7,
+    paddingVertical: 3,
+  },
+  understoodDecisionActionText: { fontSize: 10.5, fontWeight: "900", color: "#047857" },
+  pendingDecisionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 11,
+    borderRadius: 11,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  pendingDecisionText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "700", color: "#C2410C" },
+  learningResearchNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  learningResearchNoteText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "600", color: "#475569" },
+
   gapCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
