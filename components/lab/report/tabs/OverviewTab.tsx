@@ -16,7 +16,7 @@ export default function OverviewTab({
   insights: ReportInsights;
 }) {
   return (
-    <View className="gap-4 pt-4">
+    <View className="gap-3.5 pt-3.5">
       <ReportQuickInsights insights={insights.quickInsights} />
       <UnderstandingMeterCard understanding={insights.understanding} />
       <StudentAchievementCard achievements={insights.achievements} />

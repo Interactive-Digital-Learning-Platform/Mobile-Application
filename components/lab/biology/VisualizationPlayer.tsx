@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Eye, EyeOff } from "lucide-react-native";
+import { Compass, Eye, EyeOff, Lightbulb } from "lucide-react-native";
 import { cancelAnimation, Easing, runOnJS, useSharedValue, withTiming } from "react-native-reanimated";
-import { colors } from "@/constants/colors";
+import { ICON_COLORS } from "@/constants/quizStyles";
 import { VisualizationPlayerProps } from "@/types/lab";
 import { ProgressStepsCaption } from "@/components/ui/ProgressSteps";
 import VisualizationCanvas from "./VisualizationCanvas";
@@ -27,6 +27,14 @@ export default function VisualizationPlayer({ visualization }: VisualizationPlay
   const timelinePosition = useSharedValue(0);
 
   const currentStage = stages[currentStageIndex];
+  const canvasColor =
+    visualization.animationKey === "water_cycle"
+      ? "#DDF3FF"
+      : visualization.animationKey === "photosynthesis"
+        ? "#EFF9DE"
+        : visualization.animationKey === "gas_exchange"
+          ? "#FFF0F3"
+          : "#F1F5F9";
 
   const handleStageComplete = () => {
     setCurrentStageIndex((i) => {
@@ -111,7 +119,10 @@ export default function VisualizationPlayer({ visualization }: VisualizationPlay
 
   return (
     <View className="flex-1">
-      <View className="bg-bg-soft rounded-3xl overflow-hidden" style={{ aspectRatio: 300 / 220 }}>
+      <View
+        className="overflow-hidden rounded-[28px] border border-white shadow-sm shadow-black/10"
+        style={{ aspectRatio: 1.08, backgroundColor: canvasColor }}
+      >
         <VisualizationCanvas
           animationKey={visualization.animationKey}
           currentStage={currentStage}
@@ -124,7 +135,7 @@ export default function VisualizationPlayer({ visualization }: VisualizationPlay
         {currentStage && <StageLabelOverlay title={currentStage.title} stageIndex={currentStageIndex} timelinePosition={timelinePosition} />}
       </View>
 
-      <View className="mt-4">
+      <View className="mt-3 px-2">
         <VisualizationTimeline
           totalStages={stages.length}
           currentStageIndex={currentStageIndex}
@@ -148,23 +159,31 @@ export default function VisualizationPlayer({ visualization }: VisualizationPlay
         <VisualizationQuestion question={learningQuestions[0]} onReplayStage={handleReplayStage} onDone={() => setShowQuestion(false)} />
       ) : (
         currentStage && (
-          <View className="mt-2">
-            <Text className="font-amedium text-ink text-sm mb-1">What is happening?</Text>
-            <Text className="font-aregular text-muted">{currentStage.explanation}</Text>
+          <View className="mt-4 flex-row items-start gap-3 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm shadow-black/5">
+            <View className="h-12 w-12 items-center justify-center rounded-full bg-blue-500">
+              <Lightbulb size={23} color={ICON_COLORS.white} strokeWidth={2} />
+            </View>
+            <View className="flex-1">
+              <Text className="mb-1 text-xs font-black uppercase tracking-wide text-slate-800">What is happening?</Text>
+              <Text className="text-[14px] leading-5 text-slate-600">{currentStage.explanation}</Text>
+            </View>
           </View>
         )
       )}
 
-      <View className="flex-row gap-2 mt-4">
-        <Pressable onPress={handleExplore} className="flex-1 flex-row items-center justify-center gap-2 border border-border rounded-xl py-3">
-          <Text className="font-amedium text-ink">Explore</Text>
+      <View className="mt-4 flex-row gap-2">
+        <Pressable onPress={handleExplore} className="h-[52px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-white">
+          <Compass size={19} color={ICON_COLORS.blue500} strokeWidth={2.3} />
+          <Text className="font-black text-slate-800">Explore</Text>
         </Pressable>
         <Pressable
           onPress={() => setShowLabels((v) => !v)}
-          className="flex-1 flex-row items-center justify-center gap-2 border border-border rounded-xl py-3"
+          className={`h-[52px] flex-1 flex-row items-center justify-center gap-2 rounded-2xl border ${
+            showLabels ? "border-emerald-400 bg-emerald-50" : "border-emerald-200 bg-white"
+          }`}
         >
-          {showLabels ? <EyeOff size={16} color={colors.primaryBlack} /> : <Eye size={16} color={colors.primaryBlack} />}
-          <Text className="font-amedium text-ink">Labels</Text>
+          {showLabels ? <EyeOff size={19} color={ICON_COLORS.emerald600} /> : <Eye size={19} color={ICON_COLORS.emerald600} />}
+          <Text className="font-black text-slate-800">Labels</Text>
         </Pressable>
       </View>
 

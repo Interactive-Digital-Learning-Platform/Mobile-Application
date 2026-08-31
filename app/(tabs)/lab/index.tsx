@@ -1,14 +1,15 @@
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { ArrowRight, BookOpen, ChevronRight, FlaskConical } from "lucide-react-native";
+import { ArrowRight, BookOpen, ChevronRight, Clock3, FlaskConical } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
-import { LAB_SUBJECTS, formatGradeRange, gradeRangeAcross } from "@/constants/lab/experiment.constants";
+import { LAB_SUBJECTS, experimentIcon, formatGradeRange, gradeRangeAcross } from "@/constants/lab/experiment.constants";
 import { useExperimentsBySubject } from "@/hooks/lab/use-experiments";
 import { useBiologyVisualizations } from "@/hooks/lab/use-biology-visualizations";
 import { useSession, useSessionHistory, useSessionStats } from "@/hooks/lab/use-lab-session";
 import Card from "@/components/ui/Card";
 import PracticalHistoryListItem from "@/components/lab/PracticalHistoryListItem";
+import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -215,19 +216,43 @@ export default function Lab() {
                   <Card
                     key={practical._id}
                     haptic
-                    className="w-44 border border-slate-100 shadow-black/10"
+                    className="w-[218px] rounded-3xl border border-slate-100 shadow-black/10"
                     onPress={() => router.push(`/(tabs)/lab/${practical._id}/info` as never)}
                   >
-                    <View className="w-10 h-10 rounded-xl bg-slate-50 items-center justify-center">
-                      <BookOpen size={18} color={ICON_COLORS.slate500} strokeWidth={1.8} />
+                    <View className="flex-row items-center justify-between">
+                      <View
+                        className="h-12 w-12 items-center justify-center rounded-2xl"
+                        style={{ backgroundColor: `${practical.thumbnailColor}18` }}
+                      >
+                        {(() => {
+                          const Icon = experimentIcon(practical);
+                          return <Icon size={22} color={practical.thumbnailColor} strokeWidth={1.9} />;
+                        })()}
+                      </View>
+                      <DifficultyBadge difficulty={practical.difficulty} />
                     </View>
-                    <Text className="text-sm font-bold text-slate-800 mt-2" numberOfLines={2}>
+
+                    <Text className="mt-3 text-[15px] font-black leading-5 text-slate-800" numberOfLines={2}>
                       {practical.title}
                     </Text>
-                    <Text className="text-[11px] font-medium text-slate-400 mt-1">{formatGradeRange(practical.grades)}</Text>
-                    <View className="flex-row items-center gap-1 mt-2">
-                      <Text className="text-[11px] font-bold text-primary">{practical.estimatedTime} min read</Text>
-                      <ArrowRight size={12} color={ICON_COLORS.primary500} strokeWidth={2.5} />
+                    <Text className="mt-1 text-[11px] font-medium text-slate-400" numberOfLines={1}>
+                      Chemistry · Pre-lab guide
+                    </Text>
+
+                    <View className="mt-3 flex-row items-center gap-2">
+                      <View className="rounded-full bg-blue-50 px-2 py-1">
+                        <Text className="text-[10px] font-bold text-blue-700">{formatGradeRange(practical.grades)}</Text>
+                      </View>
+                      <View className="flex-row items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+                        <Clock3 size={11} color={ICON_COLORS.slate500} strokeWidth={2.1} />
+                        <Text className="text-[10px] font-bold text-slate-600">{practical.estimatedTime} min</Text>
+                      </View>
+                    </View>
+
+                    <View className="mt-3 flex-row items-center justify-center gap-1.5 rounded-xl bg-primary/10 py-2.5">
+                      <BookOpen size={14} color={ICON_COLORS.primary500} strokeWidth={2.1} />
+                      <Text className="text-[12px] font-black text-primary">Open learning guide</Text>
+                      <ArrowRight size={13} color={ICON_COLORS.primary500} strokeWidth={2.5} />
                     </View>
                   </Card>
                 ))}

@@ -384,6 +384,18 @@ export const deriveMissions = (report: LabReportType): LearningMission[] => {
   return missions;
 };
 
+// Short one-line label for a collapsed error card. Strips a leading "The student believes…" /
+// "Student thinks…" framing, then keeps the first clause, capped so the header never wraps.
+const conceptualShortLabel = (description: string): string => {
+  const stripped = description
+    .trim()
+    .replace(/^the student (believes|thinks|assumes) (that )?/i, "")
+    .replace(/^student (believes|thinks|assumes) (that )?/i, "");
+  const clause = stripped.split(/[,.;:]| — | – /)[0].trim();
+  const s = clause.charAt(0).toUpperCase() + clause.slice(1);
+  return shortTitle(s, 44);
+};
+
 // ── Errors Detected (spec §10) ──────────────────────────────────────────────────────────────
 export const deriveErrors = (report: LabReportType): ReportErrorItem[] => {
   const out: ReportErrorItem[] = [];
@@ -394,7 +406,7 @@ export const deriveErrors = (report: LabReportType): ReportErrorItem[] => {
     out.push({
       key: `proc-${i}`,
       group: behaviour ? "behaviour" : "procedural",
-      title: shortTitle(e.message, 60),
+      title: match?.label ?? PROCEDURAL_WHY_FALLBACK.label,
       relatedStepLabel: `Step ${e.stepId}${e.stepTitle ? ` · ${e.stepTitle}` : ""}`,
       whatHappened: e.count > 1 ? `${e.message} (${e.count}×)` : e.message,
       whyItMatters: match?.why ?? PROCEDURAL_WHY_FALLBACK.why,
@@ -406,7 +418,7 @@ export const deriveErrors = (report: LabReportType): ReportErrorItem[] => {
     out.push({
       key: `conc-${i}`,
       group: "conceptual",
-      title: shortTitle(e.description, 60),
+      title: conceptualShortLabel(e.description),
       relatedStepLabel: e.relatedStep != null ? `Step ${e.relatedStep}` : null,
       whatHappened: e.description,
       whyItMatters: "This idea shapes what you expect to see in this kind of experiment.",

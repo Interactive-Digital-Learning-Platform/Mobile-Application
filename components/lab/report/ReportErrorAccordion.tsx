@@ -43,14 +43,16 @@ export default function ReportErrorAccordion({ errors }: { errors: ReportErrorIt
               onToggle={() => setOpenKey(open ? null : err.key)}
               style={{ borderLeftWidth: 3, borderLeftColor: meta.accent }}
               header={
-                <View className="flex-row items-start gap-2 pr-1">
-                  <Icon size={15} color={meta.iconColor} strokeWidth={2.4} style={{ marginTop: 1 }} />
+                <View className="flex-row items-center gap-2 pr-1">
+                  <Icon size={15} color={meta.iconColor} strokeWidth={2.4} />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{meta.label}</Text>
-                    <Text className="text-[12.5px] font-semibold text-slate-800 leading-4 mt-0.5">{err.title}</Text>
-                    {err.relatedStepLabel && (
-                      <Text className="text-[11px] text-slate-400 mt-0.5">{err.relatedStepLabel}</Text>
-                    )}
+                    <Text className="text-[13px] font-semibold text-slate-800" numberOfLines={1}>
+                      {err.title}
+                    </Text>
+                    <Text className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mt-0.5">
+                      {meta.label}
+                      {err.relatedStepLabel ? ` · ${err.relatedStepLabel}` : ""}
+                    </Text>
                   </View>
                 </View>
               }

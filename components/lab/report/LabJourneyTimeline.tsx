@@ -11,9 +11,8 @@ const MAX_OPEN = 2;
 // Interactive vertical timeline of the experiment (spec §4). At most two steps open at once so
 // the screen never turns back into a long document.
 export default function LabJourneyTimeline({ journey }: { journey: JourneyStep[] }) {
-  // Auto-open the most challenging step so the key takeaway is visible without a tap.
-  const initial = journey.find((j) => j.isMostChallenging)?.stepId;
-  const [openIds, setOpenIds] = useState<number[]>(initial != null ? [initial] : []);
+  // Keep the first view scannable. Students can open only the steps they want to inspect.
+  const [openIds, setOpenIds] = useState<number[]>([]);
 
   const toggle = (stepId: number) => {
     setOpenIds((prev) => {
@@ -51,7 +50,9 @@ export default function LabJourneyTimeline({ journey }: { journey: JourneyStep[]
           />
         ))}
       </View>
-      <Text className="text-[10px] text-slate-400 mt-1">Tap a step for its tasks, timing and score impact.</Text>
+      <Text className="text-[10px] font-medium text-slate-400 mt-1 ml-10">
+        Tap a step to reveal its evidence.
+      </Text>
     </View>
   );
 }

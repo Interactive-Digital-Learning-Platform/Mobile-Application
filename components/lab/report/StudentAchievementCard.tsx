@@ -33,7 +33,7 @@ export default function StudentAchievementCard({ achievements }: { achievements:
   if (achievements.length === 0) return null;
   return (
     <View>
-      <SectionHeading title="What You Did Well" icon={Award} iconColor={ICON_COLORS.emerald600} />
+      <SectionHeading title="Wins Unlocked" icon={Award} iconColor={ICON_COLORS.emerald600} />
       <View className="flex-row flex-wrap gap-2">
         {achievements.map((a) => (
           <AchievementChip key={a.key} item={a} />

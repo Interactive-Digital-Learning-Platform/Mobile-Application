@@ -25,9 +25,9 @@ import {
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────────────────────
 export const REPORT_TABS: { key: ReportTabKey; label: string }[] = [
-  { key: "overview", label: "Overview" },
-  { key: "journey", label: "Step Journey" },
-  { key: "improve", label: "Improve" },
+  { key: "overview", label: "Highlights" },
+  { key: "journey", label: "My Journey" },
+  { key: "improve", label: "Level Up" },
 ];
 
 // ── Lab Journey step visual states ───────────────────────────────────────────────────────────
@@ -224,32 +224,38 @@ export const ERROR_GROUP_META: Record<
   behaviour: { label: "Pace & Habits", icon: Clock, iconColor: ICON_COLORS.amber600, accent: ICON_COLORS.amber500, tint: "bg-slate-50" },
 };
 
-// Static, supportive "why it matters" line per procedural friendly-message (spec §10: never
-// judgemental). Keyed by a substring of the backend's friendlyProceduralMessage output.
-export const PROCEDURAL_WHY: { match: RegExp; why: string; action: string }[] = [
+// Static, supportive "why it matters" line + a short accordion-header label per procedural
+// friendly-message (spec §10: never judgemental). Keyed by a substring of the backend's
+// friendlyProceduralMessage output. `label` keeps the collapsed error card to one line.
+export const PROCEDURAL_WHY: { match: RegExp; label: string; why: string; action: string }[] = [
   {
     match: /before it was on the bench|before the material it needs/i,
+    label: "Acted before the setup was ready",
     why: "Each step builds on the setup from the one before it.",
     action: "Check the bench has everything the step names before you act.",
   },
   {
     match: /transfer tool/i,
+    label: "Skipped the transfer tool",
     why: "The transfer tool controls how much is added and keeps the measurement fair.",
     action: "Use the dropper, pipette or burette the step asks for next time.",
   },
   {
     match: /don't produce the change|wrong action|out of order/i,
+    label: "Combined the wrong materials",
     why: "The expected observation only appears when the right things are combined.",
     action: "Re-read the step and match each material to what it asks for.",
   },
   {
     match: /very quickly|read in full/i,
+    label: "Moved through steps too fast",
     why: "Rushing a step is the most common cause of a missed observation.",
     action: "Pause and read each instruction fully before your next attempt.",
   },
 ];
 
 export const PROCEDURAL_WHY_FALLBACK = {
+  label: "Step done differently than asked",
   why: "Small procedure slips add up across an experiment.",
   action: "Review this step and try it again more slowly.",
 };
