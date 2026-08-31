@@ -13,7 +13,7 @@ export default function VisualizationQuestion({ question, onReplayStage, onDone 
 
   return (
     <View className="gap-3">
-      <Text className="font-amedium text-ink text-base">{question.question}</Text>
+      <Text className="font-bold text-slate-800 text-base">{question.question}</Text>
       <View className="gap-2">
         {question.options.map((option, index) => {
           const isSelected = selected === index;
@@ -24,10 +24,10 @@ export default function VisualizationQuestion({ question, onReplayStage, onDone 
               onPress={() => setSelected(index)}
               disabled={selected !== null}
               className={`flex-row items-center justify-between rounded-xl border px-4 py-3 ${
-                showCorrect ? "border-emerald-500 bg-emerald-50" : isSelected ? "border-red-300 bg-red-50" : "border-border"
+                showCorrect ? "border-emerald-500 bg-emerald-50" : isSelected ? "border-rose-300 bg-rose-50" : "border-slate-200"
               }`}
             >
-              <Text className="font-aregular text-ink">{option}</Text>
+              <Text className="text-slate-700">{option}</Text>
               {isSelected && (isCorrect ? <Check size={18} color="#059669" /> : <X size={18} color="#DC2626" />)}
             </Pressable>
           );

@@ -17,7 +17,7 @@ export default function StageLabelOverlay({ title, stageIndex, timelinePosition 
 
   return (
     <Animated.View pointerEvents="none" style={[{ position: "absolute", top: 12, left: 0, right: 0, alignItems: "center" }, style]}>
-      <Text className="text-ink font-abold text-base bg-white/85 px-3 py-1 rounded-full overflow-hidden">{title}</Text>
+      <Text className="text-slate-800 font-black text-base bg-white/85 px-3 py-1 rounded-full overflow-hidden">{title}</Text>
     </Animated.View>
   );
 }

@@ -45,7 +45,7 @@ export default function VisualizationCanvas({ animationKey, currentStage, curren
 
   return (
     <View className="flex-1 items-center justify-center">
-      <Text className="font-aregular text-muted">This visualization isn&apos;t available yet.</Text>
+      <Text className="text-slate-500">This visualization isn&apos;t available yet.</Text>
     </View>
   );
 }
