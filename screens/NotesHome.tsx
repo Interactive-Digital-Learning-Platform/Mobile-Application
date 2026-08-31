@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   StatusBar,
   Platform,
   StyleSheet,
-  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -21,7 +20,6 @@ import {
   Trash2,
   FileText,
   Sparkles,
-  Clock,
   AlertTriangle,
   Landmark,
   FlaskConical,
@@ -29,6 +27,13 @@ import {
   BookOpen,
   Globe,
   Code2,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Target,
+  ChevronRight,
+  ShieldCheck,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react-native";
 import { useAuth, useUser } from "@clerk/expo";
@@ -38,10 +43,9 @@ import Svg, {
   LinearGradient as SvgLinearGradient,
   Stop,
   G,
-  Polygon,
 } from "react-native-svg";
 import { notesApi } from "@/api/notesAPI";
-import { colors } from "@/constants/colors";
+import { notesClient } from "@/api/apiClients";
 import Toast from "react-native-toast-message";
 
 type NoteStatus = "all" | "processing" | "analyzed" | "failed";
@@ -207,6 +211,119 @@ interface Note {
   };
 }
 
+type CoverageTrend = "improving" | "stable" | "declining";
+
+interface SubjectMastery {
+  subjectName: string;
+  averageWeightedCoverage: number;
+  notesAnalyzed: number;
+  trend: CoverageTrend;
+  recentScores: number[];
+}
+
+interface StudySession {
+  noteId: string;
+  subject: string;
+  lessonName?: string;
+  weightedCoverage: number;
+  conceptsFound: number;
+  conceptsMissed: number;
+  analyzedAt: string;
+}
+
+interface LearningProfile {
+  exists: boolean;
+  totalNotesAnalyzed: number;
+  subjectMastery: SubjectMastery[];
+  recentSessions: StudySession[];
+}
+
+interface PersistentGap {
+  conceptId: string;
+  conceptName: string;
+  subjectName: string;
+  timesNotFoundInNotes: number;
+  timesFoundInNotes: number;
+  timesPartiallyFoundInNotes: number;
+  timesStudentConfirmedNeedsHelp: number;
+  timesStudentConfirmedUnderstood: number;
+}
+
+function buildLocalLearningProfile(notes: Note[]): LearningProfile {
+  const analyzed = notes.filter((note) => note.status === "analyzed" && note.analysis);
+  const bySubject = new Map<string, number[]>();
+
+  analyzed
+    .slice()
+    .reverse()
+    .forEach((note) => {
+      const subject = note.analysis?.subject || "Other";
+      const scores = bySubject.get(subject) ?? [];
+      scores.push(note.analysis?.overallCompleteness ?? 0);
+      bySubject.set(subject, scores);
+    });
+
+  const subjectMastery = Array.from(bySubject.entries()).map(([subjectName, scores]) => {
+    const recent = scores.slice(-3);
+    const delta = recent.length >= 3 ? recent[recent.length - 1] - recent[0] : 0;
+    const trend: CoverageTrend = delta >= 10 ? "improving" : delta <= -10 ? "declining" : "stable";
+
+    return {
+      subjectName,
+      averageWeightedCoverage: Math.round(
+        scores.reduce((sum, score) => sum + score, 0) / scores.length
+      ),
+      notesAnalyzed: scores.length,
+      trend,
+      recentScores: scores,
+    };
+  });
+
+  const recentSessions = analyzed
+    .slice(0, 10)
+    .reverse()
+    .map((note) => ({
+      noteId: note._id,
+      subject: note.analysis?.subject || "Other",
+      lessonName: note.analysis?.topic,
+      weightedCoverage: note.analysis?.overallCompleteness ?? 0,
+      conceptsFound: 0,
+      conceptsMissed: note.analysis?.learningGaps?.length ?? 0,
+      analyzedAt: note.createdAt,
+    }));
+
+  return {
+    exists: analyzed.length > 0,
+    totalNotesAnalyzed: analyzed.length,
+    subjectMastery,
+    recentSessions,
+  };
+}
+
+const TREND_CONFIG: Record<
+  CoverageTrend,
+  { label: string; color: string; backgroundColor: string; icon: LucideIcon }
+> = {
+  improving: {
+    label: "Improving",
+    color: "#059669",
+    backgroundColor: "#ECFDF5",
+    icon: ArrowUpRight,
+  },
+  stable: {
+    label: "Stable",
+    color: "#64748B",
+    backgroundColor: "#F1F5F9",
+    icon: Minus,
+  },
+  declining: {
+    label: "Needs attention",
+    color: "#DC2626",
+    backgroundColor: "#FEF2F2",
+    icon: ArrowDownRight,
+  },
+};
+
 // ─── Helpers & Configurations ────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<
@@ -271,6 +388,243 @@ function formatCreatedAt(iso: string): string {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+interface LearningInsightsProps {
+  profile: LearningProfile;
+  persistentGaps: PersistentGap[];
+  notes: Note[];
+  isSynced: boolean;
+  onOpenNote: (noteId: string) => void;
+}
+
+function LearningInsights({
+  profile,
+  persistentGaps,
+  notes,
+  isSynced,
+  onOpenNote,
+}: LearningInsightsProps) {
+  const subjects = profile.subjectMastery
+    .slice()
+    .sort((a, b) => b.averageWeightedCoverage - a.averageWeightedCoverage);
+  const displayedSubjects = subjects.slice(0, 3);
+  const prioritySubject = subjects.length > 1 ? subjects[subjects.length - 1] : subjects[0];
+  const confirmedSupportGap = persistentGaps.find(
+    (gap) => gap.timesStudentConfirmedNeedsHelp > gap.timesStudentConfirmedUnderstood
+  );
+  const recurringPattern = confirmedSupportGap ?? persistentGaps[0];
+  const latestRelevantNote = notes.find(
+    (note) =>
+      note.status === "analyzed" &&
+      note.analysis?.subject === (recurringPattern?.subjectName ?? prioritySubject?.subjectName)
+  );
+  const chartSessions = profile.recentSessions.slice(-5);
+  const latestSession = chartSessions[chartSessions.length - 1];
+  const previousSameSubject = profile.recentSessions
+    .slice(0, -1)
+    .reverse()
+    .find((session) => session.subject === latestSession?.subject);
+  const latestDelta =
+    latestSession && previousSameSubject
+      ? latestSession.weightedCoverage - previousSameSubject.weightedCoverage
+      : null;
+
+  const actionTitle = confirmedSupportGap
+    ? `Review ${confirmedSupportGap.conceptName}`
+    : recurringPattern
+    ? `Check your understanding of ${recurringPattern.conceptName}`
+    : prioritySubject
+    ? `Build stronger ${prioritySubject.subjectName} notes`
+    : "Analyze another note";
+
+  const actionDescription = confirmedSupportGap
+    ? `You marked this as needing help, and it was absent from ${confirmedSupportGap.timesNotFoundInNotes} analyzed notes.`
+    : recurringPattern
+    ? `This concept was absent from ${recurringPattern.timesNotFoundInNotes} analyzed notes. Confirm whether it is a note omission or a real support need.`
+    : prioritySubject
+    ? `${prioritySubject.subjectName} currently averages ${prioritySubject.averageWeightedCoverage}% note coverage. Review the latest analysis before your next upload.`
+    : "Each analyzed note creates a new coverage checkpoint.";
+
+  return (
+    <View style={styles.insightsSection}>
+      <View style={styles.insightsTitleRow}>
+        <View style={styles.insightsTitleIcon}>
+          <BarChart3 size={19} color="#FC6E20" strokeWidth={2.2} />
+        </View>
+        <View style={styles.insightsTitleCopy}>
+          <Text style={styles.insightsTitle}>Learning Insights</Text>
+          <Text style={styles.insightsSubtitle}>
+            {isSynced ? "Tracked across every analyzed note" : "Based on your recent analyzed notes"}
+          </Text>
+        </View>
+        <View style={styles.autoTrackedBadge}>
+          <View style={styles.autoTrackedDot} />
+          <Text style={styles.autoTrackedText}>{isSynced ? "SYNCED" : "RECENT"}</Text>
+        </View>
+      </View>
+
+      <View style={styles.insightsCard}>
+        <View style={styles.recentCoverageHeader}>
+          <View>
+            <Text style={styles.insightEyebrow}>RECENT NOTE COVERAGE</Text>
+            <Text style={styles.recentCoverageValue}>
+              {latestSession ? `${latestSession.weightedCoverage}%` : "—"}
+            </Text>
+          </View>
+          {latestSession && (
+            <View
+              style={[
+                styles.deltaBadge,
+                latestDelta === null || Math.abs(latestDelta) < 1
+                  ? styles.deltaBadgeNeutral
+                  : latestDelta > 0
+                  ? styles.deltaBadgePositive
+                  : styles.deltaBadgeNegative,
+              ]}
+            >
+              {latestDelta === null || Math.abs(latestDelta) < 1 ? (
+                <Minus size={14} color="#64748B" strokeWidth={2.2} />
+              ) : latestDelta > 0 ? (
+                <ArrowUpRight size={14} color="#059669" strokeWidth={2.2} />
+              ) : (
+                <ArrowDownRight size={14} color="#DC2626" strokeWidth={2.2} />
+              )}
+              <Text
+                style={[
+                  styles.deltaBadgeText,
+                  latestDelta !== null && latestDelta > 0
+                    ? styles.deltaTextPositive
+                    : latestDelta !== null && latestDelta < 0
+                    ? styles.deltaTextNegative
+                    : styles.deltaTextNeutral,
+                ]}
+              >
+                {latestDelta === null
+                  ? "Baseline"
+                  : `${latestDelta > 0 ? "+" : ""}${latestDelta} pts`}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.coverageChart}>
+          {chartSessions.map((session) => (
+            <View key={`${session.noteId}-${session.analyzedAt}`} style={styles.chartColumn}>
+              <Text style={styles.chartValue}>{session.weightedCoverage}</Text>
+              <View style={styles.chartTrack}>
+                <View
+                  style={[
+                    styles.chartBar,
+                    {
+                      height: `${Math.max(12, Math.min(100, session.weightedCoverage))}%`,
+                      backgroundColor:
+                        session.weightedCoverage >= 75
+                          ? "#10B981"
+                          : session.weightedCoverage >= 45
+                          ? "#F59E0B"
+                          : "#F97316",
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.chartLabel} numberOfLines={1}>
+                {session.subject.slice(0, 3).toUpperCase()}
+              </Text>
+            </View>
+          ))}
+        </View>
+        {latestSession && (
+          <Text style={styles.comparisonCaption} numberOfLines={2}>
+            {latestDelta === null
+              ? `${latestSession.subject} baseline established. Add another ${latestSession.subject} note to measure change.`
+              : `Compared with your previous ${latestSession.subject} note.`}
+          </Text>
+        )}
+      </View>
+
+      {displayedSubjects.length > 0 && (
+        <View style={styles.insightsCard}>
+          <Text style={styles.insightEyebrow}>SUBJECT NOTE COVERAGE</Text>
+          <View style={styles.subjectInsightsList}>
+            {displayedSubjects.map((subject) => {
+              const trend = TREND_CONFIG[subject.trend] ?? TREND_CONFIG.stable;
+              const TrendIcon = trend.icon;
+
+              return (
+                <View key={subject.subjectName} style={styles.subjectInsightRow}>
+                  <View style={styles.subjectInsightHeader}>
+                    <View style={styles.subjectInsightNameRow}>
+                      <Text style={styles.subjectInsightName}>{subject.subjectName}</Text>
+                      <Text style={styles.subjectNoteCount}>
+                        {subject.notesAnalyzed} note{subject.notesAnalyzed === 1 ? "" : "s"}
+                      </Text>
+                    </View>
+                    <View style={[styles.trendBadge, { backgroundColor: trend.backgroundColor }]}>
+                      <TrendIcon size={12} color={trend.color} strokeWidth={2.3} />
+                      <Text style={[styles.trendBadgeText, { color: trend.color }]}>
+                        {trend.label}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.subjectCoverageRow}>
+                    <View style={styles.subjectProgressTrack}>
+                      <View
+                        style={[
+                          styles.subjectProgressFill,
+                          { width: `${Math.min(100, subject.averageWeightedCoverage)}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.subjectCoverageValue}>
+                      {subject.averageWeightedCoverage}%
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.nextActionCard}>
+        <View style={styles.nextActionIcon}>
+          <Target size={20} color="#ffffff" strokeWidth={2.1} />
+        </View>
+        <View style={styles.nextActionCopy}>
+          <Text style={styles.nextActionEyebrow}>YOUR NEXT BEST ACTION</Text>
+          <Text style={styles.nextActionTitle}>{actionTitle}</Text>
+          <Text style={styles.nextActionDescription}>{actionDescription}</Text>
+          {latestRelevantNote && (
+            <TouchableOpacity
+              style={styles.nextActionButton}
+              activeOpacity={0.8}
+              onPress={() => onOpenNote(latestRelevantNote._id)}
+            >
+              <Text style={styles.nextActionButtonText}>Open relevant analysis</Text>
+              <ChevronRight size={14} color="#C2410C" strokeWidth={2.4} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {persistentGaps.length > 0 && (
+        <View style={styles.recurringPatternsRow}>
+          <AlertTriangle size={15} color="#B45309" strokeWidth={2} />
+          <Text style={styles.recurringPatternsText}>
+            {persistentGaps.length} recurring note omission{persistentGaps.length === 1 ? "" : "s"} detected
+          </Text>
+        </View>
+      )}
+
+      <View style={styles.insightsDisclaimer}>
+        <ShieldCheck size={14} color="#64748B" strokeWidth={2} />
+        <Text style={styles.insightsDisclaimerText}>
+          Coverage reflects what appears in uploaded notes—not everything you know. Confirm findings inside each analysis.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function NotesHome() {
   const router = useRouter();
   const { userId } = useAuth();
@@ -291,6 +645,8 @@ export default function NotesHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<NoteStatus>("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [learningProfile, setLearningProfile] = useState<LearningProfile | null>(null);
+  const [persistentGaps, setPersistentGaps] = useState<PersistentGap[]>([]);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchNotes = useCallback(
@@ -299,9 +655,30 @@ export default function NotesHome() {
       if (isRefresh) setRefreshing(true);
 
       try {
-        const response = await notesApi.getNotes(userId);
-        if (response.success) {
-          setNotes(response.data.notes);
+        const encodedUserId = encodeURIComponent(userId);
+        const [notesResult, profileResult, gapsResult] = await Promise.allSettled([
+          notesApi.getNotes(userId),
+          notesClient.get<{ success: boolean; data: LearningProfile }>(
+            `/profile/${encodedUserId}`
+          ),
+          notesClient.get<{
+            success: boolean;
+            data: { gaps: PersistentGap[] };
+          }>(`/profile/${encodedUserId}/gaps`),
+        ]);
+
+        if (notesResult.status === "fulfilled" && notesResult.value.success) {
+          setNotes(notesResult.value.data.notes);
+        } else if (notesResult.status === "rejected") {
+          throw notesResult.reason;
+        }
+
+        if (profileResult.status === "fulfilled" && profileResult.value.data.success) {
+          setLearningProfile(profileResult.value.data.data);
+        }
+
+        if (gapsResult.status === "fulfilled" && gapsResult.value.data.success) {
+          setPersistentGaps(gapsResult.value.data.data.gaps ?? []);
         }
       } catch (error) {
         console.error("Failed to fetch notes:", error);
@@ -350,7 +727,7 @@ export default function NotesHome() {
               await notesApi.deleteNote(note._id);
               setNotes((prev) => prev.filter((n) => n._id !== note._id));
               Toast.show({ type: "success", text1: "Note deleted successfully" });
-            } catch (error) {
+            } catch {
               Toast.show({ type: "error", text1: "Failed to delete note" });
             } finally {
               setDeletingId(null);
@@ -372,20 +749,21 @@ export default function NotesHome() {
         );
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  const analyzedNotes = notes.filter((n) => n.status === "analyzed");
-  const avgScore =
-    analyzedNotes.length > 0
-      ? Math.round(
-          analyzedNotes.reduce(
-            (sum, n) => sum + (n.analysis?.overallCompleteness ?? 0),
-            0
-          ) / analyzedNotes.length
-        )
-      : 0;
-  const totalGaps = analyzedNotes.reduce(
-    (sum, n) => sum + (n.analysis?.learningGaps?.length ?? 0),
+  const effectiveProfile = useMemo(
+    () => learningProfile ?? buildLocalLearningProfile(notes),
+    [learningProfile, notes]
+  );
+  const trackedNoteCount = effectiveProfile.totalNotesAnalyzed;
+  const weightedSubjectTotal = effectiveProfile.subjectMastery.reduce(
+    (sum, subject) => sum + subject.averageWeightedCoverage * subject.notesAnalyzed,
     0
   );
+  const weightedSubjectCount = effectiveProfile.subjectMastery.reduce(
+    (sum, subject) => sum + subject.notesAnalyzed,
+    0
+  );
+  const avgCoverage =
+    weightedSubjectCount > 0 ? Math.round(weightedSubjectTotal / weightedSubjectCount) : 0;
 
   // ── Note card ─────────────────────────────────────────────────────
   const renderNoteCard = ({ item }: { item: Note }) => {
@@ -599,24 +977,24 @@ export default function NotesHome() {
             <View style={styles.statCard}>
               {/* Stat 1: Analyzed */}
               <View style={[styles.statCell, styles.statCellBorderRight]}>
-                <Text style={styles.statVal}>{analyzedNotes.length}</Text>
+                <Text style={styles.statVal}>{trackedNoteCount}</Text>
                 <Text style={styles.statLbl}>Analyzed</Text>
               </View>
 
               {/* Stat 2: Avg Score */}
               <View style={styles.statCell}>
                 <Text style={styles.statVal}>
-                  {analyzedNotes.length > 0 ? `${avgScore}%` : "—"}
+                  {trackedNoteCount > 0 ? `${avgCoverage}%` : "—"}
                 </Text>
-                <Text style={styles.statLbl}>Avg Score</Text>
+                <Text style={styles.statLbl}>Avg Coverage</Text>
               </View>
 
               {/* Stat 3: Total Gaps */}
               <View style={[styles.statCell, styles.statCellBorderLeft]}>
                 <Text style={styles.statVal}>
-                  {analyzedNotes.length > 0 ? totalGaps : "—"}
+                  {trackedNoteCount > 0 ? persistentGaps.length : "—"}
                 </Text>
-                <Text style={styles.statLbl}>Total Gaps</Text>
+                <Text style={styles.statLbl}>Support Areas</Text>
               </View>
             </View>
           </View>
@@ -701,6 +1079,19 @@ export default function NotesHome() {
                 tintColor="#FC6E20"
                 colors={["#FC6E20"]}
               />
+            }
+            ListHeaderComponent={
+              activeFilter === "all" && trackedNoteCount > 0 ? (
+                <LearningInsights
+                  profile={effectiveProfile}
+                  persistentGaps={persistentGaps}
+                  notes={notes}
+                  isSynced={Boolean(learningProfile?.exists)}
+                  onOpenNote={(noteId) =>
+                    router.push(`/(main)/notes/${noteId}` as any)
+                  }
+                />
+              ) : null
             }
             ListEmptyComponent={<EmptyState />}
           />
@@ -913,6 +1304,295 @@ const styles = StyleSheet.create({
   },
 
   // ── Note Card Styles (Matches Quiz Tab Card Shadow) ──
+  insightsSection: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 18,
+    gap: 10,
+  },
+  insightsTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  insightsTitleIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#FFF7ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  insightsTitleCopy: { flex: 1 },
+  insightsTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#172033",
+    letterSpacing: -0.25,
+  },
+  insightsSubtitle: {
+    marginTop: 1,
+    fontSize: 11.5,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  autoTrackedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: "#ECFDF5",
+  },
+  autoTrackedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981",
+    marginRight: 5,
+  },
+  autoTrackedText: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    color: "#047857",
+  },
+  insightsCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E8EDF3",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.035,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  recentCoverageHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  insightEyebrow: {
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "900",
+    letterSpacing: 0.75,
+    color: "#64748B",
+  },
+  recentCoverageValue: {
+    marginTop: 2,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "800",
+    color: "#172033",
+  },
+  deltaBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  deltaBadgeNeutral: { backgroundColor: "#F1F5F9" },
+  deltaBadgePositive: { backgroundColor: "#ECFDF5" },
+  deltaBadgeNegative: { backgroundColor: "#FEF2F2" },
+  deltaBadgeText: { fontSize: 11, fontWeight: "800" },
+  deltaTextNeutral: { color: "#64748B" },
+  deltaTextPositive: { color: "#059669" },
+  deltaTextNegative: { color: "#DC2626" },
+  coverageChart: {
+    height: 104,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-around",
+    gap: 12,
+    marginTop: 10,
+    paddingHorizontal: 4,
+  },
+  chartColumn: {
+    flex: 1,
+    height: "100%",
+    maxWidth: 42,
+    alignItems: "center",
+  },
+  chartValue: {
+    height: 17,
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: "#64748B",
+  },
+  chartTrack: {
+    flex: 1,
+    width: 18,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  chartBar: { width: "100%", borderRadius: 6 },
+  chartLabel: {
+    width: 42,
+    marginTop: 5,
+    fontSize: 8.5,
+    fontWeight: "800",
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  comparisonCaption: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  subjectInsightsList: { marginTop: 10, gap: 15 },
+  subjectInsightRow: { gap: 7 },
+  subjectInsightHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  subjectInsightNameRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  subjectInsightName: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#263244",
+  },
+  subjectNoteCount: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  trendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  trendBadgeText: { fontSize: 9.5, fontWeight: "800" },
+  subjectCoverageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  subjectProgressTrack: {
+    flex: 1,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#F1F5F9",
+    overflow: "hidden",
+  },
+  subjectProgressFill: {
+    height: "100%",
+    borderRadius: 4,
+    backgroundColor: "#FC6E20",
+  },
+  subjectCoverageValue: {
+    width: 36,
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#C2410C",
+    textAlign: "right",
+  },
+  nextActionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  nextActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F97316",
+    marginRight: 12,
+  },
+  nextActionCopy: { flex: 1 },
+  nextActionEyebrow: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.65,
+    color: "#C2410C",
+  },
+  nextActionTitle: {
+    marginTop: 3,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#7C2D12",
+  },
+  nextActionDescription: {
+    marginTop: 4,
+    fontSize: 11.5,
+    lineHeight: 17,
+    fontWeight: "500",
+    color: "#9A3412",
+  },
+  nextActionButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 9,
+    paddingVertical: 4,
+  },
+  nextActionButtonText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#C2410C",
+  },
+  recurringPatternsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  recurringPatternsText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#92400E",
+  },
+  insightsDisclaimer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 7,
+    paddingHorizontal: 4,
+    paddingTop: 2,
+  },
+  insightsDisclaimerText: {
+    flex: 1,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+
   noteCard: {
     backgroundColor: "#ffffff",
     marginHorizontal: 16,
@@ -1163,4 +1843,3 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
 });
-
