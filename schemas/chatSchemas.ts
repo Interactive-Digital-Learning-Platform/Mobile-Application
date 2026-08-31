@@ -31,11 +31,24 @@ export const sourceCitationSchema = z.object({
 
 export type SourceCitationType = z.infer<typeof sourceCitationSchema>;
 
+export const generatedDocumentSchema = z.object({
+  document_id: z.string(),
+  filename: z.string(),
+  mime_type: z.string().optional().default("application/pdf"),
+  page_count: z.number().nullish(),
+  download_url: z.string().nullish(),
+  expires_at: z.string().nullish(),
+  status: z.string().optional().default("completed"),
+});
+
+export type GeneratedDocumentType = z.infer<typeof generatedDocumentSchema>;
+
 const doneEventSchema = z.object({
   type: z.literal("done"),
   message_id: z.string(),
   translation_failed: z.boolean().optional().default(false),
   sources: z.array(sourceCitationSchema).catch([]).default([]),
+  documents: z.array(generatedDocumentSchema).catch([]).default([]),
 });
 
 const errorEventSchema = z.object({
@@ -108,6 +121,7 @@ export const messageResponseSchema = z.object({
   is_translated: z.boolean().optional().default(false),
   translated_content: z.string().nullable().optional(),
   sources: z.array(sourceCitationSchema).optional().default([]),
+  documents: z.array(generatedDocumentSchema).optional().default([]),
   attachments: z.array(messageAttachmentSchema).optional().default([]),
 });
 
