@@ -1,4 +1,5 @@
 import { Text, TouchableOpacity, View } from "react-native";
+import { formatMathText } from "@/constants/quizHelpers";
 
 interface QuizOptionButtonProps {
   label: string;
@@ -56,7 +57,7 @@ export default function QuizOptionButton({
       <Text
         className={`flex-1 text-sm font-medium leading-5 ${isSelected || reveal ? "text-white" : "text-slate-700"}`}
       >
-        {optionText}
+        {formatMathText(optionText)}
       </Text>
     </TouchableOpacity>
   );

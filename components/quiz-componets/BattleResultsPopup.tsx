@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
   useAnimatedStyle,
@@ -22,8 +22,6 @@ import {
 } from "lucide-react-native";
 import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { ICON_COLORS } from "@/constants/quizStyles";
-import { filterTestSubjectNames } from "@/constants/quizHelpers";
-import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
 import { BattleParticipantResult } from "@/types/battleModuleTypes";
 import ConfettiView from "@/components/quiz-componets/ConfettiView";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
@@ -39,17 +37,6 @@ const RESULT_ICONS: Record<BattleResultTheme, { Icon: LucideIcon; confetti: bool
   draw:    { Icon: Annoyed,    confetti: false },
   forfeit: { Icon: AlarmClock, confetti: false },
 };
-
-function pickWeakSubject(analytics: ReturnType<typeof useAnalyticsMeQuery>["data"]): string | null {
-  if (!analytics) return null;
-  const topRecommendation = [...(analytics.recommendations ?? [])]
-    .sort((a, b) => a.priority - b.priority)
-    .find((r) => !!r.subject);
-  if (topRecommendation?.subject) return topRecommendation.subject;
-
-  const weakSubjects = filterTestSubjectNames(analytics.weak_subjects ?? []);
-  return weakSubjects[0] ?? null;
-}
 
 // One participant's column in the vs comparison -- score, streak, and
 // rating change stacked vertically, same shape for "You" and the opponent
@@ -123,14 +110,14 @@ export default function BattleResultsPopup({
     : "Opponent";
 
   const router = useRouter();
-  const { data: analytics } = useAnalyticsMeQuery();
-  const weakSubject = pickWeakSubject(analytics);
-  const handlePracticeWeakTopic = () => {
-    if (!weakSubject) return;
-    router.push({
-      pathname: "/(main)/quiz/quiz-session",
-      params: { subject: weakSubject, questionCount: "10", timer: "10", grade: "10" },
-    } as any);
+  // dismissTo (not push): same rationale as onHome -- pops the whole
+  // battle/queue/match-session stack instead of leaving it mounted
+  // underneath. The mode param forces QuizHome onto its Practice tab
+  // specifically, since that tab navigator stays mounted in the background
+  // the whole time this battle was in progress and would otherwise still
+  // be showing whatever mode (likely Online) it was left on.
+  const handlePracticeHome = () => {
+    router.dismissTo({ pathname: "/(tabs)/quiz", params: { mode: "practice" } } as any);
   };
 
   const heroY = useSharedValue(-80);
@@ -170,7 +157,14 @@ export default function BattleResultsPopup({
             style={{ maxHeight: "92%" }}
           >
             {confetti && <ConfettiView count={100} />}
-            <View>
+            {/* flexShrink lets this give up height to the button footer
+                below once the two combined exceed the card's maxHeight (a
+                small device, a long opponent name wrapping, etc.) -- on
+                any device where everything already fits, nothing scrolls
+                and this looks identical to a plain View. Buttons are never
+                inside this ScrollView, so they're always fully visible;
+                only the result/stats content above them ever scrolls. */}
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
               {/* View 1 -- match result only (win/loss/draw/forfeit), no
                   stats mixed in. */}
               <Animated.View
@@ -216,7 +210,7 @@ export default function BattleResultsPopup({
                   </View>
                 </View>
               </Animated.View>
-            </View>
+            </ScrollView>
 
             {/* Separate from the result/stats views above -- its own row of
                 actions, not part of that content block at all. */}
@@ -239,16 +233,14 @@ export default function BattleResultsPopup({
                 <Text className="text-slate-600 font-black text-base">Home</Text>
               </TouchableOpacity>
 
-              {weakSubject && (
-                <TouchableOpacity
-                  className="w-full flex-row justify-center items-center gap-2 py-1"
-                  activeOpacity={0.85}
-                  onPress={handlePracticeWeakTopic}
-                >
-                  <BookOpen size={16} color={ICON_COLORS.primary500} strokeWidth={2.5} />
-                  <Text className="text-primary font-bold text-sm">Practice {weakSubject}</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                className="w-full flex-row justify-center items-center gap-2 py-1"
+                activeOpacity={0.85}
+                onPress={handlePracticeHome}
+              >
+                <BookOpen size={16} color={ICON_COLORS.primary500} strokeWidth={2.5} />
+                <Text className="text-primary font-bold text-sm">Practice</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         )}

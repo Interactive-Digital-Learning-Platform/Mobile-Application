@@ -164,19 +164,29 @@ export default function PracticeList() {
         pathname: "/(main)/quiz/quiz-session",
         params: {
           shuffle:       "true",
-          subjects:      JSON.stringify(ALL_SUBJECTS),
+          subjects:      JSON.stringify(config.shuffleSubjects ?? ALL_SUBJECTS),
           questionCount: String(config.questions),
           timer:         String(config.timer),
-          grade:         "10",
+          grade:         String(config.grade),
         },
       } as any);
       return;
     }
 
-    // Excludes questions already seen in this subject so the backend serves
-    // fresh ones; lesson and difficulty are picked automatically server-side.
+    // Excludes questions already seen in this subject+grade so the backend
+    // serves fresh ones; lesson and difficulty are picked automatically
+    // server-side. Matching on grade too (not just subject) matters now that
+    // the same subject has separate Grade 10/11 curricula — otherwise a
+    // Grade 11 quiz would treat Grade 10 question ids as "already seen" and
+    // needlessly shrink its own pool. Sessions predating the grade column
+    // (grade: null) can't be attributed to either grade, so they're left out
+    // of the exclusion set rather than guessed at.
     const seenIds = (sessions ?? [])
-      .filter((s) => s.subject.toLowerCase() === config.subject.toLowerCase())
+      .filter(
+        (s) =>
+          s.subject.toLowerCase() === config.subject.toLowerCase() &&
+          s.grade === config.grade
+      )
       .flatMap((s) => s.question_ids ?? []);
 
     const uniqueExcluded = [...new Set(seenIds)];
@@ -187,7 +197,8 @@ export default function PracticeList() {
         subject:       config.subject,
         questionCount: String(config.questions),
         timer:         String(config.timer),
-        grade:         "10",
+        grade:         String(config.grade),
+        ...(config.lesson ? { lesson: config.lesson } : {}),
         ...(uniqueExcluded.length > 0
           ? { excludedQuestionIds: JSON.stringify(uniqueExcluded) }
           : {}),

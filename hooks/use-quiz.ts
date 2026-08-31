@@ -3,6 +3,7 @@ import {
   deleteQuizSession,
   fetchAIFeedback,
   fetchAnalytics,
+  fetchCurriculum,
   fetchMe,
   fetchQuizSession,
   fetchQuizSessions,
@@ -24,6 +25,7 @@ export const quizKeys = {
   all:         ["quiz"] as const,
   sessions:    ["quiz", "sessions"] as const,
   session:     (id: number) => ["quiz", "session", id] as const,
+  curriculum:  (grade: number) => ["quiz", "curriculum", grade] as const,
   analyticsMe: ["analytics", "me"] as const,
   aiFeedback:  ["analytics", "feedback"] as const,
   me:          ["user", "me"] as const,
@@ -147,6 +149,15 @@ export function useSubmitQuizTimeoutMutation() {
         queryKey: quizKeys.session(variables.session_id),
       });
     },
+  });
+}
+
+export function useCurriculumQuery(grade: number) {
+  return useQuery({
+    queryKey: quizKeys.curriculum(grade),
+    queryFn: () => fetchCurriculum(grade),
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: 1,
   });
 }
 
