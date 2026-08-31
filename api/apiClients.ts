@@ -1,4 +1,5 @@
 import { create } from "axios";
+import { getAuthToken } from "@/providers/labAuthToken";
 
 
 export const API_GATEWAY_URL = (
@@ -10,6 +11,7 @@ export const SERVICE_URLS = {
   notes: `${API_GATEWAY_URL}/api/notes`,
   quiz: `${API_GATEWAY_URL}/api/quiz`,
   pdf: `${API_GATEWAY_URL}/api/pdf`,
+  lab: `${API_GATEWAY_URL}/api/lab`,
   // Online 1v1 battle mode -- its own microservice (Quiz-Battle-Service),
   // reached through the gateway the same way as every other service.
   battle: `${API_GATEWAY_URL}/api/battle`,
@@ -25,7 +27,7 @@ export const assistantClient = create({
 // The notes service defines its own /api prefix behind the gateway prefix.
 export const notesClient = create({
   baseURL: `${SERVICE_URLS.notes}/api`,
-  timeout: 10000,
+  timeout: 60000,
 });
 
 export const notesAssetsClient = create({
@@ -153,6 +155,35 @@ export const pdfClient = create({
   timeout: 30000,
 });
 
+// The lab service defines its own /api prefix behind the gateway prefix, same as notes.
+export const labClient = create({
+  baseURL: `${SERVICE_URLS.lab}/api`,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  timeout: 15000,
+});
+
+// Lab backend auth is its own JWT (exchanged once from the signed-in Clerk user via
+// /api/auth/sync and cached in providers/labAuthToken.ts, kept fresh by
+// providers/LabAuthSyncBoundary.tsx), not a Clerk token directly — unlike quizClient above.
+labClient.interceptors.request.use(async (config) => {
+  const token = await getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export function getNotesResourceUrl(path: string): string {
   return `${SERVICE_URLS.notes}/${path.replace(/^\/+/, "")}`;
+}
+
+// Turns a lab-service media reference into a loadable absolute URL. The backend returns either an
+// already-absolute URL (S3/Cloudinary) — passed straight through — or a gateway-relative path
+// like "api/media/chemicals/<id>" that resolves against the lab service base. The app never needs
+// to know where the binary actually lives.
+export function getLabResourceUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${SERVICE_URLS.lab}/${pathOrUrl.replace(/^\/+/, "")}`;
 }

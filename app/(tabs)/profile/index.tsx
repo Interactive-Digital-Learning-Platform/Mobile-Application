@@ -53,9 +53,7 @@ import DifficultyProgressSection from "@/components/profile/DifficultyProgressSe
 
 const CARD_CLASS = "bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3";
 
-// Twitter-style profile header: a banner strip with the avatar overlapping
-// its bottom-left corner, half sunk into the banner and half into the white
-// content below -- AVATAR_SIZE / 2 of it sits below BANNER_HEIGHT.
+
 const BANNER_HEIGHT = 60;
 const AVATAR_SIZE = 88;
 
@@ -222,6 +220,7 @@ export default function Profile() {
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
+  const { signOut } = useAuth();
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
@@ -237,6 +236,33 @@ export default function Profile() {
     error: feedbackError,
     refetch: refetchFeedback,
   } = useAnalyticsFeedbackQuery(true);
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoggingOut(true);
+              await signOut();
+              queryClient.clear();
+              router.replace("/(auth)/sign-in");
+            } catch (err) {
+              console.error("Logout error:", err);
+              Alert.alert("Error", "Failed to log out. Please try again.");
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -260,9 +286,6 @@ export default function Profile() {
             setSigningOut(true);
             try {
               await signOut();
-              // Clears every other user's cached queries out of memory so a
-              // different account signing in on this device never briefly
-              // sees stale data belonging to whoever was logged in before.
               queryClient.clear();
               router.replace("/");
             } catch {
@@ -284,15 +307,6 @@ export default function Profile() {
     ? new Date(user.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : null;
 
-  // The gradient is drawn from the true top of the screen (y=0, behind the
-  // notch/status bar) down through BANNER_HEIGHT of "real" banner below it,
-  // so the primary color fills the notch area instead of leaving it white --
-  // position: absolute ignores ancestor padding in RN, so this can't rely on
-  // a SafeAreaView's own inset padding to reach up there; insets.top is
-  // added into the gradient's height explicitly instead. The avatar and the
-  // ScrollView content's top margin are then both anchored to where the
-  // banner actually visually ends (bannerVisualHeight), not to BANNER_HEIGHT
-  // alone, so they land in the right place regardless of device notch size.
   const bannerVisualHeight = insets.top + BANNER_HEIGHT;
 
   return (
@@ -304,11 +318,6 @@ export default function Profile() {
           end={{ x: 1, y: 1 }}
           style={{ height: bannerVisualHeight }}
         />
-        {/* A translucent fill (like the Quiz tab's avatar) only reads well
-            against one solid background -- this avatar straddles the
-            colored banner AND the white content below it, so it needs an
-            opaque fill + a solid white ring instead, or the half sitting on
-            white content would be nearly invisible. */}
         <View
           className="absolute left-5 rounded-full bg-primary-100 border-[4px] border-white items-center justify-center shadow-md shadow-black/10"
           style={{ top: bannerVisualHeight - AVATAR_SIZE / 2, width: AVATAR_SIZE, height: AVATAR_SIZE }}

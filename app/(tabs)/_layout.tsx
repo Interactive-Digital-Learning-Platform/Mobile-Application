@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs, useSegments } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform } from "react-native";
@@ -7,6 +7,17 @@ import icons from "@/constants/icons";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const segments = useSegments();
+  // The practical flow (app/(tabs)/lab/[experimentId]/*: info, equipment, chemicals, workspace,
+  // report) is a focused, space-constrained activity — the bottom tab bar stays hidden there. The
+  // Chemistry/Physics practical catalog (app/(tabs)/lab/practicals) and the Biology section
+  // (app/(tabs)/lab/biology/*: catalog, generate, [visualizationId]) also hide it so their card
+  // CTAs never sit under the tab bar. It reappears on the Lab home and History screens.
+  const activeSegments = segments as string[];
+  const hideTabBar =
+    activeSegments.includes("[experimentId]") ||
+    activeSegments.includes("practicals") ||
+    activeSegments.includes("biology");
 
   return (
     <Tabs
@@ -15,22 +26,24 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarActiveTintColor: "#FC6E20",
         tabBarInactiveTintColor: "#d3d2d2ff",
-        tabBarStyle: {
-          height: Platform.select({
-            ios: 64 + insets.bottom,
-            android: 64 + insets.bottom,
-          }),
-          backgroundColor: "#f0f5fb",
-          elevation: 0,
-          boxShadow: "none",
-          paddingTop: 12,
-          paddingBottom: Platform.select({
-            ios: 8 + insets.bottom,
-            android: 8 + insets.bottom,
-          }),
-          borderTopWidth: 1,
-          borderColor: "#0000001A",
-        },
+        tabBarStyle: hideTabBar
+          ? { display: "none" }
+          : {
+              height: Platform.select({
+                ios: 64 + insets.bottom,
+                android: 64 + insets.bottom,
+              }),
+              backgroundColor: "#f0f5fb",
+              elevation: 0,
+              boxShadow: "none",
+              paddingTop: 12,
+              paddingBottom: Platform.select({
+                ios: 8 + insets.bottom,
+                android: 8 + insets.bottom,
+              }),
+              borderTopWidth: 1,
+              borderColor: "#0000001A",
+            },
       }}
     >
       <Tabs.Screen
@@ -66,7 +79,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="notes"
+        name="notes/index"
         options={{
           title: "Notes",
           headerShown: false,
@@ -82,7 +95,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="lab/index"
+        name="lab"
         options={{
           title: "Lab",
           headerShown: false,

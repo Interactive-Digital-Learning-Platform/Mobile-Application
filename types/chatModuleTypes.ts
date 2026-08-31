@@ -33,6 +33,11 @@ export type signInFormValues = {
   password: string
 }
 
+export type OtpCodeFieldProps = {
+  value: string;
+  onChange: (value: string) => void;
+};
+
 export type TabIconType = {
   icon : ImageSourcePropType,
   name : string,
@@ -53,6 +58,36 @@ export type CitationType = {
   content: string
 }
 
+export type ChatLanguage = "English" | "Sinhala";
+
+export type AttachmentKind = "image" | "pdf";
+
+
+export type ChatAttachmentStatus = "uploading" | "processing" | "ready" | "failed";
+
+
+export type PickedFile = {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+};
+
+
+export type ChatAttachment = {
+  localID: string;
+  serverID?: string;
+  kind: AttachmentKind;
+  filename: string;
+  mimeType: string;
+  size?: number;
+  localUri?: string;
+  previewUrl?: string;
+  status: ChatAttachmentStatus;
+  uploadProgress?: number;
+  error?: string;
+};
+
 export type MessageType = {
   id: string,
   localID: string,
@@ -64,12 +99,17 @@ export type MessageType = {
   isError? : boolean,
   type: string,
   citations? : CitationType[],
-  tokens?: number
+  tokens?: number,
+  attachments?: ChatAttachment[],
+  translationFailed?: boolean,
+  isTranslated?: boolean,
+  translatedContent?: string
 }
 
 export type StreamCallbacks = {
+  onConversationCreated?: (conversationID: string) => void,
   onToken: (token: string) => void;
-  onDone: (messageID: string) => void;
+  onDone: (messageID: string, meta?: { translationFailed?: boolean }) => void;
   onError: (error: string) => void;
 }
 
@@ -123,8 +163,22 @@ export type UseChatReturn = {
   hasMoreHistory: boolean;
   isLoadingHistory: boolean;
   chatRef: RefObject<FlashListRef<MessageType> | null>;
-  sendMessage: (values: ChatInputValues) => Promise<void>;
+  language: ChatLanguage;
+  setLanguage: (language: ChatLanguage) => void;
+  sendMessage: (values: ChatInputValues, attachment?: ChatAttachment) => Promise<void>;
   loadMoreHistory: () => void;
   startNewConversation: () => void;
   openConversation: (conversationID: string) => void;
+  ensureConversation: () => Promise<string>;
+  stopStreaming: () => void;
+}
+
+export type StreamMessagePropType = {
+  conversationID?: string;
+  userID: string;
+  message: string;
+  language: ChatLanguage;
+  attachmentIds?: string[];
+  callbacks: StreamCallbacks;
+  signal?: AbortSignal;
 }

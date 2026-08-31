@@ -7,7 +7,7 @@ import { router, useNavigation } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useForm, Controller } from "react-hook-form";
-import z from "zod";
+import {z} from "zod";
 import { userSignupSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useSignUp } from "@clerk/expo";
@@ -35,6 +35,8 @@ export default function Signup() {
   });
 
   const onSubmit = async (formData: signUpFormValues) => {
+    if (!signUp) return;
+
     const { error } = await signUp.password({
       emailAddress: formData.email,
       password: formData.password,
@@ -51,7 +53,17 @@ export default function Signup() {
       return;
     }
 
-    await signUp.verifications.sendEmailCode();
+    const { error: sendCodeError } = await signUp.verifications.sendEmailCode();
+
+    if (sendCodeError) {
+      Toast.show({
+        type: "error",
+        text1: "Couldn't send verification code",
+        text2: sendCodeError.message,
+      });
+
+      return;
+    }
 
     router.push({
       pathname: "/(auth)/verify-email",
@@ -70,7 +82,7 @@ export default function Signup() {
           {navigation.canGoBack() && <Header />}
           <View className="py-4 flex-col justify-center items-start">
             <Text className="text-4xl font-asemibold text-[#0F172A]">
-              Let's Get Started 👋
+              Let&apos;s Get Started 👋
             </Text>
             <Text className="text-lg font-aregular text-[#979797]">
               Fill the form to continue
