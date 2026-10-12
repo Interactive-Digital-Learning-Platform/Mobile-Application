@@ -46,26 +46,26 @@ type ActiveDropdown = "difficulty" | "subject" | null;
 
 function PracticeCardSkeleton() {
   return (
-    <View className="bg-white mx-4 mb-3 rounded-2xl p-4 border border-slate-100">
+    <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-primary/20">
       <View className="flex-row items-start gap-3">
-        <Skeleton width={44} height={44} borderRadius={12} />
+        <Skeleton color={ICON_COLORS.primary100} width={44} height={44} borderRadius={12} />
         <View className="flex-1 gap-2">
-          <Skeleton width="55%" height={13} />
+          <Skeleton color={ICON_COLORS.primary100} width="55%" height={13} />
           <View className="flex-row gap-2">
-            <Skeleton width={50} height={16} borderRadius={999} />
-            <Skeleton width={70} height={11} />
+            <Skeleton color={ICON_COLORS.primary100} width={50} height={16} borderRadius={999} />
+            <Skeleton color={ICON_COLORS.primary100} width={70} height={11} />
           </View>
         </View>
-        <Skeleton width={40} height={10} />
+        <Skeleton color={ICON_COLORS.primary100} width={40} height={10} />
       </View>
       <View className="mt-3 gap-1">
         <View className="flex-row justify-between">
-          <Skeleton width={90} height={10} />
-          <Skeleton width={28} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={90} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={28} height={10} />
         </View>
-        <Skeleton width="100%" height={6} borderRadius={3} />
+        <Skeleton color={ICON_COLORS.primary100} width="100%" height={6} borderRadius={3} />
       </View>
-      <Skeleton width="100%" height={38} borderRadius={12} style={{ marginTop: 12 }} />
+      <Skeleton color={ICON_COLORS.primary100} width="100%" height={38} borderRadius={12} style={{ marginTop: 12 }} />
     </View>
   );
 }
@@ -88,17 +88,17 @@ function FilterChip({
   return (
     <TouchableOpacity
       className={`flex-row items-center gap-1.5 px-3 py-2 rounded-xl border ${
-        isOpen ? "border-primary bg-primary-50" : "border-slate-200 bg-white"
+        isOpen ? "border-primary bg-primary-50" : "border-primary-200 bg-white"
       }`}
       activeOpacity={0.8}
       onPress={onPress}
     >
-      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-slate-600"}`}>
+      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-primary-700"}`}>
         {label}: {value}
       </Text>
       <ChevronDown
         size={12}
-        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.slate400}
+        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.primary500}
         strokeWidth={2.5}
         style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
       />
@@ -112,14 +112,14 @@ function DropdownMenu<T extends string>({
   options: T[]; selected: T; onSelect: (val: T) => void;
 }) {
   return (
-    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-slate-100 shadow-md shadow-black/10 overflow-hidden">
+    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-primary-100 shadow-md shadow-primary/20 overflow-hidden">
       {options.map((opt, i) => {
         const isSelected = opt === selected;
         return (
           <TouchableOpacity
             key={opt}
             className={`flex-row items-center justify-between px-4 py-3 ${
-              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-primary-50/60"
             }`}
             activeOpacity={0.75}
             onPress={() => onSelect(opt)}
@@ -128,7 +128,7 @@ function DropdownMenu<T extends string>({
               {DIFF_DOT[opt] && (
                 <View className={`w-2 h-2 rounded-full ${DIFF_DOT[opt] ?? "bg-slate-300"}`} />
               )}
-              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-slate-700"}`}>
+              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-primary-800"}`}>
                 {opt}
               </Text>
             </View>
@@ -271,7 +271,7 @@ export default function PracticeList() {
             className="mx-4 mb-2"
             onPress={() => { setDifficulty("All"); setSubject("All"); }}
           >
-            <Text className="text-xs text-slate-400 font-medium">Clear filters</Text>
+            <Text className="text-xs text-primary-700 font-medium">Clear filters</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -288,10 +288,10 @@ export default function PracticeList() {
               <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
                 <ErrorIcon size={28} color={ICON_COLORS.rose500} strokeWidth={1.8} />
               </View>
-              <Text className="text-slate-800 font-black text-base text-center mb-1">
+              <Text className="text-primary-800 font-black text-base text-center mb-1">
                 {title}
               </Text>
-              <Text className="text-slate-400 text-sm text-center leading-5 mb-5">
+              <Text className="text-primary-700 text-sm text-center leading-5 mb-5">
                 {message}
               </Text>
               <TouchableOpacity
@@ -310,10 +310,10 @@ export default function PracticeList() {
           <View className="w-16 h-16 rounded-full bg-primary-100 justify-center items-center mb-4">
             <Brain size={28} color={ICON_COLORS.primary500} strokeWidth={1.8} />
           </View>
-          <Text className="text-slate-800 font-black text-base text-center mb-1">
+          <Text className="text-primary-800 font-black text-base text-center mb-1">
             {items.length === 0 ? "Start your first quiz" : "No quizzes match filters"}
           </Text>
-          <Text className="text-slate-400 text-sm text-center leading-5">
+          <Text className="text-primary-700 text-sm text-center leading-5">
             {items.length === 0
               ? "Tap the + button below to generate a personalised AI quiz on any subject."
               : "Try changing the difficulty or subject filter."}
@@ -330,7 +330,7 @@ export default function PracticeList() {
       )}
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
+        className="absolute bottom-6 self-center bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
         activeOpacity={0.85}
         onPress={() => setModalVisible(true)}
       >

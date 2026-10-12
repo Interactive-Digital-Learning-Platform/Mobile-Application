@@ -33,19 +33,19 @@ function HistoryRow({ entry }: { entry: BattleHistoryEntry }) {
   const delta = entry.me.rating_delta ?? 0;
 
   return (
-    <View className="mx-4 mb-2.5 px-4 py-3.5 rounded-2xl border border-slate-100 bg-white shadow-sm shadow-black/5">
+    <View className="mx-4 mb-2.5 px-4 py-3.5 rounded-2xl bg-white shadow-sm shadow-primary/15">
       <View className="flex-row items-center justify-between mb-2">
         <View className="flex-row items-center gap-2">
           <View className={`px-2.5 py-1 rounded-full ${style.bg}`}>
             <Text className="text-[10px] font-bold text-white">{style.label}</Text>
           </View>
-          <Text className="text-slate-500 text-xs font-semibold">{entry.subject}</Text>
+          <Text className="text-primary-700 text-xs font-semibold">{entry.subject}</Text>
         </View>
-        <Text className="text-[11px] text-slate-400">{formatDate(entry.finished_at)}</Text>
+        <Text className="text-[11px] text-primary-700">{formatDate(entry.finished_at)}</Text>
       </View>
 
       <View className="flex-row items-center justify-between">
-        <Text className="text-slate-800 font-bold text-sm flex-1" numberOfLines={1}>
+        <Text className="text-primary-800 font-bold text-sm flex-1" numberOfLines={1}>
           vs {entry.opponent_username ?? `Player #${entry.opponent_user_id ?? "?"}`}
         </Text>
         {entry.me.league && (
@@ -55,20 +55,20 @@ function HistoryRow({ entry }: { entry: BattleHistoryEntry }) {
         )}
       </View>
 
-      <View className="flex-row items-center justify-between mt-2.5 pt-2.5 border-t border-slate-100">
+      <View className="flex-row items-center justify-between mt-2.5 pt-2.5 border-t border-primary-100">
         <View className="items-start">
-          <Text className="text-[10px] text-slate-400">Correct</Text>
-          <Text className="text-slate-800 font-black text-sm">
+          <Text className="text-[10px] text-primary-700">Correct</Text>
+          <Text className="text-primary-800 font-black text-sm">
             {entry.me.correct_count ?? 0}
-            <Text className="text-slate-300 text-xs"> / {(entry.me.correct_count ?? 0) + (entry.me.wrong_count ?? 0)}</Text>
+            <Text className="text-primary-300 text-xs"> / {(entry.me.correct_count ?? 0) + (entry.me.wrong_count ?? 0)}</Text>
           </Text>
         </View>
         <View className="items-start">
-          <Text className="text-[10px] text-slate-400">Score</Text>
-          <Text className="text-slate-800 font-black text-sm">{entry.me.final_score ?? 0}</Text>
+          <Text className="text-[10px] text-primary-700">Score</Text>
+          <Text className="text-primary-800 font-black text-sm">{entry.me.final_score ?? 0}</Text>
         </View>
         <View className="items-end">
-          <Text className="text-[10px] text-slate-400">Rating</Text>
+          <Text className="text-[10px] text-primary-700">Rating</Text>
           <Text className={`font-black text-sm ${delta >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
             {delta >= 0 ? "+" : ""}
             {delta}
@@ -81,32 +81,32 @@ function HistoryRow({ entry }: { entry: BattleHistoryEntry }) {
 
 function HistoryRowSkeleton() {
   return (
-    <View className="mx-4 mb-2.5 px-4 py-3.5 rounded-2xl border border-slate-100 bg-white shadow-sm shadow-black/5">
+    <View className="mx-4 mb-2.5 px-4 py-3.5 rounded-2xl bg-white shadow-sm shadow-primary/15">
       <View className="flex-row items-center justify-between mb-2">
         <View className="flex-row items-center gap-2">
-          <Skeleton width={62} height={20} borderRadius={999} />
-          <Skeleton width={72} height={12} />
+          <Skeleton color={ICON_COLORS.primary100} width={62} height={20} borderRadius={999} />
+          <Skeleton color={ICON_COLORS.primary100} width={72} height={12} />
         </View>
-        <Skeleton width={64} height={11} />
+        <Skeleton color={ICON_COLORS.primary100} width={64} height={11} />
       </View>
 
       <View className="flex-row items-center justify-between">
-        <Skeleton width={140} height={14} />
-        <Skeleton width={50} height={18} borderRadius={999} />
+        <Skeleton color={ICON_COLORS.primary100} width={140} height={14} />
+        <Skeleton color={ICON_COLORS.primary100} width={50} height={18} borderRadius={999} />
       </View>
 
-      <View className="flex-row items-center justify-between mt-2.5 pt-2.5 border-t border-slate-100">
+      <View className="flex-row items-center justify-between mt-2.5 pt-2.5 border-t border-primary-100">
         <View className="items-start gap-1.5">
-          <Skeleton width={42} height={10} />
-          <Skeleton width={32} height={16} />
+          <Skeleton color={ICON_COLORS.primary100} width={42} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={32} height={16} />
         </View>
         <View className="items-start gap-1.5">
-          <Skeleton width={36} height={10} />
-          <Skeleton width={24} height={16} />
+          <Skeleton color={ICON_COLORS.primary100} width={36} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={24} height={16} />
         </View>
         <View className="items-end gap-1.5">
-          <Skeleton width={36} height={10} />
-          <Skeleton width={28} height={16} />
+          <Skeleton color={ICON_COLORS.primary100} width={36} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={28} height={16} />
         </View>
       </View>
     </View>
@@ -133,17 +133,17 @@ function FilterChip({
   return (
     <TouchableOpacity
       className={`flex-row items-center gap-1.5 px-3 py-2 rounded-xl border ${
-        isOpen ? "border-primary bg-primary-50" : "border-slate-200 bg-white"
+        isOpen ? "border-primary bg-primary-50" : "border-primary-200 bg-white"
       }`}
       activeOpacity={0.8}
       onPress={onPress}
     >
-      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-slate-600"}`}>
+      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-primary-700"}`}>
         {label}: {value}
       </Text>
       <ChevronDown
         size={12}
-        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.slate400}
+        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.primary500}
         strokeWidth={2.5}
         style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
       />
@@ -161,7 +161,7 @@ function DropdownMenu<T extends string>({
   getDotClass?: (val: T) => string | null;
 }) {
   return (
-    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-slate-100 shadow-md shadow-black/10 overflow-hidden">
+    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-primary-100 shadow-md shadow-primary/20 overflow-hidden">
       {options.map((opt, i) => {
         const isSelected = opt === selected;
         const label = getLabel ? getLabel(opt) : opt;
@@ -170,14 +170,14 @@ function DropdownMenu<T extends string>({
           <TouchableOpacity
             key={opt}
             className={`flex-row items-center justify-between px-4 py-3 ${
-              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-primary-50/60"
             }`}
             activeOpacity={0.75}
             onPress={() => onSelect(opt)}
           >
             <View className="flex-row items-center gap-2">
               {dotClass && <View className={`w-2 h-2 rounded-full ${dotClass}`} />}
-              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-slate-700"}`}>
+              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-primary-800"}`}>
                 {label}
               </Text>
             </View>
@@ -304,7 +304,7 @@ export default function OnlineList() {
               setPage(1);
             }}
           >
-            <Text className="text-xs text-slate-400 font-medium">Clear filters</Text>
+            <Text className="text-xs text-primary-700 font-medium">Clear filters</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -313,16 +313,16 @@ export default function OnlineList() {
         <HistoryListSkeleton />
       ) : isError ? (
         <View className="flex-1 items-center justify-center px-8">
-          <AlertTriangle size={28} color={ICON_COLORS.slate400} strokeWidth={2} />
-          <Text className="text-slate-500 text-sm text-center mt-3">
+          <AlertTriangle size={28} color={ICON_COLORS.primary500} strokeWidth={2} />
+          <Text className="text-primary-700 text-sm text-center mt-3">
             Couldn&apos;t load your battle history. Check your connection and try again.
           </Text>
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => refetch()}
-            className="mt-4 px-5 py-2.5 rounded-full bg-slate-100"
+            className="mt-4 px-5 py-2.5 rounded-full bg-primary-50"
           >
-            <Text className="text-slate-600 font-bold text-xs">Retry</Text>
+            <Text className="text-primary-700 font-bold text-xs">Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -337,7 +337,7 @@ export default function OnlineList() {
           }
           ListEmptyComponent={
             <View className="items-center py-16 px-8">
-              <Text className="text-slate-400 text-sm text-center">
+              <Text className="text-primary-700 text-sm text-center">
                 No completed battles yet{subject ? ` for ${subject}` : ""}
                 {resultFilter !== "All" ? ` marked as ${resultFilterLabel(resultFilter)}` : ""}. Tap the globe
                 button to find your first match.
@@ -350,21 +350,21 @@ export default function OnlineList() {
                 <TouchableOpacity
                   disabled={page <= 1}
                   onPress={() => setPage((p) => Math.max(1, p - 1))}
-                  className={`w-8 h-8 rounded-full items-center justify-center ${page <= 1 ? "opacity-30" : "bg-slate-100"}`}
+                  className={`w-8 h-8 rounded-full items-center justify-center ${page <= 1 ? "opacity-30" : "bg-primary-50"}`}
                 >
-                  <ChevronLeft size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
+                  <ChevronLeft size={16} color={ICON_COLORS.primary600} strokeWidth={2.5} />
                 </TouchableOpacity>
-                <Text className="text-xs text-slate-400 font-medium">
+                <Text className="text-xs text-primary-700 font-medium">
                   Page {data.page} / {data.total_pages}
                 </Text>
                 <TouchableOpacity
                   disabled={page >= data.total_pages}
                   onPress={() => setPage((p) => Math.min(data.total_pages, p + 1))}
                   className={`w-8 h-8 rounded-full items-center justify-center ${
-                    page >= data.total_pages ? "opacity-30" : "bg-slate-100"
+                    page >= data.total_pages ? "opacity-30" : "bg-primary-50"
                   }`}
                 >
-                  <ChevronRight size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
+                  <ChevronRight size={16} color={ICON_COLORS.primary600} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             ) : null
@@ -373,7 +373,7 @@ export default function OnlineList() {
       )}
 
       <TouchableOpacity
-        className={`absolute bottom-6 right-6 w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40 ${
+        className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40 ${
           isWrappingUp ? "bg-slate-300" : "bg-primary"
         }`}
         activeOpacity={0.85}
@@ -388,7 +388,7 @@ export default function OnlineList() {
       </TouchableOpacity>
 
       {isWrappingUp && (
-        <View className="absolute bottom-24 right-6 bg-slate-800 px-3 py-2 rounded-xl max-w-[200px]">
+        <View className="absolute bottom-24 self-center bg-slate-800 px-3 py-2 rounded-xl max-w-[200px]">
           <Text className="text-white text-[11px] font-semibold text-center">
             Finishing up your last battle…
           </Text>

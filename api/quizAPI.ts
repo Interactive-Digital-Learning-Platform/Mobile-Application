@@ -1,6 +1,8 @@
 import { quizClient } from "@/api/apiClients";
 import {
   AIFeedbackResponse,
+  DailyAnalyticsResponse,
+  DailyWindow,
   AnswerItem,
   CurriculumMap,
   DraftAnswer,
@@ -111,6 +113,15 @@ export async function fetchAnalytics(): Promise<UserAnalyticsResponse> {
   const { data } = await quizClient.get<UserAnalyticsResponse>(
     "/analytics/me"
   );
+  return data;
+}
+
+// Day boundaries follow the device's timezone (e.g. Asia/Colombo), not UTC -- see /analytics/daily.
+export async function fetchDailyAnalytics(days: DailyWindow): Promise<DailyAnalyticsResponse> {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const { data } = await quizClient.get<DailyAnalyticsResponse>("/analytics/daily", {
+    params: { days, tz },
+  });
   return data;
 }
 

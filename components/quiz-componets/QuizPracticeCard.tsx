@@ -47,14 +47,14 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
     ? Math.round((displayCount / item.questions) * 100)
     : 0;
   const barColor = !hasStarted
-    ? "bg-slate-200"
+    ? "bg-primary-200"
     : !isComplete
     ? "bg-primary"
     : displayPct >= 70 ? "bg-emerald-500"
     : displayPct >= 50 ? "bg-amber-500"
     : "bg-rose-500";
   const textColor = !hasStarted
-    ? "text-slate-500"
+    ? "text-primary-700"
     : !isComplete
     ? "text-primary"
     : displayPct >= 70 ? "text-emerald-500"
@@ -85,24 +85,24 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
   return (
     <>
-      <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-black/10 border border-slate-100">
+      <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-primary/20">
 
         <View className="flex-row items-start gap-3">
-          <View className="w-11 h-11 rounded-xl bg-slate-50 justify-center items-center mt-0.5">
-            <Icon size={20} color={ICON_COLORS.slate500} strokeWidth={1.8} />
+          <View className="w-11 h-11 rounded-xl bg-primary-50 justify-center items-center mt-0.5">
+            <Icon size={20} color={ICON_COLORS.primary600} strokeWidth={1.8} />
           </View>
 
           <View className="flex-1">
-            <Text className="text-sm font-bold text-slate-800" numberOfLines={1}>
+            <Text className="text-sm font-bold text-primary-800" numberOfLines={1}>
               {formatSubjectLabel(item.subject)}
             </Text>
             <View className="flex-row items-center gap-2 mt-1">
               {!isShuffleQuiz && <DifficultyBadge difficulty={item.difficulty} />}
-              <Text className="text-[11px] text-slate-400">{item.questions} questions</Text>
-              <Text className="text-[11px] text-slate-400">{item.timer}</Text>
+              <Text className="text-[11px] text-primary-700">{item.questions} questions</Text>
+              <Text className="text-[11px] text-primary-700">{item.timer}</Text>
             </View>
           </View>
-          <Text className="text-[10px] text-slate-500 mt-0.5">{formatCreatedAt(item.created_at)}</Text>
+          <Text className="text-[10px] text-primary-700 mt-0.5">{formatCreatedAt(item.created_at)}</Text>
 
           <TouchableOpacity
             className="w-8 h-8 rounded-xl bg-rose-50 justify-center items-center"
@@ -118,7 +118,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
         <View className="mt-3">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-[10px] text-slate-400 font-medium">
+            <Text className="text-[10px] text-primary-700 font-medium">
               {!hasStarted
                 ? "Not started"
                 : isComplete
@@ -129,7 +129,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
               {displayPct}%
             </Text>
           </View>
-          <View className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <View className="h-1.5 bg-primary-50 rounded-full overflow-hidden">
             <View
               className={`h-full rounded-full ${barColor}`}
               style={{ width: `${displayPct}%` }}
