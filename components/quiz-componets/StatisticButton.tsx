@@ -10,7 +10,9 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
+import { Flame } from "lucide-react-native";
+import { useAnalyticsMeQuery, useDailyAnalyticsQuery } from "@/hooks/use-quiz";
+import type { DailyActivityPoint } from "@/types/quizModuleTypes";
 import { useBattleProfileQuery } from "@/hooks/use-battle";
 import Skeleton from "@/components/Skeleton";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -76,13 +78,35 @@ function Donut({ percent, label, replayKey }: { percent: number; label: string; 
   );
 }
 
-function StatCell({ value, label }: { value: string | number; label: string }) {
+function StatCell({ value, label, flame }: { value: string | number; label: string; flame?: boolean }) {
   return (
     <View className="flex-1 items-center">
-      <Text className="text-white text-lg font-black" numberOfLines={1}>{value}</Text>
+      <View className="flex-row items-center gap-1">
+        {flame && <Flame size={16} color={ICON_COLORS.white} fill={ICON_COLORS.white} />}
+        <Text className="text-white text-lg font-black" numberOfLines={1}>{value}</Text>
+      </View>
       <Text className="text-white/80 text-[11px] font-medium">{label}</Text>
     </View>
   );
+}
+
+function Divider() {
+  return <View className="w-px h-8 bg-white/40" />;
+}
+
+// Consecutive days with at least one finished quiz, counting back from today. A day with no quiz yet today doesn't
+// break the streak -- it starts from yesterday instead, so the number only resets once a whole day is missed.
+function dayStreak(daily: DailyActivityPoint[]): string {
+  const days = [...daily].sort((a, b) => a.date.localeCompare(b.date));
+  let i = days.length - 1;
+  if (i >= 0 && days[i].quizzes_completed === 0) i--;
+  let streak = 0;
+  while (i >= 0 && days[i].quizzes_completed > 0) {
+    streak++;
+    i--;
+  }
+  // Every day in the window was active, so the real streak may run further back than the data we fetched.
+  return streak === days.length && streak > 0 ? `${streak}+` : String(streak);
 }
 
 interface StatisticButtonProps {
@@ -93,6 +117,7 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const router = useRouter();
   const { data: analytics, isLoading: isAnalyticsLoading, refetch: refetchAnalytics } = useAnalyticsMeQuery();
   const { data: battleProfile, isLoading: isBattleLoading, refetch: refetchBattleProfile } = useBattleProfileQuery();
+  const { data: dailyAnalytics, refetch: refetchDaily } = useDailyAnalyticsQuery(30);
 
   // Mutations already invalidate these queries, but refetching on focus too
   // (same as PracticeList) keeps them in sync even if this screen is reached
@@ -105,10 +130,11 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
       setFocusCount((n) => n + 1);
       if (mode === "practice") {
         refetchAnalytics();
+        refetchDaily();
       } else {
         refetchBattleProfile();
       }
-    }, [mode, refetchAnalytics, refetchBattleProfile])
+    }, [mode, refetchAnalytics, refetchDaily, refetchBattleProfile])
   );
 
   const sessions  = analytics?.total_sessions ?? 0;
@@ -116,6 +142,7 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const avgTime   = analytics
     ? `${analytics.overall_avg_response_time.toFixed(1)}s`
     : "0s";
+  const streakDays = dailyAnalytics ? dayStreak(dailyAnalytics.daily) : "0";
 
   // Battle profile is one row per subject with no server-side aggregate, so
   // the summary shown here is rolled up across all of them: total matches
@@ -130,6 +157,8 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
     ? subjects.reduce((best, s) => (s.rating > best.rating ? s : best))
     : null;
   const bestLeague = topSubject?.league ?? "Unranked";
+  // Win streaks are tracked per subject, so show the best one that's currently running.
+  const winStreak = subjects.reduce((best, s) => Math.max(best, s.current_win_streak), 0);
 
   const isLoading = mode === "practice" ? isAnalyticsLoading : isBattleLoading;
 
@@ -147,14 +176,12 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
         <>
           <Skeleton width={DONUT_SIZE} height={DONUT_SIZE} borderRadius={DONUT_SIZE / 2} color={ICON_COLORS.primary400} />
           <View className="flex-row w-full mt-4 gap-2">
-            <View className="flex-1 items-center gap-1.5">
-              <Skeleton width={40} height={16} color={ICON_COLORS.primary400} />
-              <Skeleton width={56} height={10} color={ICON_COLORS.primary400} />
-            </View>
-            <View className="flex-1 items-center gap-1.5">
-              <Skeleton width={40} height={16} color={ICON_COLORS.primary400} />
-              <Skeleton width={56} height={10} color={ICON_COLORS.primary400} />
-            </View>
+            {[0, 1, 2].map((i) => (
+              <View key={i} className="flex-1 items-center gap-1.5">
+                <Skeleton width={40} height={16} color={ICON_COLORS.primary400} />
+                <Skeleton width={56} height={10} color={ICON_COLORS.primary400} />
+              </View>
+            ))}
           </View>
         </>
       ) : (
@@ -168,14 +195,18 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
             {mode === "practice" ? (
               <>
                 <StatCell value={sessions} label="Sessions" />
-                <View className="w-px h-8 bg-white/40" />
+                <Divider />
                 <StatCell value={avgTime} label="Avg / Q" />
+                <Divider />
+                <StatCell value={streakDays} label="Day streak" flame />
               </>
             ) : (
               <>
                 <StatCell value={totalMatches} label="Matches" />
-                <View className="w-px h-8 bg-white/40" />
+                <Divider />
                 <StatCell value={bestLeague} label="Top League" />
+                <Divider />
+                <StatCell value={winStreak} label="Win streak" flame />
               </>
             )}
           </View>
