@@ -21,7 +21,9 @@ export interface QuestionOut {
   subject: string;
   lesson: string;
   difficulty: string;
-  correct_answer: string | null;
+  // Never sent while a quiz is in progress (generate / resume) -- only for completed sessions. After submitting,
+  // the answers come from SubmitQuizResponse.question_results.
+  correct_answer?: string | null;
 }
 
 export interface GenerateQuizResponse {
@@ -141,6 +143,14 @@ export interface SubmitQuizResponse {
   repeated_wrong_count: number;
   repeated_lessons_right: string[];
   repeated_lessons_wrong: string[];
+  question_results?: QuestionResult[]; // session question order; unanswered -> selected_answer ""
+}
+
+export interface QuestionResult {
+  question_id: number;
+  selected_answer: string;
+  correct_answer: string | null;
+  is_correct: boolean | null;
 }
 
 // Every analytics field below is optional even where the backend always
