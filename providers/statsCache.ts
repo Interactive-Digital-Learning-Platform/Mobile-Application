@@ -22,7 +22,7 @@ function isStatsQuery(key: QueryKey): boolean {
   if (scope === "analytics") return true; // me, daily/*, feedback
   if (scope === "user") return name === "me";
   if (scope === "quiz") return name === "sessions";
-  if (scope === "battle") return name === "profile";
+  if (scope === "battle") return name === "profile" || name === "analytics";
   return false;
 }
 

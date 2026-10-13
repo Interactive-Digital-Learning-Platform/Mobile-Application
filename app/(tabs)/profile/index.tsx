@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   User,
   AlertCircle,
-  Target,
   LogOut,
   BarChart3,
   ChevronRight,
@@ -37,6 +36,8 @@ import PractiseNextSection from "@/components/profile/PractiseNextSection";
 import CoachCard from "@/components/profile/CoachCard";
 import WeeklyChips from "@/components/profile/WeeklyChips";
 import SyncStatusPill from "@/components/profile/SyncStatusPill";
+import BattleSummaryCard from "@/components/profile/BattleSummaryCard";
+import { battleKeys } from "@/hooks/use-battle";
 import { clearStatsCache } from "@/providers/statsCache";
 
 
@@ -137,6 +138,8 @@ export default function Profile() {
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe }),
       queryClient.invalidateQueries({ queryKey: quizKeys.aiFeedback }),
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll }),
+      queryClient.invalidateQueries({ queryKey: battleKeys.analytics }),
+      queryClient.invalidateQueries({ queryKey: battleKeys.profile }),
     ]);
     setRefreshing(false);
   };
@@ -247,6 +250,8 @@ export default function Profile() {
 
               <CoachCard subjects={visibleSubjects} recommendations={analytics.recommendations} />
 
+              <BattleSummaryCard />
+
               <TouchableOpacity
                 className="flex-row items-center bg-white rounded-[24px] px-4 py-4 shadow-sm shadow-black/5 mb-3"
                 activeOpacity={0.85}
@@ -263,18 +268,6 @@ export default function Profile() {
                 <ChevronRight size={18} color={ICON_COLORS.slate400} strokeWidth={2.5} />
               </TouchableOpacity>
 
-
-              {analytics.total_sessions === 0 && (
-                <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 items-center py-9">
-                  <Target size={32} color={ICON_COLORS.primary500} strokeWidth={1.8} />
-                  <Text className="text-slate-800 font-black text-[15px] mt-3 mb-1">
-                    No quiz data yet
-                  </Text>
-                  <Text className="text-slate-400 text-[13px] text-center">
-                    Complete a quiz to see your analytics here.
-                  </Text>
-                </View>
-              )}
             </Animated.View>
           ) : null}
 

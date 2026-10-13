@@ -322,6 +322,7 @@ export default function BattleMatchSessionScreen() {
       // read, not stale until its 30s staleTime window happens to expire.
       queryClient.invalidateQueries({ queryKey: [...battleKeys.all, "history"] });
       queryClient.invalidateQueries({ queryKey: battleKeys.profile });
+      queryClient.invalidateQueries({ queryKey: battleKeys.analytics });
       // battleKeys.queueStatus is a single GLOBAL cache key, not scoped to
       // this screen -- left alone, it still holds {status:"matched",
       // match_id: <this now-completed match>}. A fresh queue.tsx mounted

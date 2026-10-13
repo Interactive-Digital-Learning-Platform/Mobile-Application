@@ -1,5 +1,6 @@
 import { battleClient } from "@/api/apiClients";
 import {
+  BattleAnalyticsResponse,
   BattleHistoryResponse,
   BattleMatchStateResponse,
   CompetitiveProfileResponse,
@@ -22,6 +23,11 @@ export async function fetchLeaderboard(
 
 export async function fetchBattleProfile(): Promise<CompetitiveProfileResponse> {
   const { data } = await battleClient.get<CompetitiveProfileResponse>("/battle/profile");
+  return data;
+}
+
+export async function fetchBattleAnalytics(): Promise<BattleAnalyticsResponse> {
+  const { data } = await battleClient.get<BattleAnalyticsResponse>("/battle/analytics");
   return data;
 }
 

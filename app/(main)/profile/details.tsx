@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, StatusBar } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAnalyticsMeQuery, quizKeys } from "@/hooks/use-quiz";
@@ -13,6 +13,8 @@ import TopicPerformanceSection from "@/components/profile/TopicPerformanceSectio
 import SkillMasterySection from "@/components/profile/SkillMasterySection";
 import DifficultyProgressSection from "@/components/profile/DifficultyProgressSection";
 import GrowthSection from "@/components/profile/GrowthSection";
+import BattleDetailsSection from "@/components/profile/BattleDetailsSection";
+import { battleKeys } from "@/hooks/use-battle";
 
 const PAGE_BG = "#F5F6F8"; // same light page as the Profile tab
 
@@ -24,6 +26,10 @@ export default function DetailedAnalyticsScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const { data: analytics, isLoading, refetch } = useAnalyticsMeQuery();
+  // Opened from the Profile "Battles" card: jump straight to the battle section once it has laid out.
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledToSection = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,6 +43,7 @@ export default function DetailedAnalyticsScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe }),
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll }),
+      queryClient.invalidateQueries({ queryKey: battleKeys.analytics }),
     ]);
     setRefreshing(false);
   };
@@ -72,6 +79,7 @@ export default function DetailedAnalyticsScreen() {
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ICON_COLORS.primary500} />}
@@ -82,6 +90,16 @@ export default function DetailedAnalyticsScreen() {
           <SkillMasterySection subjects={subjects} />
           <DifficultyProgressSection subjects={subjects} />
           <GrowthSection growth={analytics.growth} />
+          <View
+            onLayout={(e) => {
+              // Wait for the section to actually render (its data loads separately) before scrolling to it.
+              if (section !== "battles" || scrolledToSection.current || e.nativeEvent.layout.height === 0) return;
+              scrolledToSection.current = true;
+              scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y - 8, animated: true });
+            }}
+          >
+            <BattleDetailsSection practiceAccuracy={analytics.overall_accuracy} />
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
