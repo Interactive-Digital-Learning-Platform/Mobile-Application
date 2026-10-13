@@ -1,6 +1,8 @@
 import { Modal, View, Text, TouchableOpacity } from "react-native";
 import { useState, useEffect } from "react";
 import { useRouter } from "expo-router";
+import { onlineManager } from "@tanstack/react-query";
+import { showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -103,6 +105,11 @@ export default function QuizDetailSheet({ item, visible, onClose, onAction }: Qu
 
   const startQuiz = () => {
     onClose();
+    // The sheet can still be open when the connection drops.
+    if (!onlineManager.isOnline()) {
+      showOfflineToast(OFFLINE_COPY.startQuiz);
+      return;
+    }
     onAction();
     router.push({
       pathname: "/(main)/quiz/quiz-session",

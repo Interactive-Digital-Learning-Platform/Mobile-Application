@@ -23,7 +23,7 @@ export default function DetailedAnalyticsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
-  const { data: analytics, isLoading, isError, refetch } = useAnalyticsMeQuery();
+  const { data: analytics, isLoading, refetch } = useAnalyticsMeQuery();
 
   useFocusEffect(
     useCallback(() => {
@@ -63,7 +63,7 @@ export default function DetailedAnalyticsScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="small" color={ICON_COLORS.primary500} />
         </View>
-      ) : isError || !analytics ? (
+      ) : !analytics ? (
         <View className="flex-1 items-center justify-center px-8">
           <Text className="text-slate-500 text-sm text-center mb-4">Couldn&apos;t load your analytics.</Text>
           <TouchableOpacity onPress={() => refetch()} className="px-5 py-2.5 rounded-full bg-primary-100">

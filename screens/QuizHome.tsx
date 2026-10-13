@@ -2,6 +2,7 @@ import StatisticButton from "@/components/quiz-componets/StatisticButton";
 import ModeSwitcher, { QuizMode } from "@/components/quiz-componets/ModeSwitcher";
 import PracticeList from "@/components/quiz-componets/PracticeList";
 import OnlineList from "@/components/quiz-componets/OnlineList";
+import OfflineBanner from "@/components/quiz-componets/OfflineBanner";
 import { StatusBar, View } from "react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -143,6 +144,7 @@ export default function QuizHome() {
           className="w-full items-center px-[30px] pt-4 pb-3"
           onLayout={(e) => setHeaderBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}
         >
+          <OfflineBanner />
           <StatisticButton mode={mode} />
           <View className="mt-4">
             <ModeSwitcher mode={mode} onModeChange={switchMode} />

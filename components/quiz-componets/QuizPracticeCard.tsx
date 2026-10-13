@@ -5,6 +5,7 @@ import { ICON_COLORS, getSubjectIcon, formatSubjectLabel, type Difficulty } from
 import QuizDetailSheet from "@/components/quiz-componets/QuizDetailSheet";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import { useDeleteQuizSessionMutation } from "@/hooks/use-quiz";
+import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 
 export type { Difficulty };
 
@@ -37,6 +38,7 @@ function formatCreatedAt(iso: string): string {
 export default function QuizPracticeCard({ item, disabled = false }: { item: PracticeItem; disabled?: boolean }) {
 
   const [sheetVisible, setSheetVisible] = useState(false);
+  const isOnline = useIsOnline();
   const Icon: LucideIcon = getSubjectIcon(item.subject);
   const isComplete   = item.progress === 100;
   const hasStarted   = item.progress > 0;
@@ -69,6 +71,11 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
   const { mutate: deleteSession, isPending: isDeleting } = useDeleteQuizSessionMutation();
 
   const handleDelete = () => {
+    // Offline the delete would sit paused until reconnecting, leaving a spinner on the card meanwhile.
+    if (!isOnline) {
+      showOfflineToast(OFFLINE_COPY.deleteQuiz);
+      return;
+    }
     Alert.alert(
       "Delete Quiz",
       "Remove this quiz? Your analytics data will be kept.",
@@ -137,13 +144,14 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </View>
         </View>
 
+        {/* Questions and answers live on the server, so offline the button greys out and explains on tap. */}
         <TouchableOpacity
           className={`mt-3 py-2.5 rounded-xl items-center ${
-            isComplete ? "bg-emerald-600" : hasStarted ? "bg-slate-700" : "bg-primary"
+            !isOnline ? "bg-slate-300" : isComplete ? "bg-emerald-600" : hasStarted ? "bg-slate-700" : "bg-primary"
           } ${disabled || isDeleting ? "opacity-40" : ""}`}
           activeOpacity={0.8}
           disabled={disabled || isDeleting}
-          onPress={() => setSheetVisible(true)}
+          onPress={() => (isOnline ? setSheetVisible(true) : showOfflineToast(OFFLINE_COPY.startQuiz))}
         >
           <Text className="text-white text-sm font-bold">
             {isComplete ? "Retake Quiz" : hasStarted ? "Continue Quiz" : "Start Quiz"}

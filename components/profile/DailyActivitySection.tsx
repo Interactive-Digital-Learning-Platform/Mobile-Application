@@ -173,7 +173,7 @@ function ProgressBars({ daily }: { daily: DailyActivityPoint[] }) {
 }
 
 export default function DailyActivitySection() {
-  const { data, isLoading, isError, refetch } = useDailyAnalyticsQuery(WINDOW_DAYS);
+  const { data, isLoading, refetch } = useDailyAnalyticsQuery(WINDOW_DAYS);
 
   return (
     <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
@@ -187,7 +187,7 @@ export default function DailyActivitySection() {
         <View className="items-center justify-center py-12">
           <ActivityIndicator size="small" color={ICON_COLORS.primary500} />
         </View>
-      ) : isError || !data ? (
+      ) : !data ? (
         <View className="items-center py-8">
           <Text className="text-slate-400 text-xs text-center mb-3">Couldn&apos;t load your daily progress.</Text>
           <TouchableOpacity onPress={() => refetch()} className="px-4 py-2 rounded-full bg-primary-100">

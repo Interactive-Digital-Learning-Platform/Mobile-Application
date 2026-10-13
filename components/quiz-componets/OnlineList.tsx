@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Globe } from "lucide-react-native";
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, CloudOff, Globe } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { SUBJECTS, ICON_COLORS } from "@/constants/quizStyles";
 import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { useBattleAvailabilityQuery, useBattleHistoryQuery } from "@/hooks/use-battle";
+import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 import { BattleHistoryEntry } from "@/types/battleModuleTypes";
 import BattleSubjectModal from "@/components/quiz-componets/BattleSubjectModal";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
@@ -197,6 +198,7 @@ export default function OnlineList() {
   const [resultFilter, setResultFilter] = useState<ResultFilter>("All");
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, refetch } = useBattleHistoryQuery(subject, page);
+  const isOnline = useIsOnline();
 
   // Deliberately NOT wired to the query's own `isFetching` -- that flips
   // true for ANY fetch against this query (changing the subject/result
@@ -209,6 +211,11 @@ export default function OnlineList() {
   // nothing but an actual pull.
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = async () => {
+    // Offline the refetch is paused until reconnecting, so awaiting it would leave the spinner stuck.
+    if (!isOnline) {
+      showOfflineToast(OFFLINE_COPY.battle);
+      return;
+    }
     setRefreshing(true);
     try {
       await refetch();
@@ -237,8 +244,20 @@ export default function OnlineList() {
     }
   }, [isWrappingUp]);
 
+  // Matchmaking is live, so the subject picker closes if the connection drops while it's open.
+  useEffect(() => {
+    if (!isOnline && modalVisible) {
+      setModalVisible(false);
+      showOfflineToast(OFFLINE_COPY.battle);
+    }
+  }, [isOnline, modalVisible]);
+
   const handleFindMatch = (subject: string) => {
     setModalVisible(false);
+    if (!isOnline) {
+      showOfflineToast(OFFLINE_COPY.battle);
+      return;
+    }
     router.push({ pathname: "/(main)/battle/queue", params: { subject } } as any);
   };
 
@@ -311,11 +330,16 @@ export default function OnlineList() {
 
       {isLoading ? (
         <HistoryListSkeleton />
-      ) : isError ? (
+      ) : !data && (isError || !isOnline) ? (
+        // Battle history isn't saved on the device, so offline there's nothing to show until reconnecting.
         <View className="flex-1 items-center justify-center px-8">
-          <AlertTriangle size={28} color={ICON_COLORS.primary500} strokeWidth={2} />
+          {isOnline
+            ? <AlertTriangle size={28} color={ICON_COLORS.primary500} strokeWidth={2} />
+            : <CloudOff size={28} color={ICON_COLORS.primary500} strokeWidth={2} />}
           <Text className="text-primary-700 text-sm text-center mt-3">
-            Couldn&apos;t load your battle history. Check your connection and try again.
+            {isOnline
+              ? "Couldn't load your battle history. Check your connection and try again."
+              : "You're offline. Your battle history will load when you reconnect."}
           </Text>
           <TouchableOpacity
             activeOpacity={0.8}
@@ -372,22 +396,27 @@ export default function OnlineList() {
         />
       )}
 
+      {/* Offline it looks disabled but stays tappable, so tapping explains why instead of doing nothing. */}
       <TouchableOpacity
-        className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40 ${
-          isWrappingUp ? "bg-slate-300" : "bg-primary"
+        className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg ${
+          isWrappingUp || !isOnline ? "bg-slate-300 shadow-black/10" : "bg-primary shadow-primary/40"
         }`}
         activeOpacity={0.85}
         disabled={isWrappingUp}
-        onPress={() => setModalVisible(true)}
+        onPress={() => (isOnline ? setModalVisible(true) : showOfflineToast(OFFLINE_COPY.battle))}
+        accessibilityRole="button"
+        accessibilityLabel={isOnline ? "Find a battle" : "Find a battle, unavailable offline"}
       >
-        {isWrappingUp ? (
+        {!isOnline ? (
+          <CloudOff size={24} color={ICON_COLORS.white} strokeWidth={2.25} />
+        ) : isWrappingUp ? (
           <ActivityIndicator size="small" color={ICON_COLORS.white} />
         ) : (
           <Globe size={26} color={ICON_COLORS.white} strokeWidth={2} />
         )}
       </TouchableOpacity>
 
-      {isWrappingUp && (
+      {isWrappingUp && isOnline && (
         <View className="absolute bottom-24 self-center bg-slate-800 px-3 py-2 rounded-xl max-w-[200px]">
           <Text className="text-white text-[11px] font-semibold text-center">
             Finishing up your last battle…

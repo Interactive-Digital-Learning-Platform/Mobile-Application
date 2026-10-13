@@ -26,7 +26,8 @@ import {
   useAnalyticsMeQuery,
   quizKeys,
 } from "@/hooks/use-quiz";
-import { useQueryClient } from "@tanstack/react-query";
+import { onlineManager, useQueryClient } from "@tanstack/react-query";
+import { showOfflineToast } from "@/hooks/use-online-status";
 import Skeleton from "@/components/Skeleton";
 import { filterTestSubjects } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -35,6 +36,8 @@ import SubjectsSection from "@/components/profile/SubjectsSection";
 import PractiseNextSection from "@/components/profile/PractiseNextSection";
 import CoachCard from "@/components/profile/CoachCard";
 import WeeklyChips from "@/components/profile/WeeklyChips";
+import SyncStatusPill from "@/components/profile/SyncStatusPill";
+import { clearStatsCache } from "@/providers/statsCache";
 
 
 const AVATAR_SIZE = 44;
@@ -124,6 +127,11 @@ export default function Profile() {
   );
 
   const onRefresh = async () => {
+    // Offline the refetches are paused until reconnecting, so awaiting them would leave the spinner stuck.
+    if (!onlineManager.isOnline()) {
+      showOfflineToast("Your stats will update when you reconnect.");
+      return;
+    }
     setRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe }),
@@ -146,6 +154,7 @@ export default function Profile() {
             setSigningOut(true);
             try {
               await signOut();
+              await clearStatsCache();
               queryClient.clear();
               router.replace("/");
             } catch {
@@ -201,12 +210,17 @@ export default function Profile() {
 
         <View className="pt-1">
 
+        <SyncStatusPill />
+
         <View >
           {analyticsLoading ? (
             <StatsSkeleton />
-          ) : analyticsError ? (
+          ) : !analytics ? (
+            // Only reached with nothing cached -- with saved stats the page renders them and the pill explains.
             <ErrorState
-              message={(analyticsError as Error)?.message ?? "Something went wrong."}
+              message={analyticsError
+                ? (analyticsError as Error)?.message ?? "Something went wrong."
+                : "You're offline. Connect to the internet to load your stats."}
               onRetry={refetchAnalytics}
             />
           ) : analytics ? (

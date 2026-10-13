@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, FlatList } from "react-native";
-import { useState, useCallback } from "react";
-import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, type LucideIcon } from "lucide-react-native";
+import { useState, useCallback, useEffect } from "react";
+import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, CloudOff, type LucideIcon } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import CreateQuizModal, { QuizConfig } from "@/components/quiz-componets/CreateQuizModal";
 import { DIFF_DOT, ICON_COLORS, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
@@ -8,6 +8,7 @@ import { capitalize } from "@/constants/quizHelpers";
 import QuizPracticeCard, { type Difficulty, type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 import Skeleton from "@/components/Skeleton";
 import { useQuizSessionsQuery } from "@/hooks/use-quiz";
+import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 
 const DIFFICULTIES: ("All" | Difficulty)[] = ["All", "Easy", "Medium", "Hard"];
 const SUBJECTS = ["All", ...ALL_SUBJECTS];
@@ -156,7 +157,22 @@ export default function PracticeList() {
     useCallback(() => { refetch(); }, [refetch])
   );
 
+  // Generating a quiz is a server call, so it's blocked offline -- and a Create popup that's already open closes if
+  // the connection drops underneath it.
+  const isOnline = useIsOnline();
+  useEffect(() => {
+    if (!isOnline && modalVisible) {
+      setModalVisible(false);
+      showOfflineToast(OFFLINE_COPY.createQuiz);
+    }
+  }, [isOnline, modalVisible]);
+
   const handleGenerate = (config: QuizConfig) => {
+    if (!isOnline) {
+      setModalVisible(false);
+      showOfflineToast(OFFLINE_COPY.createQuiz);
+      return;
+    }
     if (config.shuffle) {
       // Shuffle draws fresh variety across every subject, so there's no
       // single subject to filter prior question ids against.
@@ -278,11 +294,13 @@ export default function PracticeList() {
 
       {isLoading ? (
         <PracticeListSkeleton />
-      ) : isError && items.length === 0 ? (
+      ) : (isError || (!isOnline && !sessions)) && items.length === 0 ? (
         // Only takes over the empty state — a failed background refresh with
         // an already-loaded list on screen leaves that list showing as-is.
+        // Offline with nothing saved yet, the fetch is paused rather than
+        // failed, so it's routed here explicitly instead of "Start your first quiz".
         (() => {
-          const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[classifyLoadError(error)];
+          const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[isOnline ? classifyLoadError(error) : "network"];
           return (
             <View className="flex-1 justify-center items-center px-8 pb-16">
               <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
@@ -329,12 +347,19 @@ export default function PracticeList() {
         />
       )}
 
+      {/* Offline it looks disabled but stays tappable, so tapping explains why instead of doing nothing. */}
       <TouchableOpacity
-        className="absolute bottom-6 self-center bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
+        className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg ${
+          isOnline ? "bg-primary shadow-primary/40" : "bg-slate-300 shadow-black/10"
+        }`}
         activeOpacity={0.85}
-        onPress={() => setModalVisible(true)}
+        onPress={() => (isOnline ? setModalVisible(true) : showOfflineToast(OFFLINE_COPY.createQuiz))}
+        accessibilityRole="button"
+        accessibilityLabel={isOnline ? "Create a quiz" : "Create a quiz, unavailable offline"}
       >
-        <Plus size={26} color={ICON_COLORS.white} strokeWidth={2.5} />
+        {isOnline
+          ? <Plus size={26} color={ICON_COLORS.white} strokeWidth={2.5} />
+          : <CloudOff size={24} color={ICON_COLORS.white} strokeWidth={2.25} />}
       </TouchableOpacity>
 
       <CreateQuizModal

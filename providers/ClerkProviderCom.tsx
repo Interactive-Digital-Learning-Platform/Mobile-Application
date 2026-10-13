@@ -1,8 +1,11 @@
 import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
+import { resourceCache } from "@clerk/expo/resource-cache";
 import { PropsWithChildren, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { markClerkReady, setClerkTokenGetter } from "@/api/apiClients";
 import { useUserSyncMutation } from "@/hooks/use-quiz";
+import { attachStatsCache, detachStatsCache } from "@/providers/statsCache";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
@@ -38,10 +41,27 @@ function ClerkTokenSync() {
   return null;
 }
 
+// Restores the signed-in user's saved stats (see statsCache) once Clerk knows who they are.
+function StatsCacheSync() {
+  const { isLoaded, userId } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (userId) attachStatsCache(queryClient, userId);
+    else detachStatsCache();
+  }, [isLoaded, userId, queryClient]);
+
+  return null;
+}
+
 export default function ClerkProviderCom({ children }: PropsWithChildren) {
+  // resourceCache lets Clerk start from its last known session when offline -- without it the app can't get past
+  // the entry screen with no connection, so the saved stats would never be reachable.
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache} __experimental_resourceCache={resourceCache}>
       <ClerkTokenSync />
+      <StatsCacheSync />
       {children}
     </ClerkProvider>
   );

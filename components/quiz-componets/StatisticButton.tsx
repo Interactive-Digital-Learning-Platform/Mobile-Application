@@ -142,7 +142,9 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const avgTime   = analytics
     ? `${analytics.overall_avg_response_time.toFixed(1)}s`
     : "0s";
-  const streakDays = dailyAnalytics ? dayStreak(dailyAnalytics.daily) : "0";
+  // "–" rather than 0 when the daily data isn't available (e.g. offline before it was ever saved) -- a real 0 would
+  // tell the student they'd broken their streak.
+  const streakDays = dailyAnalytics ? dayStreak(dailyAnalytics.daily) : "–";
 
   // Battle profile is one row per subject with no server-side aggregate, so
   // the summary shown here is rolled up across all of them: total matches
