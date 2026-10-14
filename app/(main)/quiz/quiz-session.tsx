@@ -6,11 +6,12 @@ import {
   ScrollView,
   ActivityIndicator,
   AppState,
+  StatusBar,
   type AppStateStatus,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import Animated, {
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
@@ -334,12 +335,16 @@ export default function QuizSession() {
 
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const shakeX   = useSharedValue(0);
-  const timerPct = useSharedValue(1);
-  const [barWidth, setBarWidth] = useState(0);
-
+  const shakeX = useSharedValue(0);
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
-  const barStyle   = useAnimatedStyle(() => ({ width: timerPct.value * barWidth }));
+
+  // Orange header behind the status bar: light status-bar text while this screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      const entry = StatusBar.pushStackEntry({ barStyle: "light-content" });
+      return () => StatusBar.popStackEntry(entry);
+    }, [])
+  );
 
   const doSaveProgress = useCallback(
     (currentAnswers: Record<number, number>, currentTimes: Record<number, number>, currentTimeLeft: number) => {
@@ -387,10 +392,6 @@ export default function QuizSession() {
     timerIntervalRef.current = id;
     return () => clearInterval(id);
   }, [isReady, timeUp]);
-
-  useEffect(() => {
-    timerPct.value = withTiming(timeLeft / totalSec, { duration: 900 });
-  }, [timeLeft]);
 
   useEffect(() => {
     if (!timeUp) return;
@@ -530,187 +531,210 @@ export default function QuizSession() {
     );
   }
 
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+
   return (
-    <SafeAreaView edges={["top"]} className="flex-1 bg-white">
+    <View className="flex-1 bg-primary-500">
+      {/* Two-tone backdrop: a deeper band behind the header that the question card overlaps. */}
+      <View
+        className="absolute left-0 right-0 top-0 bg-primary-700"
+        style={{ height: "44%", borderBottomLeftRadius: 56, borderBottomRightRadius: 56 }}
+      />
 
       {isSubmitting && (
         <View className="absolute inset-0 z-50" pointerEvents="box-only" />
       )}
 
-      <View className="flex-row items-center justify-between px-4 py-3 bg-white">
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-slate-100 justify-center items-center"
-          activeOpacity={0.7}
-          onPress={() => setShowExit(true)}
-        >
-          <ChevronLeft size={18} color={ICON_COLORS.slate500} strokeWidth={2.5} />
-        </TouchableOpacity>
+      <SafeAreaView edges={["top", "bottom"]} className="flex-1">
+        {/* Header: back · question counter · timer */}
+        <View className="flex-row items-center justify-between px-5 pt-2">
+          <TouchableOpacity
+            className="w-11 h-11 rounded-2xl bg-white/15 justify-center items-center"
+            activeOpacity={0.7}
+            onPress={() => setShowExit(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Exit quiz"
+          >
+            <ChevronLeft size={22} color={ICON_COLORS.white} strokeWidth={2.75} />
+          </TouchableOpacity>
 
-        <View className="items-center justify-center">
-          <Text className="text-md font-black text-slate-800">{displaySubject}</Text>
-          {/* Shuffle mode has no difficulty of its own — each subject picks
-              its own independently at generation time — so no difficulty
-              pill is shown here at all when isShuffle. */}
-          {!isShuffle && (
-            <View className={`self-center px-2 py-0.5 rounded-full mt-0.5 ${diff.bg}`}>
-              <Text className={`text-[12px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
+          <Text className="text-white text-[17px] font-black">
+            Question {pad2(current + 1)} / {pad2(totalQ)}
+          </Text>
+
+          <View
+            className={`flex-row items-center gap-1.5 pl-1.5 pr-3 h-11 rounded-full ${
+              isLow ? "bg-rose-500" : "bg-white/20"
+            }`}
+          >
+            <View className="w-8 h-8 rounded-full bg-white justify-center items-center">
+              <Clock size={16} color={isLow ? ICON_COLORS.rose500 : ICON_COLORS.primary600} strokeWidth={2.75} />
             </View>
+            <Text className="text-white text-[16px] font-black tracking-wider">{formatTime(timeLeft)}</Text>
+          </View>
+        </View>
+
+        {/* Progress: one segment per question, tap to jump. */}
+        <View className="mx-5 mt-5 h-2.5 rounded-full bg-black/20 flex-row overflow-hidden">
+          {questions.map((_, i) => {
+            const isAns  = answers[i] !== undefined;
+            const isFlag = flagged.has(i);
+            const isCurr = i === current;
+            return (
+              <TouchableOpacity
+                key={i}
+                onPress={() => navigateTo(i)}
+                hitSlop={{ top: 10, bottom: 10 }}
+                style={{ flex: 1, marginHorizontal: 1, borderRadius: 99 }}
+                className={
+                  isFlag ? "bg-violet-300" :
+                  isAns  ? "bg-emerald-400" :
+                  isCurr ? "bg-white" : "bg-transparent"
+                }
+              />
+            );
+          })}
+        </View>
+        <View className="flex-row justify-between px-6 mt-2">
+          <Text className="text-xs text-white/80 font-semibold">{answered}/{totalQ} answered</Text>
+          {flagged.size > 0 && (
+            <Text className="text-xs text-white/80 font-semibold">{flagged.size} flagged</Text>
           )}
         </View>
 
-        <TouchableOpacity
-          className={`w-9 h-9 rounded-full justify-center items-center ${
-            isFlagged ? "bg-violet-100" : "bg-slate-100"
-          }`}
-          activeOpacity={0.7}
-          onPress={toggleFlag}
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}
         >
-          <Flag
-            size={16}
-            color={isFlagged ? ICON_COLORS.violet600 : ICON_COLORS.slate500}
-            strokeWidth={2.5}
-            fill={isFlagged ? ICON_COLORS.violet100 : "transparent"}
-          />
-        </TouchableOpacity>
-      </View>
+          <View>
+            {/* Stacked "deck" edges peeking out under the card. */}
+            <View className="absolute rounded-[28px] bg-white/25" style={{ left: 28, right: 28, top: 24, bottom: -22 }} />
+            <View className="absolute rounded-[28px] bg-white/45" style={{ left: 14, right: 14, top: 12, bottom: -11 }} />
 
-      <View className="mt-4 mx-4 flex-row justify-between items-center">
-        <View
-          className={`h-2 rounded-full w-[80%] overflow-hidden ${isLow ? "bg-rose-200" : "bg-slate-200"}`}
-          onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-        >
-          <Animated.View
-            style={barStyle}
-            className={`h-full ${isLow ? "bg-rose-500" : "bg-primary"}`}
-          />
-        </View>
-
-        <View className="flex-row items-center gap-1">
-          <Clock size={14} color={isLow ? ICON_COLORS.rose500 : ICON_COLORS.primary500} strokeWidth={3} />
-          <Text className={`text-md font-black tracking-widest ${isLow ? "text-rose-500" : "text-primary"}`}>
-            {formatTime(timeLeft)}
-          </Text>
-        </View>
-      </View>
-
-      <View className="flex-row px-4 mt-4 gap-1 flex-wrap">
-        {questions.map((_, i) => {
-          const isAns  = answers[i] !== undefined;
-          const isFlag = flagged.has(i);
-          const isCurr = i === current;
-          return (
-            <TouchableOpacity
-              key={i}
-              onPress={() => navigateTo(i)}
-              style={{ height: 7, flex: 1, minWidth: 8, borderRadius: 99 }}
-              className={
-                isFlag ? "bg-violet-500" :
-                isAns  ? "bg-primary"    :
-                isCurr ? "bg-primary/40" : "bg-slate-200"
-              }
-            />
-          );
-        })}
-      </View>
-
-      <View className="flex-row justify-between px-5 mt-3">
-        <Text className="text-xs text-slate-400 font-medium">
-          Question {current + 1} / {totalQ}
-        </Text>
-        <Text className="text-xs text-slate-400 font-medium">
-          {flagged.size > 0 ? `${flagged.size} flagged  ·  ` : ""}
-          {answered}/{totalQ} answered
-        </Text>
-      </View>
-
-      <View className="bg-white rounded-2xl py-[40px] px-4 m-4 border border-slate-100 shadow-sm shadow-black/5">
-        {isFlagged && (
-          <View className="flex-row items-center gap-1 absolute ps-5 pt-5">
-            <Flag size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} fill={ICON_COLORS.violet100} />
-            <Text className="text-[11px] text-violet-600 font-semibold">Flagged for review</Text>
-          </View>
-        )}
-        {(isShuffle && !!q?.subject) || !!q?.lesson ? (
-          <View className="flex-row flex-wrap items-center gap-2 mb-3">
-            {isShuffle && !!q?.subject && (() => {
-              const SubjectIcon = getSubjectIcon(q.subject);
-              return (
-                <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-violet-50">
-                  <SubjectIcon size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} />
-                  <Text className="text-[11px] text-violet-600 font-semibold" numberOfLines={1}>
-                    {q.subject}
-                  </Text>
+            <View className="bg-white rounded-[28px] px-5 pt-5 pb-6 shadow-lg shadow-black/15">
+              <View className="flex-row items-center justify-between">
+                <View className="flex-1 flex-row items-center gap-2 mr-3">
+                  <Text className="text-[15px] font-medium text-slate-400" numberOfLines={1}>{displaySubject}</Text>
+                  {/* Shuffle mode has no difficulty of its own — each subject picks
+                      its own independently at generation time — so no difficulty
+                      pill is shown here at all when isShuffle. */}
+                  {!isShuffle && (
+                    <View className={`px-2 py-0.5 rounded-full ${diff.bg}`}>
+                      <Text className={`text-[11px] font-bold ${diff.text}`}>{displayDifficulty}</Text>
+                    </View>
+                  )}
                 </View>
-              );
-            })()}
-            {!!q?.lesson && (
-              <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-primary-50">
-                <BookOpen size={11} color={ICON_COLORS.primary500} strokeWidth={2.5} />
-                <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
-                  {q.lesson}
-                </Text>
+                <TouchableOpacity
+                  className={`w-9 h-9 rounded-xl justify-center items-center ${
+                    isFlagged ? "bg-violet-100" : "bg-slate-100"
+                  }`}
+                  activeOpacity={0.7}
+                  onPress={toggleFlag}
+                  accessibilityRole="button"
+                  accessibilityLabel={isFlagged ? "Unflag question" : "Flag question for review"}
+                >
+                  <Flag
+                    size={16}
+                    color={isFlagged ? ICON_COLORS.violet600 : ICON_COLORS.slate500}
+                    strokeWidth={2.5}
+                    fill={isFlagged ? ICON_COLORS.violet100 : "transparent"}
+                  />
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
-        ) : null}
-        <Text className="font-bold text-slate-800 leading-6 text-xl">{formatMathText(q?.question ?? "")}</Text>
-      </View>
 
-      <View className="w-full flex-1 py-2 px-4">
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-          <View className="gap-2.5">
-            {(q?.options ?? []).map((opt, i) => (
-              <QuizOptionButton
-                key={i}
-                label={OPTION_LABELS[i]}
-                optionText={opt}
-                isSelected={selectedOpt === i}
-                onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
-              />
-            ))}
-          </View>
+              {isFlagged && (
+                <View className="flex-row items-center gap-1 mt-1">
+                  <Flag size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} fill={ICON_COLORS.violet100} />
+                  <Text className="text-[11px] text-violet-600 font-semibold">Flagged for review</Text>
+                </View>
+              )}
 
+              {(isShuffle && !!q?.subject) || !!q?.lesson ? (
+                <View className="flex-row flex-wrap items-center gap-2 mt-3">
+                  {isShuffle && !!q?.subject && (() => {
+                    const SubjectIcon = getSubjectIcon(q.subject);
+                    return (
+                      <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-violet-50">
+                        <SubjectIcon size={11} color={ICON_COLORS.violet600} strokeWidth={2.5} />
+                        <Text className="text-[11px] text-violet-600 font-semibold" numberOfLines={1}>
+                          {q.subject}
+                        </Text>
+                      </View>
+                    );
+                  })()}
+                  {!!q?.lesson && (
+                    <View className="flex-row items-center gap-1 px-2 py-1 rounded-full bg-primary-50">
+                      <BookOpen size={11} color={ICON_COLORS.primary500} strokeWidth={2.5} />
+                      <Text className="text-[11px] text-primary font-semibold" numberOfLines={1}>
+                        {q.lesson}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              <Text className="mt-3 text-[21px] leading-7 font-black text-slate-800">
+                {formatMathText(q?.question ?? "")}
+              </Text>
+
+              <View className="gap-3 mt-5">
+                {(q?.options ?? []).map((opt, i) => (
+                  <QuizOptionButton
+                    key={i}
+                    variant="card"
+                    label={OPTION_LABELS[i]}
+                    optionText={opt}
+                    isSelected={selectedOpt === i}
+                    onPress={() => setAnswers((prev) => ({ ...prev, [current]: i }))}
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
         </ScrollView>
-      </View>
 
-      <View className="flex-row justify-between items-center absolute bottom-8 px-4 py-5 w-full bg-white/90">
-        <TouchableOpacity
-          className={`w-[49%] flex-row justify-center items-center gap-2 py-3.5 rounded-2xl ${
-            current === 0 ? "bg-white border border-slate-200 opacity-40" : "bg-slate-100"
-          }`}
-          activeOpacity={0.8}
-          disabled={current === 0}
-          onPress={() => navigateTo(current - 1)}
-        >
-          <ChevronLeft size={16} color={ICON_COLORS.slate500} strokeWidth={2.5} />
-          <Text className="text-sm font-bold text-slate-600">Previous</Text>
-        </TouchableOpacity>
+        {/* Footer: Previous · Next / Submit */}
+        <View className="flex-row items-center gap-3 px-5 pt-2 pb-3">
+          {/* Same raised style as Next (bottom "lip", bold label), in white as the secondary action. */}
+          <TouchableOpacity
+            className={`h-14 px-4 flex-row justify-center items-center gap-1 rounded-2xl bg-white border-b-[5px] border-primary-200 ${
+              current === 0 ? "opacity-40" : ""
+            }`}
+            activeOpacity={0.85}
+            disabled={current === 0}
+            onPress={() => navigateTo(current - 1)}
+          >
+            <ChevronLeft size={20} color={ICON_COLORS.primary600} strokeWidth={2.75} />
+            <Text className="text-lg font-black text-primary-600">Previous</Text>
+          </TouchableOpacity>
 
-        {current < totalQ - 1 ? (
-          <TouchableOpacity
-            className="w-[49%] flex-row justify-center items-center gap-2 py-3.5 rounded-2xl bg-primary shadow-sm shadow-primary"
-            activeOpacity={0.8}
-            onPress={() => navigateTo(current + 1)}
-          >
-            <Text className="text-sm font-bold text-white">Next</Text>
-            <ChevronRight size={16} color={ICON_COLORS.white} strokeWidth={2.5} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            className="w-[49%] flex-row justify-center items-center gap-2 py-3.5 rounded-2xl bg-emerald-500 shadow-sm shadow-emerald-500"
-            activeOpacity={0.8}
-            disabled={isSubmitting}
-            onPress={goToResults}
-          >
-            {isSubmitting
-              ? <ActivityIndicator size="small" color={ICON_COLORS.white} />
-              : <BarChart2 size={16} color={ICON_COLORS.white} strokeWidth={2.5} />}
-            <Text className="text-sm font-bold text-white">
-              {isSubmitting ? "Saving…" : "Submit"}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          {current < totalQ - 1 ? (
+            <TouchableOpacity
+              className="flex-1 h-14 flex-row justify-center items-center gap-2 rounded-2xl bg-emerald-400 border-b-[5px] border-emerald-600"
+              activeOpacity={0.85}
+              onPress={() => navigateTo(current + 1)}
+            >
+              <Text className="text-lg font-black text-white">Next</Text>
+              <ChevronRight size={20} color={ICON_COLORS.white} strokeWidth={2.75} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              className="flex-1 h-14 flex-row justify-center items-center gap-2 rounded-2xl bg-emerald-400 border-b-[5px] border-emerald-600"
+              activeOpacity={0.85}
+              disabled={isSubmitting}
+              onPress={goToResults}
+            >
+              {isSubmitting
+                ? <ActivityIndicator size="small" color={ICON_COLORS.white} />
+                : <BarChart2 size={18} color={ICON_COLORS.white} strokeWidth={2.75} />}
+              <Text className="text-lg font-black text-white">
+                {isSubmitting ? "Saving…" : "Submit"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </SafeAreaView>
 
       <ExitQuizModal
         visible={showExit}
@@ -729,6 +753,6 @@ export default function QuizSession() {
         onShowResults={() => { setShowTimesUpModal(false); navigateToResults(true, submitData); }}
         shakeStyle={shakeStyle}
       />
-    </SafeAreaView>
+    </View>
   );
 }
