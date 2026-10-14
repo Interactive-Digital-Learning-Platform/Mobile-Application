@@ -32,6 +32,10 @@ import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/ho
 // once the server's "question_result" reveal actually arrives, avoids a
 // last-second tap that's guaranteed to be rejected.
 const ANSWER_REVEAL_SECONDS = 5;
+// The local deadline runs behind the server's by the network delay, and the countdown only re-renders once a second,
+// so lock a second early -- otherwise a last-moment tap reaches the server after its lock and gets rejected.
+const LOCK_SAFETY_MARGIN_SECONDS = 1;
+const LOCK_AT_SECONDS_REMAINING = ANSWER_REVEAL_SECONDS + LOCK_SAFETY_MARGIN_SECONDS;
 
 // Every non-"answering" state the question card can be in, unified into one
 // place -- each maps to a background/border + a small top-right tag,
@@ -213,15 +217,14 @@ export default function BattleMatchSessionScreen() {
   // options here (client-predicted) rather than only once the server's
   // "question_result" reveal actually arrives avoids a last-second tap
   // that's guaranteed to be rejected with a 409.
-  const secondsRemaining = Math.max(
-    0,
-    Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
-  );
-  const optionsDisabled = isLocked || secondsRemaining <= ANSWER_REVEAL_SECONDS;
+  const exactSecondsRemaining = () => ((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000;
+  const secondsRemaining = Math.max(0, Math.ceil(exactSecondsRemaining()));
+  const pastLocalLock = () => exactSecondsRemaining() <= LOCK_AT_SECONDS_REMAINING;
+  const optionsDisabled = isLocked || pastLocalLock();
   // 3, 2, 1 warning in the last 3 seconds before the lock -- 0 once the
   // lock threshold itself is reached (options already disabled at that
   // point, see optionsDisabled above).
-  const secondsUntilLock = Math.max(0, secondsRemaining - ANSWER_REVEAL_SECONDS);
+  const secondsUntilLock = Math.max(0, secondsRemaining - LOCK_AT_SECONDS_REMAINING);
 
   const questionCardState: QuestionCardState =
     isLocked && lastAnswerFeedback
@@ -604,6 +607,12 @@ export default function BattleMatchSessionScreen() {
                       // resubmit that would only push the response-time-for-
                       // scoring later for no reason.
                       if (opt === selectedOption) return;
+                      // Checked at tap time, not just at the last 1s re-render: a tap after the lock would only be
+                      // rejected by the server, while the option still looked selected here.
+                      if (pastLocalLock()) {
+                        forceTick((t) => t + 1);
+                        return;
+                      }
                       setSelectedOption(opt);
                       if (matchState.question) {
                         submitAnswer(matchState.question.question_id, opt);
