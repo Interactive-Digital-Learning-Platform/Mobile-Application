@@ -377,6 +377,13 @@ export function useBattleMatch(matchId: number | null) {
           // not something the user can act on -- log only, no toast.
           if (event.detail.startsWith("Malformed message")) {
             console.warn("[BattleWS] Server rejected a malformed message:", event.detail);
+          } else if (
+            event.detail.startsWith("Answers are locked") ||
+            event.detail.startsWith("This is not the current question")
+          ) {
+            // An answer that reached the server after its question locked (or after the next one started, e.g. held
+            // up by a flaky connection) -- expected timing, not a server fault.
+            Toast.show({ type: "info", text1: "Too late", text2: "That answer came in after the question locked." });
           } else {
             Toast.show({ type: "error", text1: "Server error", text2: event.detail });
           }

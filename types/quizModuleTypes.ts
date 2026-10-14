@@ -21,7 +21,9 @@ export interface QuestionOut {
   subject: string;
   lesson: string;
   difficulty: string;
-  correct_answer: string | null;
+  // Never sent while a quiz is in progress (generate / resume) -- only for completed sessions. After submitting,
+  // the answers come from SubmitQuizResponse.question_results.
+  correct_answer?: string | null;
 }
 
 export interface GenerateQuizResponse {
@@ -141,6 +143,14 @@ export interface SubmitQuizResponse {
   repeated_wrong_count: number;
   repeated_lessons_right: string[];
   repeated_lessons_wrong: string[];
+  question_results?: QuestionResult[]; // session question order; unanswered -> selected_answer ""
+}
+
+export interface QuestionResult {
+  question_id: number;
+  selected_answer: string;
+  correct_answer: string | null;
+  is_correct: boolean | null;
 }
 
 // Every analytics field below is optional even where the backend always
@@ -157,6 +167,52 @@ export interface PerformanceTrend {
   previous_period_sessions: number;
   trend: string;
   method: string;
+}
+
+// One completed quiz from the same session set performance_trend is computed from, oldest first: the newest
+// current_period_sessions points are the trend's current period, the previous_period_sessions before them its previous.
+export interface AccuracyHistoryPoint {
+  session_id: number;
+  completed_at: string;
+  subject: string;
+  correct: number;
+  total: number;
+  accuracy: number;
+}
+
+export type DailyWindow = 7 | 14 | 30;
+
+// One local calendar day from GET /analytics/daily; accuracy / avg_response_time are null on days with no answers.
+export interface DailyActivityPoint {
+  date: string; // YYYY-MM-DD in the device timezone
+  quizzes_completed: number;
+  questions_answered: number;
+  correct_answers: number;
+  accuracy: number | null;
+  study_time_seconds: number;
+  avg_response_time: number | null;
+  // Daily Progress Score (0-100) = 0.5 x accuracy + 0.3 x improvement + 0.2 x effort; null on rest days.
+  baseline_accuracy: number | null; // accuracy over everything before this day
+  progress_score: number | null;
+  score_accuracy: number | null;
+  score_improvement: number | null; // 50 = same as usual
+  score_effort: number | null;      // questions answered vs the daily target
+}
+
+export interface DailyAnalyticsResponse {
+  days: DailyWindow;
+  timezone: string;
+  start_date: string;
+  end_date: string;
+  active_days: number;
+  total_quizzes_completed: number;
+  total_questions_answered: number;
+  total_correct_answers: number;
+  accuracy: number | null;
+  total_study_time_seconds: number;
+  avg_response_time: number | null;
+  weekly_progress_score: number | null; // mean of the active days' progress_score
+  daily: DailyActivityPoint[];
 }
 
 export interface RepeatedQuestionAnalytics {
@@ -319,6 +375,12 @@ export interface SubjectAnalytics {
   quizzes_required_for_promotion?: number;
   promotion_progress_percentage?: number;
   promotion_readiness?: number;
+  // The two requirements behind promotion_progress_percentage (which is just the lower of the two): skill = adaptive
+  // mastery score vs the level-up threshold, practice = questions answered vs the minimum. *_required null at top level.
+  promotion_mastery_score?: number;
+  promotion_mastery_required?: number | null;
+  promotion_questions_answered?: number;
+  promotion_questions_required?: number | null;
   next_difficulty?: string;
   difficulty_status_message?: string;
   mastery_score?: number | null;
@@ -357,6 +419,7 @@ export interface UserAnalyticsResponse {
   response_time_standard_deviation?: number;
   answering_behavior?: string;
   performance_trend?: PerformanceTrend;
+  accuracy_history?: AccuracyHistoryPoint[];
   repeated_question_analytics?: RepeatedQuestionAnalytics;
   growth?: GrowthAnalytics;
   recommendations?: Recommendation[];

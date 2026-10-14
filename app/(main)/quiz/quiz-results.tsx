@@ -141,14 +141,19 @@ export default function QuizResultsScreen() {
 
   const answers: Record<number, number> =
     answersJson ? JSON.parse(answersJson) : {};
-  const questions: QuestionOut[] =
-    questionsJson ? JSON.parse(questionsJson) : [];
   const submitData: SubmitQuizResponse | null =
     submitDataJson ? JSON.parse(submitDataJson) : null;
+  // The answer key isn't sent with the questions anymore (so it can't be read before submitting) -- it arrives
+  // per question in the submit response, merged in here for the review list.
+  const answerKey = new Map((submitData?.question_results ?? []).map((r) => [r.question_id, r.correct_answer]));
+  const questions: QuestionOut[] = (questionsJson ? (JSON.parse(questionsJson) as QuestionOut[]) : []).map((q) => ({
+    ...q,
+    correct_answer: answerKey.get(q.id) ?? q.correct_answer ?? null,
+  }));
 
   // Falls back to computing correctness locally if the backend submit call
-  // never came back (submitData null) — still possible since the backend
-  // sends correct_answer along with each question.
+  // never came back (submitData null) — only possible when the questions
+  // already carry their answers (a completed session).
   const localCorrect = questions.filter((q, i) => {
     const chosen = answers[i];
     if (chosen === undefined || !q.options || !q.correct_answer) return false;

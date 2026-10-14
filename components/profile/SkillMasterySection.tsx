@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { Brain, Circle, Sparkles, TrendingUp } from "lucide-react-native";
+import { Brain, AlertTriangle, Sparkles, TrendingUp } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { SubjectAnalytics } from "@/types/quizModuleTypes";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -23,7 +23,9 @@ const GROUPS: {
   key: "mastered" | "learning" | "not_started"; label: string; icon: LucideIcon;
   iconColor: string; bgClass: string; textClass: string;
 }[] = [
-  { key: "not_started", label: "Not Started", icon: Circle, iconColor: ICON_COLORS.slate400, bgClass: "bg-slate-100", textClass: "text-slate-500" },
+  // The backend labels any skill with p_know below BKT_LEARNING_THRESHOLD "not_started", but a skill row only exists once
+  // it has been attempted -- so for the user this group means "attempted, still weak", not "never tried".
+  { key: "not_started", label: "Needs Practice", icon: AlertTriangle, iconColor: ICON_COLORS.rose600, bgClass: "bg-rose-50", textClass: "text-rose-600" },
   { key: "learning", label: "Learning", icon: TrendingUp, iconColor: ICON_COLORS.amber600, bgClass: "bg-amber-100", textClass: "text-amber-600" },
   { key: "mastered", label: "Mastered", icon: Sparkles, iconColor: ICON_COLORS.emerald600, bgClass: "bg-emerald-100", textClass: "text-emerald-600" },
 ];
@@ -46,22 +48,24 @@ export default function SkillMasterySection({ subjects }: SkillMasterySectionPro
 
   return (
     <View className="bg-white rounded-[18px] p-3.5 border border-slate-100 shadow-sm shadow-black/5 mb-3">
-      <View className="flex-row items-center justify-between mb-1">
-        <SectionHeader icon={Brain} label="Skill Mastery" />
-        {hasSkills && (
+      <SectionHeader
+        icon={Brain}
+        label="Skill Mastery"
+        right={hasSkills ? (
           <Text className="text-primary-600 text-[11px] font-black">
             {masteredSkills} / {totalSkills} mastered
           </Text>
-        )}
-      </View>
+        ) : undefined}
+      />
 
       {hasSkills ? (
-        <View className="gap-3.5 mt-2">
+        <View className="gap-3.5">
           {GROUPS.map((group) => {
-            const items = flattenSkills(subjects, group.key)
+            const groupSkills = flattenSkills(subjects, group.key);
+            if (groupSkills.length === 0) return null;
+            const items = groupSkills
               .sort((a, b) => b.opportunities - a.opportunities)
               .slice(0, MAX_PER_GROUP);
-            if (items.length === 0) return null;
             const GroupIcon = group.icon;
 
             return (
@@ -69,7 +73,7 @@ export default function SkillMasterySection({ subjects }: SkillMasterySectionPro
                 <View className="flex-row items-center gap-1.5 mb-2">
                   <GroupIcon size={13} color={group.iconColor} strokeWidth={2} />
                   <Text className={`font-extrabold text-[11px] uppercase tracking-wider ${group.textClass}`}>
-                    {group.label} ({items.length})
+                    {group.label} ({groupSkills.length})
                   </Text>
                 </View>
                 <View className="gap-1.5">

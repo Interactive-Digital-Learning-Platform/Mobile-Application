@@ -9,6 +9,9 @@ interface BattleProgressBarProps {
   currentIndex: number;
   answers: BattleAnswerProgress[];
   size?: "md" | "sm";
+  // "dark": for a coloured backdrop (the match screen's orange header) -- light label, translucent-dark empty
+  // segments and a white current segment. Answer colours are the same in both tones.
+  tone?: "light" | "dark";
 }
 
 type SegmentState = "correct" | "incorrect" | "skipped" | "current" | "pending";
@@ -35,7 +38,14 @@ const SEGMENT_CLASS: Record<SegmentState, string> = {
   pending: "bg-slate-200",
 };
 
-function Segment({ state, size }: { state: SegmentState; size: "md" | "sm" }) {
+const DARK_SEGMENT_CLASS: Record<SegmentState, string> = {
+  ...SEGMENT_CLASS,
+  correct: "bg-emerald-400",
+  current: "bg-white",
+  pending: "bg-black/20",
+};
+
+function Segment({ state, size, tone }: { state: SegmentState; size: "md" | "sm"; tone: "light" | "dark" }) {
   const pulse = useSharedValue(1);
 
   useEffect(() => {
@@ -50,7 +60,9 @@ function Segment({ state, size }: { state: SegmentState; size: "md" | "sm" }) {
 
   return (
     <Animated.View
-      className={`flex-1 rounded-full ${size === "sm" ? "h-1" : "h-2"} ${SEGMENT_CLASS[state]}`}
+      className={`flex-1 rounded-full ${size === "sm" ? "h-1" : "h-2"} ${
+        (tone === "dark" ? DARK_SEGMENT_CLASS : SEGMENT_CLASS)[state]
+      }`}
       style={state === "current" ? pulseStyle : undefined}
     />
   );
@@ -62,11 +74,12 @@ export default function BattleProgressBar({
   currentIndex,
   answers,
   size = "md",
+  tone = "light",
 }: BattleProgressBarProps) {
   return (
     <View className="mb-1.5">
       <Text
-        className={`font-bold text-slate-400 uppercase tracking-wide mb-1 ${
+        className={`font-bold uppercase tracking-wide mb-1 ${tone === "dark" ? "text-white/80" : "text-slate-400"} ${
           size === "sm" ? "text-[9px]" : "text-[10px]"
         }`}
       >
@@ -74,7 +87,7 @@ export default function BattleProgressBar({
       </Text>
       <View className="flex-row gap-1">
         {Array.from({ length: count }, (_, i) => (
-          <Segment key={i} state={segmentState(i, currentIndex, answers)} size={size} />
+          <Segment key={i} state={segmentState(i, currentIndex, answers)} size={size} tone={tone} />
         ))}
       </View>
     </View>

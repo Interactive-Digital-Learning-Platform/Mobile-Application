@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock, Flame, WifiOff, X, XCircle } from "lucide-react-native";
 import Toast from "react-native-toast-message";
@@ -32,6 +32,10 @@ import { battleKeys, useBattleProfileQuery, useForfeitMatchMutation } from "@/ho
 // once the server's "question_result" reveal actually arrives, avoids a
 // last-second tap that's guaranteed to be rejected.
 const ANSWER_REVEAL_SECONDS = 5;
+// The local deadline runs behind the server's by the network delay, and the countdown only re-renders once a second,
+// so lock a second early -- otherwise a last-moment tap reaches the server after its lock and gets rejected.
+const LOCK_SAFETY_MARGIN_SECONDS = 1;
+const LOCK_AT_SECONDS_REMAINING = ANSWER_REVEAL_SECONDS + LOCK_SAFETY_MARGIN_SECONDS;
 
 // Every non-"answering" state the question card can be in, unified into one
 // place -- each maps to a background/border + a small top-right tag,
@@ -167,16 +171,23 @@ export default function BattleMatchSessionScreen() {
 
   const { data: battleProfile } = useBattleProfileQuery();
   const myLeague = battleProfile?.subjects.find((s) => s.subject === matchState?.subject)?.league;
-  // Lighter tint of the player's own league color, standing in for the
-  // question card's plain neutral ("answering") background -- falls back
-  // to white until the profile query resolves the league, rather than
-  // flashing a default league's color. The screen behind it stays plain
-  // white so the card keeps clear contrast against it.
-  const leagueBg = myLeague ? LEAGUE_STYLES[myLeague].bg : "bg-white";
+  // Lighter tint of the player's own league color, behind the subject +
+  // league badge at the top of the question card -- falls back to plain
+  // slate until the profile query resolves the league, rather than
+  // flashing a default league's color.
+  const leagueBg = myLeague ? LEAGUE_STYLES[myLeague].bg : "bg-slate-100";
 
   const [showForfeit, setShowForfeit] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [, forceTick] = useState(0);
+
+  // Orange header behind the status bar: light status-bar text while this screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      const entry = StatusBar.pushStackEntry({ barStyle: "light-content" });
+      return () => StatusBar.popStackEntry(entry);
+    }, [])
+  );
 
   // Nothing else ever closed this modal once the forfeit was confirmed --
   // isForfeiting flips back to false as soon as the REST call settles, but
@@ -213,15 +224,14 @@ export default function BattleMatchSessionScreen() {
   // options here (client-predicted) rather than only once the server's
   // "question_result" reveal actually arrives avoids a last-second tap
   // that's guaranteed to be rejected with a 409.
-  const secondsRemaining = Math.max(
-    0,
-    Math.ceil(((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000)
-  );
-  const optionsDisabled = isLocked || secondsRemaining <= ANSWER_REVEAL_SECONDS;
+  const exactSecondsRemaining = () => ((questionDeadlineRef.current ?? Date.now()) - Date.now()) / 1000;
+  const secondsRemaining = Math.max(0, Math.ceil(exactSecondsRemaining()));
+  const pastLocalLock = () => exactSecondsRemaining() <= LOCK_AT_SECONDS_REMAINING;
+  const optionsDisabled = isLocked || pastLocalLock();
   // 3, 2, 1 warning in the last 3 seconds before the lock -- 0 once the
   // lock threshold itself is reached (options already disabled at that
   // point, see optionsDisabled above).
-  const secondsUntilLock = Math.max(0, secondsRemaining - ANSWER_REVEAL_SECONDS);
+  const secondsUntilLock = Math.max(0, secondsRemaining - LOCK_AT_SECONDS_REMAINING);
 
   const questionCardState: QuestionCardState =
     isLocked && lastAnswerFeedback
@@ -322,6 +332,7 @@ export default function BattleMatchSessionScreen() {
       // read, not stale until its 30s staleTime window happens to expire.
       queryClient.invalidateQueries({ queryKey: [...battleKeys.all, "history"] });
       queryClient.invalidateQueries({ queryKey: battleKeys.profile });
+      queryClient.invalidateQueries({ queryKey: battleKeys.analytics });
       // battleKeys.queueStatus is a single GLOBAL cache key, not scoped to
       // this screen -- left alone, it still holds {status:"matched",
       // match_id: <this now-completed match>}. A fresh queue.tsx mounted
@@ -451,170 +462,205 @@ export default function BattleMatchSessionScreen() {
     return null;
   }
 
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const timerLow = matchState.status === "active" && secondsRemaining <= 10;
+
   return (
-    <SafeAreaView edges={["top"]} className="flex-1 bg-white">
-      <View className="flex-row items-center justify-between px-4 py-3">
-        <TouchableOpacity
-          className="w-9 h-9 rounded-full bg-slate-100 justify-center items-center"
-          activeOpacity={0.7}
-          onPress={handleBack}
-        >
-          <X size={18} color={ICON_COLORS.slate500} strokeWidth={2.5} />
-        </TouchableOpacity>
+    <View className="flex-1 bg-primary-500">
+      {/* Two-tone backdrop: a deeper band behind the header that the question card overlaps (same as Practice). */}
+      <View
+        className="absolute left-0 right-0 top-0 bg-primary-700"
+        style={{ height: "46%", borderBottomLeftRadius: 56, borderBottomRightRadius: 56 }}
+      />
 
-        <View className="items-center">
-          <Text className="text-md font-black text-slate-800">{matchState.subject}</Text>
-          {!!myLeague && (
-            <View className="self-center mt-0.5">
-              <LeagueBadge league={myLeague} />
-            </View>
-          )}
-        </View>
-
-        <View className="w-9 h-9 items-center justify-center">
-          {connectionStatus !== "open" && (
-            <WifiOff size={16} color={ICON_COLORS.amber500} strokeWidth={2.5} />
-          )}
-        </View>
-      </View>
-
-      {connectionStatus === "closed" && (
-        <View className="bg-rose-100 mx-4 rounded-xl px-3 py-2 mb-2 flex-row items-center gap-2">
-          <WifiOff size={14} color={ICON_COLORS.rose500} strokeWidth={2.5} />
-          <Text className="text-rose-700 text-xs font-semibold flex-1">
-            Connection lost — you may be missing live updates.
-          </Text>
+      <SafeAreaView edges={["top", "bottom"]} className="flex-1">
+        {/* Header: forfeit · question counter · connection + timer */}
+        <View className="flex-row items-center justify-between px-5 pt-2">
           <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={manualRetry}
-            className="px-3 py-1.5 rounded-full bg-rose-500"
+            className="w-11 h-11 rounded-2xl bg-white/15 justify-center items-center"
+            activeOpacity={0.7}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel={matchState.status === "active" ? "Forfeit match" : "Leave match"}
           >
-            <Text className="text-white text-[11px] font-black">Retry</Text>
+            <X size={20} color={ICON_COLORS.white} strokeWidth={2.75} />
           </TouchableOpacity>
-        </View>
-      )}
 
-      {disconnectInfo && (
-        <View className="bg-amber-100 mx-4 rounded-xl px-3 py-2 mb-2 flex-row items-center gap-2">
-          <WifiOff size={14} color={ICON_COLORS.amber600} strokeWidth={2.5} />
-          <Text className="text-amber-700 text-xs font-semibold flex-1">
-            Opponent disconnected — waiting for them to reconnect…
+          <Text className="text-white text-[17px] font-black">
+            {matchState.question != null
+              ? `Question ${pad2((matchState.question_index ?? 0) + 1)} / ${pad2(matchState.question_count ?? 0)}`
+              : matchState.subject}
           </Text>
-        </View>
-      )}
 
-      {(matchState.status === "active" || matchState.status === "completed") && matchState.question != null && (
-        <View className="flex-1">
-          <View className="mx-4 mt-2 flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-xs text-slate-400 font-medium">
-                Question {(matchState.question_index ?? 0) + 1} / {matchState.question_count}
-              </Text>
-            </View>
-            <View className="flex-1 items-center">
-              <View className="items-center">
-                <Text className="text-2xl font-black text-slate-800">{ownScore}</Text>
-                {scoreGain != null && (
-                  <Animated.View
-                    style={[scoreGainStyle, { position: "absolute", top: -4, alignSelf: "center" }]}
-                    pointerEvents="none"
-                  >
-                    <Text className="text-emerald-500 font-black text-sm">+{scoreGain}</Text>
-                  </Animated.View>
-                )}
-              </View>
-              <Text className="text-[8px] font-bold text-slate-400 uppercase tracking-wide -mt-1">
-                Score
-              </Text>
-            </View>
-            <View className="flex-1 flex-row items-center justify-end gap-1">
-              <Clock size={13} color={ICON_COLORS.primary500} strokeWidth={3} />
-              <Text className="text-sm font-black text-primary">{secondsRemaining}s</Text>
-            </View>
-          </View>
-
-          {onStreak && (
-            <Animated.View
-              style={streakStyle}
-              className="mx-4 mt-1.5 flex-row items-center justify-center gap-1 self-center bg-amber-100 px-2.5 py-1 rounded-full"
-            >
-              <Flame size={13} color={ICON_COLORS.amber500} strokeWidth={2.5} />
-              <Text className="text-amber-600 font-black text-xs">{currentStreak} Streak!</Text>
-            </Animated.View>
-          )}
-
-          <View className="mx-4 mt-3">
-            <BattleProgressBar
-              label="You"
-              count={matchState.question_count ?? 0}
-              currentIndex={matchState.question_index ?? 0}
-              answers={myProgress}
-              size="md"
-            />
-            <View className="mt-2">
-              <BattleProgressBar
-                label="Opponent"
-                count={matchState.question_count ?? 0}
-                currentIndex={matchState.question_index ?? 0}
-                answers={opponentProgress}
-                size="sm"
-              />
-            </View>
-          </View>
-
-          <Animated.View
-            style={cardBlinkStyle}
-            className={`rounded-2xl py-8 px-4 m-4 border shadow-sm shadow-black/5 relative ${
-              questionCardState === "answering" ? leagueBg : QUESTION_CARD_STYLES[questionCardState].bg
-            } ${QUESTION_CARD_STYLES[questionCardState].border}`}
-          >
-            {questionCardTagLabel && (
-              <View
-                className={`absolute -top-2.5 right-4 px-2.5 py-1 rounded-full ${
-                  QUESTION_CARD_STYLES[questionCardState].tagBg
-                }`}
-              >
-                <Text className="text-white text-[10px] font-black">{questionCardTagLabel}</Text>
+          <View className="flex-row items-center gap-2">
+            {connectionStatus !== "open" && (
+              <View className="w-8 h-8 rounded-full bg-white justify-center items-center">
+                <WifiOff size={15} color={ICON_COLORS.amber500} strokeWidth={2.5} />
               </View>
             )}
-            <Text className="font-bold text-slate-800 leading-6 text-xl">
-              {formatMathText(matchState.question?.question ?? "")}
-            </Text>
-          </Animated.View>
+            <View
+              className={`flex-row items-center gap-1.5 pl-1.5 pr-3 h-11 rounded-full ${
+                timerLow ? "bg-rose-500" : "bg-white/20"
+              }`}
+            >
+              <View className="w-8 h-8 rounded-full bg-white justify-center items-center">
+                <Clock size={16} color={timerLow ? ICON_COLORS.rose500 : ICON_COLORS.primary600} strokeWidth={2.75} />
+              </View>
+              <Text className="text-white text-[16px] font-black">{secondsRemaining}s</Text>
+            </View>
+          </View>
+        </View>
 
+        {connectionStatus === "closed" && (
+          <View className="bg-white mx-5 mt-3 rounded-2xl px-3 py-2.5 flex-row items-center gap-2">
+            <WifiOff size={14} color={ICON_COLORS.rose500} strokeWidth={2.5} />
+            <Text className="text-rose-700 text-xs font-semibold flex-1">
+              Connection lost — you may be missing live updates.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={manualRetry}
+              className="px-3 py-1.5 rounded-full bg-rose-500"
+            >
+              <Text className="text-white text-[11px] font-black">Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {disconnectInfo && (
+          <View className="bg-amber-100 mx-5 mt-3 rounded-2xl px-3 py-2.5 flex-row items-center gap-2">
+            <WifiOff size={14} color={ICON_COLORS.amber600} strokeWidth={2.5} />
+            <Text className="text-amber-700 text-xs font-semibold flex-1">
+              Opponent disconnected — waiting for them to reconnect…
+            </Text>
+          </View>
+        )}
+
+        {(matchState.status === "active" || matchState.status === "completed") && matchState.question != null && (
           <View className="flex-1">
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
-              <View className="px-4 gap-2.5">
-                {(matchState.question?.options ?? []).map((opt, i) => (
-                  <QuizOptionButton
-                    key={i}
-                    label={OPTION_LABELS[i]}
-                    optionText={opt}
-                    isSelected={selectedOption === opt}
-                    disabled={optionsDisabled}
-                    isCorrect={isLocked && lastAnswerFeedback?.correctAnswer === opt}
-                    isWrongSelected={
-                      isLocked && !lastAnswerFeedback?.isCorrect && selectedOption === opt
-                    }
-                    onPress={() => {
-                      // Editable answers: tapping a different option before
-                      // the question locks just resubmits -- skip if it's
-                      // already the current selection to avoid a pointless
-                      // resubmit that would only push the response-time-for-
-                      // scoring later for no reason.
-                      if (opt === selectedOption) return;
-                      setSelectedOption(opt);
-                      if (matchState.question) {
-                        submitAnswer(matchState.question.question_id, opt);
-                      }
-                    }}
-                  />
-                ))}
+            {/* Score (with the floating +N) and streak */}
+            <View className="mx-5 mt-4 flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2 bg-white/15 rounded-2xl pl-3 pr-4 py-1.5">
+                <Text className="text-[10px] font-bold text-white/80 uppercase tracking-wide">Score</Text>
+                <View className="items-center">
+                  <Text className="text-2xl font-black text-white">{ownScore}</Text>
+                  {scoreGain != null && (
+                    <Animated.View
+                      style={[scoreGainStyle, { position: "absolute", top: -4, alignSelf: "center" }]}
+                      pointerEvents="none"
+                    >
+                      <Text className="text-emerald-300 font-black text-sm">+{scoreGain}</Text>
+                    </Animated.View>
+                  )}
+                </View>
+              </View>
+
+              {onStreak && (
+                <Animated.View
+                  style={streakStyle}
+                  className="flex-row items-center gap-1 bg-amber-100 px-3 py-1.5 rounded-full"
+                >
+                  <Flame size={14} color={ICON_COLORS.amber500} strokeWidth={2.5} />
+                  <Text className="text-amber-600 font-black text-xs">{currentStreak} Streak!</Text>
+                </Animated.View>
+              )}
+            </View>
+
+            <View className="mx-5 mt-3">
+              <BattleProgressBar
+                label="You"
+                count={matchState.question_count ?? 0}
+                currentIndex={matchState.question_index ?? 0}
+                answers={myProgress}
+                size="md"
+                tone="dark"
+              />
+              <View className="mt-1">
+                <BattleProgressBar
+                  label="Opponent"
+                  count={matchState.question_count ?? 0}
+                  currentIndex={matchState.question_index ?? 0}
+                  answers={opponentProgress}
+                  size="sm"
+                  tone="dark"
+                />
+              </View>
+            </View>
+
+            <ScrollView
+              className="flex-1"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40 }}
+            >
+              <View>
+                {/* Stacked "deck" edges peeking out under the card. */}
+                <View className="absolute rounded-[28px] bg-white/25" style={{ left: 28, right: 28, top: 24, bottom: -22 }} />
+                <View className="absolute rounded-[28px] bg-white/45" style={{ left: 14, right: 14, top: 12, bottom: -11 }} />
+
+                <Animated.View
+                  style={cardBlinkStyle}
+                  className={`rounded-[28px] px-5 pt-5 pb-6 border-2 shadow-lg shadow-black/15 ${
+                    questionCardState === "answering" ? "bg-white" : QUESTION_CARD_STYLES[questionCardState].bg
+                  } ${questionCardState === "answering" ? "border-white" : QUESTION_CARD_STYLES[questionCardState].border}`}
+                >
+                  <View className="flex-row items-center justify-between">
+                    <View className={`flex-row items-center gap-2 pl-3 pr-1 py-1 rounded-full mr-3 flex-shrink ${leagueBg}`}>
+                      <Text className="text-[13px] font-semibold text-slate-600" numberOfLines={1}>
+                        {matchState.subject}
+                      </Text>
+                      {!!myLeague && <LeagueBadge league={myLeague} />}
+                    </View>
+                    {questionCardTagLabel && (
+                      <View className={`px-2.5 py-1 rounded-full ${QUESTION_CARD_STYLES[questionCardState].tagBg}`}>
+                        <Text className="text-white text-[11px] font-black">{questionCardTagLabel}</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <Text className="mt-3 text-[21px] leading-7 font-black text-slate-800">
+                    {formatMathText(matchState.question?.question ?? "")}
+                  </Text>
+
+                  <View className="gap-3 mt-5">
+                    {(matchState.question?.options ?? []).map((opt, i) => (
+                      <QuizOptionButton
+                        key={i}
+                        variant="card"
+                        label={OPTION_LABELS[i]}
+                        optionText={opt}
+                        isSelected={selectedOption === opt}
+                        disabled={optionsDisabled}
+                        isCorrect={isLocked && lastAnswerFeedback?.correctAnswer === opt}
+                        isWrongSelected={
+                          isLocked && !lastAnswerFeedback?.isCorrect && selectedOption === opt
+                        }
+                        onPress={() => {
+                          // Editable answers: tapping a different option before
+                          // the question locks just resubmits -- skip if it's
+                          // already the current selection to avoid a pointless
+                          // resubmit that would only push the response-time-for-
+                          // scoring later for no reason.
+                          if (opt === selectedOption) return;
+                          // Checked at tap time, not just at the last 1s re-render: a tap after the lock would only be
+                          // rejected by the server, while the option still looked selected here.
+                          if (pastLocalLock()) {
+                            forceTick((t) => t + 1);
+                            return;
+                          }
+                          setSelectedOption(opt);
+                          if (matchState.question) {
+                            submitAnswer(matchState.question.question_id, opt);
+                          }
+                        }}
+                      />
+                    ))}
+                  </View>
+                </Animated.View>
               </View>
             </ScrollView>
           </View>
-        </View>
-      )}
+        )}
+      </SafeAreaView>
 
       <ForfeitModal
         visible={showForfeit}
@@ -633,6 +679,6 @@ export default function BattleMatchSessionScreen() {
           onHome={handleResultsHome}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

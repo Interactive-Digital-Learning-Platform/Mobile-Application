@@ -210,3 +210,54 @@ export interface SubmitBattleAnswerResponse {
   question_id: number;
   selected_option: string;
 }
+
+// ── GET /battle/analytics ────────────────────────────────────────────────────
+
+export interface BattleRatingPoint {
+  match_id: number;
+  finished_at: string | null;
+  rating: number;
+  rating_change: number | null;
+  result: BattleParticipantResultLabel | null;
+}
+
+export interface BattleRatingHistory {
+  subject: string;
+  points: BattleRatingPoint[]; // oldest -> newest
+}
+
+export type BattleSpeedTierKey = "fast" | "quick" | "steady" | "slow";
+
+export interface BattleSpeedTier {
+  tier: BattleSpeedTierKey;
+  max_seconds: number | null; // inclusive upper bound; null for the last, open-ended tier
+  answered: number;
+  correct: number;
+}
+
+export interface BattleTopicStat {
+  subject: string;
+  lesson: string;
+  answered: number;
+  correct: number;
+  accuracy: number;
+}
+
+export interface BattleAnalyticsResponse {
+  matches_played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  forfeits: number;
+  win_rate: number;
+  average_score: number;
+  answered: number;
+  correct: number;
+  accuracy: number;
+  recent_form: BattleParticipantResultLabel[]; // oldest -> newest
+  rating_history: BattleRatingHistory[]; // most-played subject first
+  speed_profile: BattleSpeedTier[]; // fastest tier first, always all four
+  points: { base: number; speed_bonus: number; streak_bonus: number };
+  topics: BattleTopicStat[]; // strongest first, lessons with enough answers only
+  vs_stronger: { played: number; wins: number };
+}

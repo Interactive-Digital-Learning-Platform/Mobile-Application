@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { SERVICE_URLS } from "@/api/apiClients";
 import { battleWsInboundEventSchema } from "@/schemas/battleWsSchemas";
 import { BattleWsInboundEvent, BattleWsOutboundMessage } from "@/types/battleWsTypes";
@@ -27,12 +28,32 @@ export interface BattleSocketHandle {
   close: () => void;
 }
 
-function buildBattleWsUrl(matchId: number, token: string): string {
+function buildBattleWsUrl(matchId: number): string {
   // SERVICE_URLS.battle is http(s)://<gateway>/api/battle — swap scheme to
   // ws(s) and append the same /api/v1 prefix battleClient uses, since nginx
   // proxies the WS upgrade through the identical gateway path.
   const wsBase = SERVICE_URLS.battle.replace(/^http/, "ws");
-  return `${wsBase}/api/v1/battle/match/${matchId}/ws?token=${encodeURIComponent(token)}`;
+  return `${wsBase}/api/v1/battle/match/${matchId}/ws`;
+}
+
+// React Native's WebSocket accepts a third `{ headers }` argument (iOS + Android); the DOM typings this project
+// compiles against only declare two, so describe the native constructor explicitly.
+type NativeWebSocketCtor = new (
+  url: string,
+  protocols: string | string[] | null,
+  options: { headers: Record<string, string> }
+) => WebSocket;
+
+function openBattleWs(matchId: number, token: string): WebSocket {
+  const url = buildBattleWsUrl(matchId);
+  // Browsers can't set handshake headers, so web keeps the ?token= fallback (the server redacts it from its logs).
+  if (Platform.OS === "web") {
+    return new WebSocket(`${url}?token=${encodeURIComponent(token)}`);
+  }
+  // Native: send the Clerk JWT as a header (React Native's third WebSocket arg) -- unlike a query string it never
+  // lands in the gateway's or the service's access logs.
+  const NativeWebSocket = WebSocket as unknown as NativeWebSocketCtor;
+  return new NativeWebSocket(url, null, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export function connectBattleSocket(
@@ -40,7 +61,7 @@ export function connectBattleSocket(
   token: string,
   callbacks: BattleSocketCallbacks
 ): BattleSocketHandle {
-  const ws = new WebSocket(buildBattleWsUrl(matchId, token));
+  const ws = openBattleWs(matchId, token);
 
   const send = (message: BattleWsOutboundMessage): boolean => {
     if (ws.readyState !== WebSocket.OPEN) return false;
