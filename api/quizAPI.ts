@@ -1,12 +1,18 @@
 import { quizClient } from "@/api/apiClients";
 import {
   AIFeedbackResponse,
+  DailyAnalyticsResponse,
+  DailyWindow,
   AnswerItem,
+  CurriculumMap,
   DraftAnswer,
   GenerateQuizRequest,
   GenerateQuizResponse,
   QuestionOut,
+  QuizQuoteRequest,
+  QuizQuoteResponse,
   QuizSessionSummary,
+  RetakeSessionResponse,
   SavedQuizResponse,
   SaveProgressRequest,
   SaveProgressResponse,
@@ -26,6 +32,13 @@ export async function syncUser(username?: string): Promise<UserOut> {
     "/user/sync",
     username ? { username } : {}
   );
+  return data;
+}
+
+export async function fetchCurriculum(grade: number): Promise<CurriculumMap> {
+  const { data } = await quizClient.get<CurriculumMap>("/quiz/curriculum", {
+    params: { grade },
+  });
   return data;
 }
 
@@ -49,6 +62,15 @@ export async function fetchQuizSession(
 ): Promise<SavedQuizResponse> {
   const { data } = await quizClient.get<SavedQuizResponse>(
     `/quiz/sessions/${sessionId}`
+  );
+  return data;
+}
+
+export async function retakeQuizSession(
+  sessionId: number
+): Promise<RetakeSessionResponse> {
+  const { data } = await quizClient.post<RetakeSessionResponse>(
+    `/quiz/sessions/${sessionId}/retake`
   );
   return data;
 }
@@ -94,9 +116,28 @@ export async function fetchAnalytics(): Promise<UserAnalyticsResponse> {
   return data;
 }
 
+// Day boundaries follow the device's timezone (e.g. Asia/Colombo), not UTC -- see /analytics/daily.
+export async function fetchDailyAnalytics(days: DailyWindow): Promise<DailyAnalyticsResponse> {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const { data } = await quizClient.get<DailyAnalyticsResponse>("/analytics/daily", {
+    params: { days, tz },
+  });
+  return data;
+}
+
 export async function fetchAIFeedback(): Promise<AIFeedbackResponse> {
   const { data } = await quizClient.get<AIFeedbackResponse>(
     "/analytics/feedback"
+  );
+  return data;
+}
+
+export async function fetchMotivationalQuote(
+  payload: QuizQuoteRequest
+): Promise<QuizQuoteResponse> {
+  const { data } = await quizClient.post<QuizQuoteResponse>(
+    "/quiz/motivational-quote",
+    payload
   );
   return data;
 }

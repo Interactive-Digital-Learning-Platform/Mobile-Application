@@ -115,9 +115,7 @@ export default function QuizStatusScreen({
   const ringProps = useAnimatedProps(() => ({
     strokeDashoffset: RING_CIRCUMFERENCE * (1 - fill.value),
   }));
-  const pulseStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse.value }],
-  }));
+ 
 
   const { icon: StepIcon, text } = steps[stepIndex];
 
@@ -144,7 +142,7 @@ export default function QuizStatusScreen({
           </Svg>
 
           <Animated.View
-            style={pulseStyle}
+            
             className="w-[100px] h-[100px] rounded-full bg-white/20 justify-center items-center border-2 border-white/40"
           >
             <StepIcon size={30} color={ICON_COLORS.white} strokeWidth={1.8} />

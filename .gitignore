@@ -52,3 +52,5 @@ app-example
 # Local Expo diagnostics and logs
 *.log
 /diagnostic-dist/
+
+dev-docs

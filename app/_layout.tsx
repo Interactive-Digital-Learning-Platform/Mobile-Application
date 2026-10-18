@@ -8,6 +8,7 @@ import "nativewind";
 import ClerkProviderCom from "@/providers/ClerkProviderCom";
 import Toast from "react-native-toast-message";
 import { KeyboardProvider } from "react-native-keyboard-controller";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,18 +38,20 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !error) return null;
   return (
-    <KeyboardProvider>
-      <QueryClientProviderCom>
-         <ClerkProviderCom> 
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="(main)" options={{ headerShown: false }} />
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-          </Stack>
-          <Toast />
-         </ClerkProviderCom> 
-      </QueryClientProviderCom>
-    </KeyboardProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <QueryClientProviderCom>
+           <ClerkProviderCom>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen name="(main)" options={{ headerShown: false }} />
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+              </Stack>
+              <Toast />
+           </ClerkProviderCom>
+        </QueryClientProviderCom>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }

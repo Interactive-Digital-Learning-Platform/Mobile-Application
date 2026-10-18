@@ -10,6 +10,7 @@ import { ICON_COLORS } from "@/constants/quizStyles";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import SectionHeader from "./SectionHeader";
 import EmptyState from "./EmptyState";
+import LevelUpProgress from "./LevelUpProgress";
 
 interface DifficultyProgressSectionProps {
   subjects: SubjectAnalytics[];
@@ -81,10 +82,6 @@ function MasteryDetailPanel({ mastery }: { mastery: AdaptiveMasteryDetail }) {
 function SubjectDifficultyRow({ s }: { s: SubjectAnalytics }) {
   const [expanded, setExpanded] = useState(false);
 
-  const progress = isPresent(s.promotion_progress_percentage)
-    ? Math.min(100, Math.max(0, s.promotion_progress_percentage))
-    : undefined;
-  const canShowProgress = progress !== undefined && !!s.next_difficulty;
   const canExpand = !!s.adaptive_mastery;
 
   return (
@@ -96,24 +93,7 @@ function SubjectDifficultyRow({ s }: { s: SubjectAnalytics }) {
         <DifficultyBadge difficulty={s.current_difficulty} size="xs" />
       </View>
 
-      {canShowProgress ? (
-        <View>
-          <View className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <View className="h-full bg-primary-500 rounded-full" style={{ width: `${progress}%` }} />
-          </View>
-          <View className="flex-row items-center justify-between mt-1">
-            <Text className="text-[10px] text-slate-400">{Math.round(progress)}% to next level</Text>
-            <View className="flex-row items-center gap-1">
-              <Text className="text-[10px] text-slate-400">Next:</Text>
-              <DifficultyBadge difficulty={s.next_difficulty!} size="xs" />
-            </View>
-          </View>
-        </View>
-      ) : (
-        <Text className="text-[10px] text-slate-400">
-          {s.difficulty_status_message ?? "Keep practicing to progress to the next difficulty."}
-        </Text>
-      )}
+      <LevelUpProgress subject={s} />
 
       {canExpand && (
         <Pressable

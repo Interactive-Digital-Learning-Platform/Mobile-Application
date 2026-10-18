@@ -1,13 +1,31 @@
 import {
+  createConversation,
   fetchMessageHistory,
+  getAttachmentStatus,
   streamMessage,
 } from "@/api/chatAPI";
+import {
+  ATTACHMENT_POLL_INTERVAL_MS,
+  ATTACHMENT_POLL_TIMEOUT_MS,
+  attachmentKindFromMime,
+  isTerminalAttachmentStatus,
+  mapServerAttachmentStatus,
+} from "@/constants/attachments";
 import { ChatInputValues } from "@/schemas/chatSchemas";
-import { MessageType, UseChatReturn } from "@/types/chatModuleTypes";
+import {
+  ChatAttachment,
+  ChatLanguage,
+  MessageType,
+  UseChatReturn,
+} from "@/types/chatModuleTypes";
 import { useUser } from "@clerk/expo";
 import { FlashListRef } from "@shopify/flash-list";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+// Streamed tokens are flushed into React state at most once per this interval so
+// the Markdown body re-renders ~20x/sec while streaming instead of once per token.
+const STREAM_FLUSH_INTERVAL_MS = 50;
 
 export function useChat(): UseChatReturn {
   const { user } = useUser();
@@ -16,35 +34,61 @@ export function useChat(): UseChatReturn {
   const chatRef = useRef<FlashListRef<MessageType> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasPendingMessagesRef = useRef(false);
+  const embeddedPollTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
+    new Set(),
+  );
 
   const tokenBufferRef = useRef<string>("");
   const activeAssistantIDRef = useRef<string | null>(null);
   const isSendingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<MessageType[]>([]);
 
   const conversationIDRef = useRef<string | null>(null);
   const [conversationID, setConversationID] = useState<string | null>(null);
+  const [language, setLanguage] = useState<ChatLanguage>("English");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [beforeCursor, setBeforeCursor] = useState<string | undefined>(
     undefined,
   );
 
+  const clearEmbeddedPolls = useCallback(() => {
+    embeddedPollTimersRef.current.forEach((timer) => clearTimeout(timer));
+    embeddedPollTimersRef.current.clear();
+  }, []);
+
   useEffect(() => {
     return () => {
       abortControllerRef.current?.abort();
+      clearEmbeddedPolls();
 
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
+      if (streamFlushRef.current) {
+        clearTimeout(streamFlushRef.current);
+      }
     };
-  }, []);
+  }, [clearEmbeddedPolls]);
 
   const setConversationIDSync = useCallback((id: string) => {
     conversationIDRef.current = id;
     setConversationID(id);
   }, []);
+
+  const ensureConversation = useCallback(async (): Promise<string> => {
+    if (conversationIDRef.current) return conversationIDRef.current;
+    if (!user?.id) throw new Error("User session unavailable");
+
+    const id = await createConversation(user.id);
+    setConversationIDSync(id);
+    queryClient.invalidateQueries({
+      queryKey: ["ai-conversations", user.id],
+    });
+    return id;
+  }, [user?.id, setConversationIDSync, queryClient]);
 
   const { data: messageHistory, isLoading: isLoadingHistory } = useQuery({
     queryKey: ["ai-messages", conversationID],
@@ -65,6 +109,22 @@ export function useChat(): UseChatReturn {
       createdAt: new Date(message.created_at),
       type: "text" as const,
       sources: message.sources,
+      documents: message.documents?.length ? message.documents : undefined,
+      isTranslated: message.is_translated,
+      translatedContent: message.translated_content ?? undefined,
+      attachments: message.attachments?.length
+        ? message.attachments.map(
+            (a): ChatAttachment => ({
+              localID: a.id,
+              serverID: a.id,
+              kind: attachmentKindFromMime(a.content_type),
+              filename: a.filename,
+              mimeType: a.content_type,
+              previewUrl: a.preview_url ?? undefined,
+              status: mapServerAttachmentStatus(a.status),
+            }),
+          )
+        : undefined,
     }));
 
     setMessages(mapped);
@@ -88,8 +148,81 @@ export function useChat(): UseChatReturn {
     [],
   );
 
+  const patchEmbeddedAttachment = useCallback(
+    (
+      attachmentID: string,
+      patch: (a: NonNullable<MessageType["attachments"]>[number]) => NonNullable<
+        MessageType["attachments"]
+      >[number],
+    ) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (!msg.attachments?.some((a) => a.serverID === attachmentID)) {
+            return msg;
+          }
+          return {
+            ...msg,
+            attachments: msg.attachments.map((a) =>
+              a.serverID === attachmentID ? patch(a) : a,
+            ),
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const pollEmbeddedAttachment = useCallback(
+    (conversationID: string, attachmentID: string, deadline: number) => {
+      const timer = setTimeout(async () => {
+        embeddedPollTimersRef.current.delete(timer);
+        try {
+          const res = await getAttachmentStatus({
+            conversationID,
+            attachmentID,
+            userID: user?.id ?? "",
+          });
+
+          patchEmbeddedAttachment(attachmentID, (a) => ({
+            ...a,
+            status: mapServerAttachmentStatus(res.status),
+            previewUrl: res.preview_url ?? a.previewUrl,
+            error:
+              res.status === "failed"
+                ? res.error_message ?? "Processing failed"
+                : a.error,
+          }));
+
+          if (isTerminalAttachmentStatus(res.status)) return;
+          if (Date.now() > deadline) {
+            patchEmbeddedAttachment(attachmentID, (a) => ({
+              ...a,
+              status: "failed",
+              error: "Attachment analysis timed out",
+            }));
+            return;
+          }
+          pollEmbeddedAttachment(conversationID, attachmentID, deadline);
+        } catch {
+          if (Date.now() > deadline) {
+            patchEmbeddedAttachment(attachmentID, (a) => ({
+              ...a,
+              status: "failed",
+              error: "Attachment analysis timed out",
+            }));
+            return;
+          }
+          pollEmbeddedAttachment(conversationID, attachmentID, deadline);
+        }
+      }, ATTACHMENT_POLL_INTERVAL_MS);
+
+      embeddedPollTimersRef.current.add(timer);
+    },
+    [user?.id, patchEmbeddedAttachment],
+  );
+
   const sendMessage = useCallback(
-    async (values: ChatInputValues) => {
+    async (values: ChatInputValues, attachment?: ChatAttachment) => {
       const trimmed = values.message.trim();
 
       if (!user?.id) throw new Error("User session unavailable");
@@ -105,6 +238,29 @@ export function useChat(): UseChatReturn {
       activeAssistantIDRef.current = assistantLocalID;
       tokenBufferRef.current = "";
 
+      const flushAssistantContent = () => {
+        const buffered = tokenBufferRef.current;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.localID === assistantLocalID && msg.content !== buffered
+              ? { ...msg, content: buffered }
+              : msg,
+          ),
+        );
+      };
+
+      const cancelScheduledFlush = () => {
+        if (streamFlushRef.current) {
+          clearTimeout(streamFlushRef.current);
+          streamFlushRef.current = null;
+        }
+      };
+
+      const sendableAttachment =
+        attachment && attachment.serverID && attachment.status !== "failed"
+          ? attachment
+          : undefined;
+
       setMessages((prev) => [
         ...prev,
         {
@@ -114,6 +270,7 @@ export function useChat(): UseChatReturn {
           type: "text" as const,
           role: "user" as const,
           createdAt: new Date(),
+          attachments: sendableAttachment ? [sendableAttachment] : undefined,
         },
         {
           id: assistantLocalID,
@@ -136,10 +293,27 @@ export function useChat(): UseChatReturn {
 
         let activeConversationID = conversationIDRef.current;
 
+        if (
+          sendableAttachment &&
+          activeConversationID &&
+          sendableAttachment.serverID &&
+          sendableAttachment.status !== "ready"
+        ) {
+          pollEmbeddedAttachment(
+            activeConversationID,
+            sendableAttachment.serverID,
+            Date.now() + ATTACHMENT_POLL_TIMEOUT_MS,
+          );
+        }
+
         await streamMessage({
           conversationID: activeConversationID ?? undefined,
           userID: user?.id,
           message: trimmed,
+          language,
+          attachmentIds: sendableAttachment?.serverID
+            ? [sendableAttachment.serverID]
+            : undefined,
           signal: abortControllerRef.current?.signal,
           callbacks: {
             onConversationCreated: (conversationID) => {
@@ -150,30 +324,35 @@ export function useChat(): UseChatReturn {
             },
             onToken: (token) => {
               tokenBufferRef.current += token;
-              const buffered = tokenBufferRef.current;
 
-              setMessages(
-                (prevMessages) => prevMessages.map((msg) =>
-                  msg.localID === assistantLocalID ?
-                    {
-                      ...msg,
-                      content: buffered
-                    } : msg,
-                )
-              );
-
-              scrollToLatestMessage();
+              if (streamFlushRef.current == null) {
+                streamFlushRef.current = setTimeout(() => {
+                  streamFlushRef.current = null;
+                  flushAssistantContent();
+                  scrollToLatestMessage();
+                }, STREAM_FLUSH_INTERVAL_MS);
+              }
             },
-            onDone: (serverMessageID) => {
+            onDone: (serverMessageID, meta) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
-                serverID: serverMessageID,
+                content: tokenBufferRef.current || msg.content,
+                serverID: serverMessageID || msg.serverID,
                 isLoading: false,
+                translationFailed: meta?.translationFailed ?? false,
+                sources: meta?.sources ?? msg.sources,
+                documents: meta?.documents?.length
+                  ? meta.documents
+                  : msg.documents,
               }));
 
               hasPendingMessagesRef.current = false;
             },
             onError: (error) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
                 content: error,
@@ -186,6 +365,8 @@ export function useChat(): UseChatReturn {
           },
         });
       } catch (error) {
+        cancelScheduledFlush();
+
         updateMessage(assistantLocalID, (msg) => ({
           ...msg,
           content: "Something went wrong. Please try again! " + error,
@@ -195,13 +376,44 @@ export function useChat(): UseChatReturn {
 
         hasPendingMessagesRef.current = false;
       } finally {
+        cancelScheduledFlush();
         setIsStreaming(false);
         isSendingRef.current = false;
         tokenBufferRef.current = "";
       }
     },
-    [user?.id, updateMessage, setConversationIDSync, scrollToLatestMessage, queryClient],
+    [
+      user?.id,
+      language,
+      updateMessage,
+      setConversationIDSync,
+      scrollToLatestMessage,
+      queryClient,
+      pollEmbeddedAttachment,
+    ],
   );
+
+  const stopStreaming = useCallback(() => {
+    abortControllerRef.current?.abort();
+
+    if (streamFlushRef.current) {
+      clearTimeout(streamFlushRef.current);
+      streamFlushRef.current = null;
+    }
+
+    const activeID = activeAssistantIDRef.current;
+    const buffered = tokenBufferRef.current;
+    if (activeID) {
+      updateMessage(activeID, (msg) => ({
+        ...msg,
+        content: buffered || msg.content,
+        isLoading: false,
+      }));
+    }
+
+    hasPendingMessagesRef.current = false;
+    setIsStreaming(false);
+  }, [updateMessage]);
 
   const loadMoreHistory = useCallback(() => {
     if (!messageHistory?.has_more || !messageHistory?.next_cursor) return;
@@ -210,26 +422,28 @@ export function useChat(): UseChatReturn {
 
   const startNewConversation = useCallback(() => {
     abortControllerRef.current?.abort();
+    clearEmbeddedPolls();
     hasPendingMessagesRef.current = false;
     isSendingRef.current = false;
     conversationIDRef.current = null;
     setConversationID(null);
     setMessages([]);
     setBeforeCursor(undefined);
-  }, []);
+  }, [clearEmbeddedPolls]);
 
   const openConversation = useCallback(
     (nextConversationID: string) => {
       if (nextConversationID === conversationIDRef.current) return;
 
       abortControllerRef.current?.abort();
+      clearEmbeddedPolls();
       hasPendingMessagesRef.current = false;
       isSendingRef.current = false;
       setMessages([]);
       setBeforeCursor(undefined);
       setConversationIDSync(nextConversationID);
     },
-    [setConversationIDSync],
+    [setConversationIDSync, clearEmbeddedPolls],
   );
 
   return {
@@ -240,9 +454,13 @@ export function useChat(): UseChatReturn {
     hasMoreHistory: messageHistory?.has_more ?? false,
     isLoadingHistory,
     chatRef,
+    language,
+    setLanguage,
     sendMessage,
     loadMoreHistory,
     startNewConversation,
     openConversation,
+    ensureConversation,
+    stopStreaming,
   };
 }

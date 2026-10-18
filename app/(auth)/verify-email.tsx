@@ -1,22 +1,17 @@
 import Header from "@/components/Header";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  CodeField,
-  Cursor,
-  useBlurOnFulfill,
-  useClearByFocusCell,
-} from "react-native-confirmation-code-field";
 import CustomButton from "@/components/CustomButton";
+import OtpCodeField from "@/components/auth/OtpCodeField";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuth, useSignUp } from "@clerk/expo";
 import { Controller, useForm } from "react-hook-form";
-import z from "zod";
+import {z} from "zod";
 import { emailVerificationSchema } from "@/schemas/userSchemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function VerifyEmail() {
   const params = useLocalSearchParams();
@@ -26,12 +21,63 @@ export default function VerifyEmail() {
   const { signUp, fetchStatus } = useSignUp();
   const { isSignedIn } = useAuth();
 
+  const [phase, setPhase] = useState<"idle" | "verifying" | "settled">("idle");
+  const verifyErrorRef = useRef<string | null>(null);
+  const handledRef = useRef(false);
+
   useEffect(() => {
-    if (signUp?.status === "complete" || isSignedIn) {
-      router.push("/(tabs)/ai");
+    if (isSignedIn) {
+      router.replace("/(tabs)/ai");
       return;
     }
-  }, [signUp?.status, isSignedIn]);
+
+    if (phase !== "settled" || handledRef.current) return;
+
+    const currentSignUp = signUp;
+    const status = currentSignUp?.status;
+
+    if (currentSignUp && status === "complete") {
+      handledRef.current = true;
+
+      let cancelled = false;
+      (async () => {
+        const { error } = await currentSignUp.finalize({
+          navigate: ({ session }) => {
+            if (session?.currentTask) {
+              console.log("Current task: ", session?.currentTask);
+              return;
+            }
+
+            router.replace("/(tabs)/ai");
+          },
+        });
+
+        if (error && !cancelled) {
+          handledRef.current = false;
+          setPhase("idle");
+          Toast.show({
+            type: "error",
+            text1: "Error",
+            text2: "Could not complete sign up. Please try again.",
+          });
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    handledRef.current = true;
+    setPhase("idle");
+    Toast.show({
+      type: "error",
+      text1: "Verification failed",
+      text2:
+        verifyErrorRef.current ??
+        "The code you entered is incorrect or has expired.",
+    });
+  }, [signUp, isSignedIn, phase]);
 
   const {
     control,
@@ -46,28 +92,18 @@ export default function VerifyEmail() {
   });
 
   const verifyEmail = async (data: { code: string }) => {
-    await signUp.verifications.verifyEmailCode({
+    if (!signUp || phase === "verifying") return;
+
+    handledRef.current = false;
+    verifyErrorRef.current = null;
+    setPhase("verifying");
+
+    const { error } = await signUp.verifications.verifyEmailCode({
       code: data.code,
     });
 
-    if (signUp.status === "complete") {
-      await signUp.finalize({
-        navigate: ({ session }) => {
-          if (session?.currentTask) {
-            console.log("Current task: ", session?.currentTask);
-            return;
-          }
-
-          router.push("/(tabs)/ai");
-        },
-      });
-    } else {
-      Toast.show({
-        type: "error",
-        text1: "Error",
-        text2: "Signup attempt not completed!",
-      });
-    }
+    verifyErrorRef.current = error?.message ?? null;
+    setPhase("settled");
   };
 
   return (
@@ -90,7 +126,7 @@ export default function VerifyEmail() {
           <View className="w-full mt-10">
             <View className="w-full flex-col justify-center items-center gap-3">
               <Text className="text-4xl font-asemibold">
-                Let's Verify Your email
+                Let&apos;s Verify Your email
               </Text>
               <Text className="font-aregular text-lg text-justify leading-tight text-[#979797]">
                 We’ve sent a verification code to your email address. Please
@@ -108,36 +144,9 @@ export default function VerifyEmail() {
             <Controller
               name="code"
               control={control}
-              render={({ field: { value, onChange } }) => {
-                const ref = useBlurOnFulfill({ value, cellCount: 6 });
-                const [props, getCellOnLayoutHandler] = useClearByFocusCell({
-                  value,
-                  setValue: onChange,
-                });
-
-                return (
-                  <CodeField
-                    ref={ref}
-                    {...props}
-                    value={value}
-                    onChangeText={onChange}
-                    cellCount={6}
-                    rootStyle={styles.codeFieldRoot}
-                    keyboardType="number-pad"
-                    textContentType="oneTimeCode"
-                    testID="my-code-input"
-                    renderCell={({ index, symbol, isFocused }) => (
-                      <Text
-                        key={index}
-                        style={[styles.cell, isFocused && styles.focusCell]}
-                        onLayout={getCellOnLayoutHandler(index)}
-                      >
-                        {symbol || (isFocused && <Cursor />)}
-                      </Text>
-                    )}
-                  />
-                );
-              }}
+              render={({ field: { value, onChange } }) => (
+                <OtpCodeField value={value} onChange={onChange} />
+              )}
             />
           </View>
         </View>
@@ -145,7 +154,12 @@ export default function VerifyEmail() {
           <CustomButton
             title="Verify"
             handlePress={handleSubmit(verifyEmail)}
-            isLoading={isSubmitting || !isValid || fetchStatus === "fetching"}
+            isLoading={
+              isSubmitting ||
+              !isValid ||
+              fetchStatus === "fetching" ||
+              phase !== "idle"
+            }
           />
         </View>
       </KeyboardAwareScrollView>
@@ -154,31 +168,6 @@ export default function VerifyEmail() {
 }
 
 const styles = StyleSheet.create({
-  codeFieldRoot: {
-    marginTop: 35,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-  },
-  cell: {
-    width: 50,
-    height: 50,
-    lineHeight: 45,
-    fontSize: 24,
-    fontFamily: "Author-Medium",
-    borderWidth: 2,
-    borderColor: "#00000030",
-    textAlign: "center",
-    color: "#000",
-    borderRadius: 12,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  focusCell: {
-    borderColor: "#000",
-  },
   buttonContainer: {
     width: "100%",
     justifyContent: "center",

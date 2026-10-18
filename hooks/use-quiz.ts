@@ -3,16 +3,20 @@ import {
   deleteQuizSession,
   fetchAIFeedback,
   fetchAnalytics,
+  fetchDailyAnalytics,
+  fetchCurriculum,
   fetchMe,
   fetchQuizSession,
   fetchQuizSessions,
   generateQuiz,
+  retakeQuizSession,
   saveQuizProgress,
   submitQuiz,
   submitQuizTimeout,
   syncUser,
 } from "@/api/quizAPI";
 import type {
+  DailyWindow,
   GenerateQuizRequest,
   QuizSessionSummary,
   SaveProgressRequest,
@@ -23,7 +27,10 @@ export const quizKeys = {
   all:         ["quiz"] as const,
   sessions:    ["quiz", "sessions"] as const,
   session:     (id: number) => ["quiz", "session", id] as const,
+  curriculum:  (grade: number) => ["quiz", "curriculum", grade] as const,
   analyticsMe: ["analytics", "me"] as const,
+  analyticsDailyAll: ["analytics", "daily"] as const,
+  analyticsDaily: (days: number) => ["analytics", "daily", days] as const,
   aiFeedback:  ["analytics", "feedback"] as const,
   me:          ["user", "me"] as const,
 };
@@ -54,6 +61,7 @@ export function useGenerateQuizMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll });
     },
   });
 }
@@ -72,6 +80,12 @@ export function useQuizSessionQuery(sessionId: number | null) {
     queryFn: () => fetchQuizSession(sessionId!),
     enabled: sessionId !== null && sessionId > 0,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useRetakeQuizSessionMutation() {
+  return useMutation({
+    mutationFn: (sessionId: number) => retakeQuizSession(sessionId),
   });
 }
 
@@ -108,6 +122,8 @@ export function useDeleteQuizSessionMutation() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll });
     },
   });
 }
@@ -119,6 +135,7 @@ export function useSubmitQuizMutation() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll });
       queryClient.invalidateQueries({ queryKey: quizKeys.aiFeedback });
       queryClient.invalidateQueries({
         queryKey: quizKeys.session(variables.session_id),
@@ -134,11 +151,30 @@ export function useSubmitQuizTimeoutMutation() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: quizKeys.sessions });
       queryClient.invalidateQueries({ queryKey: quizKeys.analyticsMe });
+      queryClient.invalidateQueries({ queryKey: quizKeys.analyticsDailyAll });
       queryClient.invalidateQueries({ queryKey: quizKeys.aiFeedback });
       queryClient.invalidateQueries({
         queryKey: quizKeys.session(variables.session_id),
       });
     },
+  });
+}
+
+export function useCurriculumQuery(grade: number) {
+  return useQuery({
+    queryKey: quizKeys.curriculum(grade),
+    queryFn: () => fetchCurriculum(grade),
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useDailyAnalyticsQuery(days: DailyWindow) {
+  return useQuery({
+    queryKey: quizKeys.analyticsDaily(days),
+    queryFn: () => fetchDailyAnalytics(days),
+    staleTime: 2 * 60 * 1000,
+    retry: 1,
   });
 }
 

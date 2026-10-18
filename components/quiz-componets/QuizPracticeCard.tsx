@@ -1,10 +1,11 @@
 import { Text, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
 import { useState } from "react";
-import { HelpCircle, Trash2, type LucideIcon } from "lucide-react-native";
-import { ICON_COLORS, SUBJECT_ICONS, type Difficulty } from "@/constants/quizStyles";
+import { Trash2, type LucideIcon } from "lucide-react-native";
+import { ICON_COLORS, getSubjectIcon, formatSubjectLabel, type Difficulty } from "@/constants/quizStyles";
 import QuizDetailSheet from "@/components/quiz-componets/QuizDetailSheet";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import { useDeleteQuizSessionMutation } from "@/hooks/use-quiz";
+import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 
 export type { Difficulty };
 
@@ -37,7 +38,8 @@ function formatCreatedAt(iso: string): string {
 export default function QuizPracticeCard({ item, disabled = false }: { item: PracticeItem; disabled?: boolean }) {
 
   const [sheetVisible, setSheetVisible] = useState(false);
-  const Icon: LucideIcon = SUBJECT_ICONS[item.subject] ?? HelpCircle;
+  const isOnline = useIsOnline();
+  const Icon: LucideIcon = getSubjectIcon(item.subject);
   const isComplete   = item.progress === 100;
   const hasStarted   = item.progress > 0;
   const correctCount = item.correct_count ?? 0;
@@ -47,23 +49,33 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
     ? Math.round((displayCount / item.questions) * 100)
     : 0;
   const barColor = !hasStarted
-    ? "bg-slate-200"
+    ? "bg-primary-200"
     : !isComplete
     ? "bg-primary"
     : displayPct >= 70 ? "bg-emerald-500"
     : displayPct >= 50 ? "bg-amber-500"
     : "bg-rose-500";
   const textColor = !hasStarted
-    ? "text-slate-500"
+    ? "text-primary-700"
     : !isComplete
     ? "text-primary"
     : displayPct >= 70 ? "text-emerald-500"
     : displayPct >= 50 ? "text-amber-500"
     : "text-rose-500";
 
+  // Shuffle mode has no difficulty of its own — each subject picks its own
+  // independently at generation time — so no difficulty badge is shown for
+  // a shuffle session at all.
+  const isShuffleQuiz = item.subject === "Mixed";
+
   const { mutate: deleteSession, isPending: isDeleting } = useDeleteQuizSessionMutation();
 
   const handleDelete = () => {
+    // Offline the delete would sit paused until reconnecting, leaving a spinner on the card meanwhile.
+    if (!isOnline) {
+      showOfflineToast(OFFLINE_COPY.deleteQuiz);
+      return;
+    }
     Alert.alert(
       "Delete Quiz",
       "Remove this quiz? Your analytics data will be kept.",
@@ -80,23 +92,24 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
   return (
     <>
-      <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-black/10 border border-slate-100">
+      <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-primary/20">
 
         <View className="flex-row items-start gap-3">
-          <View className="w-11 h-11 rounded-xl bg-slate-50 justify-center items-center mt-0.5">
-            <Icon size={20} color={ICON_COLORS.slate500} strokeWidth={1.8} />
+          <View className="w-11 h-11 rounded-xl bg-primary-50 justify-center items-center mt-0.5">
+            <Icon size={20} color={ICON_COLORS.primary600} strokeWidth={1.8} />
           </View>
 
           <View className="flex-1">
-            <Text className="text-sm font-bold text-slate-800">{item.subject}</Text>
+            <Text className="text-sm font-bold text-primary-800" numberOfLines={1}>
+              {formatSubjectLabel(item.subject)}
+            </Text>
             <View className="flex-row items-center gap-2 mt-1">
-              <DifficultyBadge difficulty={item.difficulty} />
-              <Text className="text-[11px] text-slate-400">{item.questions} questions</Text>
-              <Text className="text-[11px] text-slate-400">{item.timer}</Text>
+              {!isShuffleQuiz && <DifficultyBadge difficulty={item.difficulty} />}
+              <Text className="text-[11px] text-primary-700">{item.questions} questions</Text>
+              <Text className="text-[11px] text-primary-700">{item.timer}</Text>
             </View>
-            
           </View>
-          <Text className="text-[10px] text-slate-500 mt-0.5">{formatCreatedAt(item.created_at)}</Text>
+          <Text className="text-[10px] text-primary-700 mt-0.5">{formatCreatedAt(item.created_at)}</Text>
 
           <TouchableOpacity
             className="w-8 h-8 rounded-xl bg-rose-50 justify-center items-center"
@@ -112,7 +125,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
 
         <View className="mt-3">
           <View className="flex-row justify-between items-center mb-1">
-            <Text className="text-[10px] text-slate-400 font-medium">
+            <Text className="text-[10px] text-primary-700 font-medium">
               {!hasStarted
                 ? "Not started"
                 : isComplete
@@ -123,7 +136,7 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
               {displayPct}%
             </Text>
           </View>
-          <View className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <View className="h-1.5 bg-primary-50 rounded-full overflow-hidden">
             <View
               className={`h-full rounded-full ${barColor}`}
               style={{ width: `${displayPct}%` }}
@@ -131,13 +144,14 @@ export default function QuizPracticeCard({ item, disabled = false }: { item: Pra
           </View>
         </View>
 
+        {/* Questions and answers live on the server, so offline the button greys out and explains on tap. */}
         <TouchableOpacity
           className={`mt-3 py-2.5 rounded-xl items-center ${
-            isComplete ? "bg-emerald-600" : hasStarted ? "bg-slate-700" : "bg-primary"
+            !isOnline ? "bg-slate-300" : isComplete ? "bg-emerald-600" : hasStarted ? "bg-slate-700" : "bg-primary"
           } ${disabled || isDeleting ? "opacity-40" : ""}`}
           activeOpacity={0.8}
           disabled={disabled || isDeleting}
-          onPress={() => setSheetVisible(true)}
+          onPress={() => (isOnline ? setSheetVisible(true) : showOfflineToast(OFFLINE_COPY.startQuiz))}
         >
           <Text className="text-white text-sm font-bold">
             {isComplete ? "Retake Quiz" : hasStarted ? "Continue Quiz" : "Start Quiz"}

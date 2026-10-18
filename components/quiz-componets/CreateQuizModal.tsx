@@ -1,5 +1,5 @@
 import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,16 +7,26 @@ import Animated, {
   runOnJS,
   Easing,
 } from "react-native-reanimated";
-import { X, Sparkles, Plus, Minus } from "lucide-react-native";
+import { X, Sparkles, Plus, Minus, Shuffle } from "lucide-react-native";
 import { ICON_COLORS, SUBJECTS } from "@/constants/quizStyles";
+import { useCurriculumQuery } from "@/hooks/use-quiz";
 
 const SHEET_OFFSCREEN_Y = 700;
 const ANIM_MS = 250;
+const AVAILABLE_GRADES = [10, 11];
 
 export interface QuizConfig {
+  grade: number;
   subject: string;
+  lesson?: string;
   questions: number;
   timer: number;
+  shuffle: boolean;
+  // The curriculum-valid subject list for `grade` (or the static SUBJECTS
+  // fallback for grades without curriculum data) — shuffle mode needs this
+  // instead of an unconditional "every subject" list, since e.g. "Health
+  // and Physical Education" is only valid for Grade 11, not Grade 10.
+  shuffleSubjects: string[];
 }
 
 interface CreateQuizModalProps {
@@ -26,13 +36,41 @@ interface CreateQuizModalProps {
 }
 
 export default function CreateQuizModal({ visible, onClose, onGenerate }: CreateQuizModalProps) {
+  const [grade, setGrade] = useState(10);
   const [subject, setSubject] = useState("Mathematics");
+  const [lesson, setLesson] = useState<string | undefined>(undefined);
   const [questions, setQuestions] = useState(10);
   const [timer, setTimer] = useState(10);
   const [timerCustomized, setTimerCustomized] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
   // Blocks a fast double-tap from firing onGenerate twice — that used to create
   // two duplicate QuizSession rows for one tap.
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Empty for grades without curriculum data — the subject/lesson pickers
+  // fall back to the static SUBJECTS list and "AI picks" respectively.
+  const { data: curriculum } = useCurriculumQuery(grade);
+  const subjectOptions = useMemo(() => {
+    const keys = curriculum ? Object.keys(curriculum) : [];
+    return keys.length > 0 ? keys : SUBJECTS;
+  }, [curriculum]);
+  const lessonOptions = useMemo(() => curriculum?.[subject] ?? [], [curriculum, subject]);
+
+  // If the current subject/lesson selection isn't valid for the newly
+  // chosen grade's curriculum, fall back to the first available subject and
+  // clear the lesson pin rather than silently sending a stale combination.
+  useEffect(() => {
+    if (!subjectOptions.includes(subject)) {
+      setSubject(subjectOptions[0] ?? "Mathematics");
+      setLesson(undefined);
+    }
+  }, [subjectOptions, subject]);
+
+  useEffect(() => {
+    if (lesson && !lessonOptions.includes(lesson)) {
+      setLesson(undefined);
+    }
+  }, [lessonOptions, lesson]);
 
   // Keep the modal mounted until the exit animation finishes, since RN's
   // <Modal> would otherwise unmount it instantly and cut the animation short.
@@ -47,10 +85,13 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
   }, [questions, timerCustomized]);
 
   const resetForm = () => {
+    setGrade(10);
     setSubject("Mathematics");
+    setLesson(undefined);
     setQuestions(10);
     setTimer(10);
     setTimerCustomized(false);
+    setShuffle(false);
     setIsSubmitting(false);
   };
 
@@ -106,24 +147,119 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
           </View>
 
           <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-            Subject
+            Grade
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
-            {SUBJECTS.map((s) => (
+          <View className="flex-row gap-2 mb-5">
+            {AVAILABLE_GRADES.map((g) => (
               <TouchableOpacity
-                key={s}
-                className={`mr-2 px-4 py-2 rounded-xl border ${
-                  subject === s ? "bg-primary border-primary" : "bg-white border-slate-200"
+                key={g}
+                className={`flex-1 px-4 py-2 rounded-xl border items-center ${
+                  grade === g ? "bg-primary border-primary" : "bg-white border-slate-200"
                 }`}
                 activeOpacity={0.8}
-                onPress={() => setSubject(s)}
+                onPress={() => setGrade(g)}
               >
-                <Text className={`text-xs font-semibold ${subject === s ? "text-white" : "text-slate-600"}`}>
-                  {s}
+                <Text className={`text-xs font-semibold ${grade === g ? "text-white" : "text-slate-600"}`}>
+                  Grade {g}
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
+
+          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+            Mode
+          </Text>
+          <View className="flex-row gap-2 mb-5">
+            <TouchableOpacity
+              className={`flex-1 px-4 py-2 rounded-xl border items-center ${
+                !shuffle ? "bg-primary border-primary" : "bg-white border-slate-200"
+              }`}
+              activeOpacity={0.8}
+              onPress={() => setShuffle(false)}
+            >
+              <Text className={`text-xs font-semibold ${!shuffle ? "text-white" : "text-slate-600"}`}>
+                Single Subject
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`flex-1 flex-row justify-center items-center gap-1.5 px-4 py-2 rounded-xl border ${
+                shuffle ? "bg-primary border-primary" : "bg-white border-slate-200"
+              }`}
+              activeOpacity={0.8}
+              onPress={() => setShuffle(true)}
+            >
+              <Shuffle size={12} color={shuffle ? ICON_COLORS.white : ICON_COLORS.slate500} strokeWidth={2.5} />
+              <Text className={`text-xs font-semibold ${shuffle ? "text-white" : "text-slate-600"}`}>
+                Shuffle
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {shuffle ? (
+            <Text className="text-[10px] text-slate-400 mb-5">
+              Questions will be pulled from every subject, mixing lessons and topics in one quiz.
+            </Text>
+          ) : (
+            <>
+              <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                Subject
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+                {subjectOptions.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    className={`mr-2 px-4 py-2 rounded-xl border ${
+                      subject === s ? "bg-primary border-primary" : "bg-white border-slate-200"
+                    }`}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setSubject(s);
+                      setLesson(undefined);
+                    }}
+                  >
+                    <Text className={`text-xs font-semibold ${subject === s ? "text-white" : "text-slate-600"}`}>
+                      {s}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {lessonOptions.length > 0 && (
+                <>
+                  <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                    Lesson
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+                    <TouchableOpacity
+                      className={`mr-2 px-4 py-2 rounded-xl border ${
+                        !lesson ? "bg-primary border-primary" : "bg-white border-slate-200"
+                      }`}
+                      activeOpacity={0.8}
+                      onPress={() => setLesson(undefined)}
+                    >
+                      <Text className={`text-xs font-semibold ${!lesson ? "text-white" : "text-slate-600"}`}>
+                        Auto (AI picks)
+                      </Text>
+                    </TouchableOpacity>
+                    {lessonOptions.map((l) => (
+                      <TouchableOpacity
+                        key={l}
+                        className={`mr-2 px-4 py-2 rounded-xl border ${
+                          lesson === l ? "bg-primary border-primary" : "bg-white border-slate-200"
+                        }`}
+                        activeOpacity={0.8}
+                        onPress={() => setLesson(l)}
+                      >
+                        <Text className={`text-xs font-semibold ${lesson === l ? "text-white" : "text-slate-600"}`}>
+                          {l}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+            </>
+          )}
 
           <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
             Number of Questions
@@ -192,7 +328,7 @@ export default function CreateQuizModal({ visible, onClose, onGenerate }: Create
             onPress={() => {
               if (isSubmitting) return;
               setIsSubmitting(true);
-              onGenerate({ subject, questions, timer });
+              onGenerate({ grade, subject, lesson, questions, timer, shuffle, shuffleSubjects: subjectOptions });
               onClose();
             }}
           >
