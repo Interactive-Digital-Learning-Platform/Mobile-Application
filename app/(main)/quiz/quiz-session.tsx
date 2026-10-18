@@ -7,11 +7,14 @@ import {
   ActivityIndicator,
   AppState,
   StatusBar,
+  useWindowDimensions,
   type AppStateStatus,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import {
+import Animated, {
+  Easing,
+  runOnJS,
   useSharedValue,
   useAnimatedStyle,
   withSequence,
@@ -75,6 +78,9 @@ const RETRIEVING_STEPS: QuizStatusStep[] = [
 // correct answers) must never count toward analytics or adaptive difficulty.
 // Questions are frozen into local state once loaded so a restart never
 // re-generates them.
+// Each half of the card swap between questions (old card out, new card in).
+const CARD_SWAP_HALF_MS = 200;
+
 export default function QuizSession() {
   const router = useRouter();
   const {
@@ -428,9 +434,41 @@ export default function QuizSession() {
     questionStartRef.current = Date.now();
   };
 
+  // Card swap between questions (same motion as the 1v1 battle's): going
+  // forward, the card slides off to the left and the next one comes in from
+  // the right; going back (Previous, or an earlier progress segment), the
+  // other way round. Taps are ignored while a swap is running.
+  const { width: screenWidth } = useWindowDimensions();
+  const cardX = useSharedValue(0);
+  const cardSwapStyle = useAnimatedStyle(() => ({ transform: [{ translateX: cardX.value }] }));
+  const [swapping, setSwapping] = useState(false);
+
+  const endSwap = useCallback(() => setSwapping(false), []);
+
+  const slideInQuestion = useCallback(
+    (next: number, direction: 1 | -1) => {
+      setCurrent(next);
+      cardX.value = direction * screenWidth;
+      cardX.value = withTiming(0, { duration: CARD_SWAP_HALF_MS, easing: Easing.out(Easing.cubic) }, () => {
+        runOnJS(endSwap)();
+      });
+    },
+    [cardX, screenWidth, endSwap]
+  );
+
   const navigateTo = (next: number) => {
+    if (next === current || swapping) return;
     recordQuestionTime(current);
-    setCurrent(next);
+    const direction = next > current ? 1 : -1;
+    setSwapping(true);
+    cardX.value = withTiming(
+      -direction * screenWidth,
+      { duration: CARD_SWAP_HALF_MS, easing: Easing.in(Easing.cubic) },
+      (done) => {
+        if (done) runOnJS(slideInQuestion)(next, direction);
+        else runOnJS(endSwap)();
+      }
+    );
   };
 
   const q           = questions[current];
@@ -612,7 +650,7 @@ export default function QuizSession() {
             <View className="absolute rounded-[28px] bg-white/25" style={{ left: 28, right: 28, top: 24, bottom: -22 }} />
             <View className="absolute rounded-[28px] bg-white/45" style={{ left: 14, right: 14, top: 12, bottom: -11 }} />
 
-            <View className="bg-white rounded-[28px] px-5 pt-5 pb-6 shadow-lg shadow-black/15">
+            <Animated.View style={cardSwapStyle} className="bg-white rounded-[28px] px-5 pt-5 pb-6 shadow-lg shadow-black/15">
               <View className="flex-row items-center justify-between">
                 <View className="flex-1 flex-row items-center gap-2 mr-3">
                   <Text className="text-[15px] font-medium text-slate-400" numberOfLines={1}>{displaySubject}</Text>
@@ -690,7 +728,7 @@ export default function QuizSession() {
                   />
                 ))}
               </View>
-            </View>
+            </Animated.View>
           </View>
         </ScrollView>
 

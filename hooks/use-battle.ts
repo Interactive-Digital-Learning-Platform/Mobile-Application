@@ -18,6 +18,10 @@ export const battleKeys = {
   analytics:  ["battle", "analytics"] as const,
   queueStatus: ["battle", "queue", "status"] as const,
   availability: ["battle", "availability"] as const,
+  // A finished-first match's own state, polled from the home screen while
+  // waiting on the opponent (BattleResultWatcher) -- also what the match
+  // screen starts from when that match is reopened, so it opens instantly.
+  pendingResult: (matchId: number | null) => ["battle", "pending-result", matchId] as const,
   history:    (subject: string | null, page: number) => ["battle", "history", subject, page] as const,
 };
 

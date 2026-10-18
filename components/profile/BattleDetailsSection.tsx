@@ -6,7 +6,8 @@ import type { BattleAnalyticsResponse, BattleSpeedTier, BattleTopicStat } from "
 import SectionHeader from "./SectionHeader";
 import { FormDots, RatingSparkline } from "./BattleSummaryCard";
 
-// Detailed battle analytics: battle vs practice accuracy, answer-speed bands, where points come from, strongest /
+// Detailed battle analytics: battle vs practice accuracy, answer-speed bands, where points come from (incl. the
+// streak bonus), what happened to each question (answered / skipped / not reached), how matches ended, strongest /
 // weakest battle topics and rating per subject. Marks use the primary ramp; every number is also printed as text.
 
 const TOPICS_SHOWN = 3;
@@ -98,6 +99,63 @@ function PointsBreakdown({ points }: { points: BattleAnalyticsResponse["points"]
   );
 }
 
+function QuestionUsage({ usage }: { usage: NonNullable<BattleAnalyticsResponse["question_usage"]> }) {
+  if (usage.questions === 0) return <Text className="text-slate-400 text-xs">No questions yet.</Text>;
+  const parts = [
+    { key: "Answered", n: usage.answered, color: ICON_COLORS.primary600 },
+    { key: "Skipped", n: usage.skipped, color: ICON_COLORS.primary400 },
+    { key: "Not reached", n: usage.not_reached, color: ICON_COLORS.primary200 },
+  ];
+  return (
+    <View>
+      <View className="flex-row h-3 rounded-full overflow-hidden gap-[2px]">
+        {parts.filter((p) => p.n > 0).map((p) => (
+          <View key={p.key} style={{ flex: p.n / usage.questions, backgroundColor: p.color }} />
+        ))}
+      </View>
+      <View className="mt-2.5 gap-1.5">
+        {parts.map((p) => (
+          <View key={p.key} className="flex-row items-center">
+            <View className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: p.color }} />
+            <Text className="flex-1 text-slate-600 text-[12px]">{p.key}</Text>
+            <Text className="text-slate-800 text-[12px] font-bold">
+              {p.n} · {Math.round((p.n / usage.questions) * 100)}%
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function formatDuration(seconds: number): string {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function MatchEndings({ endings }: { endings: NonNullable<BattleAnalyticsResponse["match_endings"]> }) {
+  const counted = endings.all_finished + endings.time_up + endings.forfeit;
+  if (counted === 0) return <Text className="text-slate-400 text-xs">No matches yet.</Text>;
+  return (
+    <View>
+      <View className="flex-row gap-2">
+        <Stat value={String(endings.all_finished)} label="Both finished" />
+        <Stat value={String(endings.time_up)} label="Time ran out" />
+        <Stat value={String(endings.forfeit)} label="Forfeits" />
+      </View>
+      {endings.average_finish_seconds != null && (
+        <Text className="text-slate-500 text-[12px] mt-2.5">
+          You got through every question in{" "}
+          <Text className="text-slate-800 font-bold">
+            {endings.finished_all_questions} {endings.finished_all_questions === 1 ? "match" : "matches"}
+          </Text>
+          , in <Text className="text-slate-800 font-bold">{formatDuration(endings.average_finish_seconds)}</Text> on average.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function TopicList({ title, topics, tone }: { title: string; topics: BattleTopicStat[]; tone: "good" | "bad" }) {
   if (topics.length === 0) return null;
   return (
@@ -150,6 +208,20 @@ export default function BattleDetailsSection({ practiceAccuracy }: { practiceAcc
 
       <SubHeading>Where your points come from</SubHeading>
       <PointsBreakdown points={data.points} />
+
+      {data.question_usage && (
+        <>
+          <SubHeading>Your questions</SubHeading>
+          <QuestionUsage usage={data.question_usage} />
+        </>
+      )}
+
+      {data.match_endings && (
+        <>
+          <SubHeading>How your matches ended</SubHeading>
+          <MatchEndings endings={data.match_endings} />
+        </>
+      )}
 
       {(strongest.length > 0 || weakest.length > 0) && (
         <>

@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, CloudOff, Globe } from "lucide-react-native";
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, CloudOff, Globe, Trophy } from "lucide-react-native";
 import Toast from "react-native-toast-message";
 import { SUBJECTS, ICON_COLORS } from "@/constants/quizStyles";
 import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { useBattleAvailabilityQuery, useBattleHistoryQuery } from "@/hooks/use-battle";
 import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 import { BattleHistoryEntry } from "@/types/battleModuleTypes";
+import { usePendingBattleResult } from "@/hooks/use-pending-battle-result";
 import BattleSubjectModal from "@/components/quiz-componets/BattleSubjectModal";
+import { openBattleResults } from "@/components/quiz-componets/BattleResultWatcher";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 import Skeleton from "@/components/Skeleton";
 
@@ -228,7 +230,15 @@ export default function OnlineList() {
   // join attempt) so the FAB can visibly reflect "you can't search yet"
   // instead of only discovering that after tapping it and getting a 409.
   const { data: availability } = useBattleAvailabilityQuery(true);
-  const isWrappingUp = availability?.status === "matched";
+  // Finished a battle first and left it to wait: until those results are
+  // opened once, the matchmaking button becomes "Show Results".
+  const pendingResult = usePendingBattleResult();
+  const awaitingOpponent = availability?.status === "matched" && !!availability.awaiting_opponent;
+  const resultsMatchId = pendingResult?.matchId ?? (awaitingOpponent ? availability?.match_id ?? null : null);
+  // "Ready" only once the server has confirmed the match completed (see
+  // BattleResultWatcher) -- not inferred from matchmaking status.
+  const opponentStillPlaying = pendingResult ? !pendingResult.completed : awaitingOpponent;
+  const isWrappingUp = availability?.status === "matched" && resultsMatchId == null;
   const wasWrappingUpRef = useRef(false);
 
   useEffect(() => {
@@ -236,13 +246,15 @@ export default function OnlineList() {
       wasWrappingUpRef.current = true;
     } else if (wasWrappingUpRef.current) {
       wasWrappingUpRef.current = false;
+      // BattleResultWatcher has its own toast for a battle waiting to be viewed.
+      if (resultsMatchId != null) return;
       Toast.show({
         type: "success",
         text1: "Ready to Battle!",
         text2: "Your last match has wrapped up — you can search for a new one now.",
       });
     }
-  }, [isWrappingUp]);
+  }, [isWrappingUp, resultsMatchId]);
 
   // Matchmaking is live, so the subject picker closes if the connection drops while it's open.
   useEffect(() => {
@@ -396,6 +408,26 @@ export default function OnlineList() {
         />
       )}
 
+      {resultsMatchId != null ? (
+        <View className="absolute bottom-6 self-center items-center">
+          <View className="mb-2 bg-slate-800 px-3 py-1.5 rounded-xl">
+            <Text className="text-white text-[11px] font-semibold text-center">
+              {opponentStillPlaying ? "Your opponent is still competing…" : "Your battle results are ready"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            className="flex-row items-center gap-2 h-14 px-6 rounded-full bg-primary shadow-lg shadow-primary/40"
+            activeOpacity={0.85}
+            onPress={() => openBattleResults(router, resultsMatchId)}
+            accessibilityRole="button"
+            accessibilityLabel="Show results of your last battle"
+          >
+            <Trophy size={20} color={ICON_COLORS.white} strokeWidth={2.25} />
+            <Text className="text-white font-black text-base">Show Results</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+      <>
       {/* Offline it looks disabled but stays tappable, so tapping explains why instead of doing nothing. */}
       <TouchableOpacity
         className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg ${
@@ -422,6 +454,8 @@ export default function OnlineList() {
             Finishing up your last battle…
           </Text>
         </View>
+      )}
+      </>
       )}
 
       <BattleSubjectModal
