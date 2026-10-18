@@ -14,17 +14,21 @@ const battleQuestionPublicSchema = z.object({
 
 const battleAnswerProgressSchema = z.object({
   question_order: z.number(),
-  is_correct: z.boolean(),
+  is_correct: z.boolean().nullable(),
   answered: z.boolean(),
 });
 
-const participantQuestionResultSchema = z.object({
-  user_id: z.number(),
-  answered: z.boolean(),
-  is_correct: z.boolean(),
+const battleQuestionReviewSchema = z.object({
+  question_order: z.number(),
+  question: z.string(),
+  options: z.array(z.string()).nullable(),
+  correct_answer: z.string().nullable(),
+  selected_option: z.string().nullable(),
+  status: z.enum(["correct", "incorrect", "skipped", "unanswered"]),
+  response_time_ms: z.number().nullable(),
   base_score: z.number(),
   speed_bonus: z.number(),
-  streak_bonus: z.number(),
+  streak_bonus: z.number().default(0),
   total_question_score: z.number(),
 });
 
@@ -48,8 +52,11 @@ const battleParticipantResultSchema = z.object({
   result: z.enum(["win", "loss", "draw", "forfeit"]).nullable(),
 });
 
+const battleEndReasonSchema = z.enum(["forfeit", "all_finished", "time_up"]);
+
 const battleMatchResultSchema = z.object({
   winner_user_id: z.number().nullable(),
+  end_reason: battleEndReasonSchema.nullable().optional(),
   me: battleParticipantResultSchema,
   opponent: battleParticipantResultSchema.nullable(),
 });
@@ -66,17 +73,18 @@ const battleMatchStateSchema = z.object({
   countdown_seconds_remaining: z.number().nullable().optional(),
   question_index: z.number().nullable().optional(),
   question: battleQuestionPublicSchema.nullable().optional(),
-  has_answered_current_question: z.boolean().nullable().optional(),
+  finished: z.boolean().nullable().optional(),
+  ends_at: z.string().nullable().optional(),
+  server_time: z.string().nullable().optional(),
   my_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
   opponent_answers: z.array(battleAnswerProgressSchema).nullable().optional(),
-  current_question_results: z.array(participantQuestionResultSchema).nullable().optional(),
-  current_question_correct_answer: z.string().nullable().optional(),
   my_progress: battleParticipantProgressSchema.nullable().optional(),
   opponent_progress: battleParticipantProgressSchema.nullable().optional(),
   started_at: z.string().nullable().optional(),
   finished_at: z.string().nullable().optional(),
   reason: z.string().nullable().optional(),
   result: battleMatchResultSchema.nullable().optional(),
+  review: z.array(battleQuestionReviewSchema).nullable().optional(),
 });
 
 const connectedEventSchema = z.object({
@@ -106,26 +114,30 @@ const matchStartedEventSchema = z.object({
   subject: z.string(),
   difficulty: z.string(),
   question_count: z.number(),
+  ends_at: z.string(),
+  server_time: z.string(),
 });
 
-const questionStartedEventSchema = z.object({
-  type: z.literal("question_started"),
+const nextQuestionEventSchema = z.object({
+  type: z.literal("next_question"),
   question_index: z.number(),
-  question: battleQuestionPublicSchema,
-  time_remaining_seconds: z.number(),
+  question: battleQuestionPublicSchema.nullable(),
+  finished: z.boolean(),
+  ends_at: z.string(),
+  server_time: z.string(),
 });
 
-const answerAcknowledgedEventSchema = z.object({
-  type: z.literal("answer_acknowledged"),
-  question_id: z.number(),
-  selected_option: z.string(),
-});
-
-const questionResultEventSchema = z.object({
-  type: z.literal("question_result"),
+const playerProgressEventSchema = z.object({
+  type: z.literal("player_progress"),
+  user_id: z.number(),
   question_order: z.number(),
-  results: z.array(participantQuestionResultSchema),
-  correct_answer: z.string().nullable(),
+  answered: z.boolean(),
+  answered_count: z.number(),
+});
+
+const pingEventSchema = z.object({
+  type: z.literal("ping"),
+  nonce: z.number(),
 });
 
 const playerDisconnectedEventSchema = z.object({
@@ -145,6 +157,7 @@ const playerReconnectedEventSchema = z.object({
 const matchFinishedEventSchema = z.object({
   type: z.literal("match_finished"),
   winner_user_id: z.number().nullable(),
+  end_reason: battleEndReasonSchema.nullable().optional(),
   participants: z.array(battleParticipantResultSchema),
 });
 
@@ -164,9 +177,9 @@ export const battleWsInboundEventSchema = z.discriminatedUnion("type", [
   playerReadyEventSchema,
   countdownStartedEventSchema,
   matchStartedEventSchema,
-  questionStartedEventSchema,
-  answerAcknowledgedEventSchema,
-  questionResultEventSchema,
+  nextQuestionEventSchema,
+  playerProgressEventSchema,
+  pingEventSchema,
   playerDisconnectedEventSchema,
   playerReconnectedEventSchema,
   matchFinishedEventSchema,

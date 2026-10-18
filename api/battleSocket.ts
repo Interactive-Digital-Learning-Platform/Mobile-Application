@@ -23,7 +23,9 @@ export interface BattleSocketHandle {
   // use this; queued server-side confirmation still arrives as its own
   // inbound event (e.g. "player_ready").
   sendReady: () => boolean;
+  // Next / Skip -- same "was it written to the socket" return as sendReady.
   sendAnswer: (questionId: number, selectedOption: string) => boolean;
+  sendSkip: (questionId: number) => boolean;
   sendForfeit: () => void;
   close: () => void;
 }
@@ -76,6 +78,12 @@ export function connectBattleSocket(
   ws.onmessage = (event) => {
     try {
       const parsed = battleWsInboundEventSchema.parse(JSON.parse(event.data as string));
+      if (parsed.type === "ping") {
+        // Answer straight away -- the server times this round trip and takes
+        // it off the speed-bonus clock, so any delay here would only hurt.
+        send({ type: "pong", nonce: parsed.nonce });
+        return;
+      }
       callbacks.onEvent(parsed as BattleWsInboundEvent);
     } catch (error) {
       console.warn("[BattleWS] Parse error", error, "raw:", event.data);
@@ -94,6 +102,7 @@ export function connectBattleSocket(
     sendReady: () => send({ type: "ready" }),
     sendAnswer: (questionId, selectedOption) =>
       send({ type: "answer", question_id: questionId, selected_option: selectedOption }),
+    sendSkip: (questionId) => send({ type: "skip", question_id: questionId }),
     sendForfeit: () => send({ type: "forfeit" }),
     close: () => ws.close(),
   };

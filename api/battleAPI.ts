@@ -3,11 +3,11 @@ import {
   BattleAnalyticsResponse,
   BattleHistoryResponse,
   BattleMatchStateResponse,
+  BattleNextQuestionResponse,
   CompetitiveProfileResponse,
   LeaderboardResponse,
   QueueStatusResponse,
   SubmitBattleAnswerRequest,
-  SubmitBattleAnswerResponse,
 } from "@/types/battleModuleTypes";
 
 export async function fetchLeaderboard(
@@ -69,8 +69,8 @@ export async function fetchMatchState(matchId: number): Promise<BattleMatchState
 export async function submitBattleAnswer(
   matchId: number,
   payload: SubmitBattleAnswerRequest
-): Promise<SubmitBattleAnswerResponse> {
-  const { data } = await battleClient.post<SubmitBattleAnswerResponse>(
+): Promise<BattleNextQuestionResponse> {
+  const { data } = await battleClient.post<BattleNextQuestionResponse>(
     `/battle/match/${matchId}/answer`,
     payload
   );

@@ -23,6 +23,25 @@ import { useUserMeQuery } from "@/hooks/use-quiz";
 import ForfeitModal from "@/components/quiz-componets/ForfeitModal";
 import VersusIntro from "@/components/quiz-componets/VersusIntro";
 
+// What a cancelled match tells the player before they're re-queued -- the
+// server's actual reason, not a blanket "Opponent left".
+function cancelReasonMessage(reason: string | null | undefined): { text1: string; text2: string } {
+  const lower = reason?.toLowerCase() ?? "";
+  if (lower.includes("could be generated or found")) {
+    return { text1: "Not enough questions yet", text2: "We're adding questions for this subject — finding you a new match…" };
+  }
+  if (lower.includes("opponent left")) {
+    return { text1: "Opponent left", text2: "Looking for a new match…" };
+  }
+  if (lower.includes("orphaned") || lower.includes("abandoned")) {
+    return { text1: "Match didn't start", text2: "Looking for a new match…" };
+  }
+  return { text1: "Match cancelled", text2: "Looking for a new match…" };
+}
+
+// How long to wait for the server to confirm our ready before sending it again.
+const READY_CONFIRM_TIMEOUT_MS = 4000;
+
 export default function BattleQueueScreen() {
   const router = useRouter();
   const { subject: subjectParam } = useLocalSearchParams<{ subject: string }>();
@@ -154,10 +173,29 @@ export default function BattleQueueScreen() {
   // back over my own socket) from "the opponent cancelled" (this screen
   // should auto-requeue instead) -- both sides see the same event.
   const selfCancelledRef = useRef(false);
+  // The cancelled match this screen has already reacted to -- the requeue
+  // below runs once per cancelled match, never twice. Seeded with a match
+  // that was ALREADY cancelled when this screen mounted (e.g. bounced back
+  // here from preparing.tsx): the mount effect's own join covers that one, and
+  // a second, racing join used to get "You're already in an active battle"
+  // and send the player home.
+  const handledCancelRef = useRef<number | null>(
+    matchState?.status === "cancelled" ? matchState.match_id : null
+  );
+  const cancelToastShownRef = useRef<number | null>(null);
 
   const navigation = useNavigation();
   const pendingLeaveActionRef = useRef<any>(null);
   const [leavingConfirmed, setLeavingConfirmed] = useState(false);
+
+  const matchStatus = matchState?.status;
+  // The server only leaves "waiting" once BOTH players have readied, so a
+  // match already counting down (or further) means both are ready -- even if
+  // this screen never saw the opponent's player_ready: it's broadcast the
+  // moment they ready, which can be before this player's socket has even
+  // connected (the faster the backend, the likelier), and isn't replayed.
+  const matchUnderway = matchStatus === "countdown" || matchStatus === "active" || matchStatus === "completed";
+  const bothReady = readyUserIds.size >= 2 || matchUnderway;
 
   // Backing out of a matched-but-not-started screen via the hardware back
   // button or an iOS swipe-back gesture bypasses handleLeaveMatchConfirm
@@ -166,11 +204,11 @@ export default function BattleQueueScreen() {
   // notified and neither player can queue into a new match while the old
   // one still looks active to the backend. Intercept any removal attempt
   // for as long as we're matched and the match hasn't already started
-  // (readyUserIds reaching 2 is our own signal to router.replace() away to
-  // match-session below -- excluding that keeps this guard from blocking
-  // that legitimate, in-app navigation) and route it through the same
-  // confirm-then-forfeit flow as the explicit "Cancel Match" button.
-  usePreventRemove(isMatched && readyUserIds.size < 2 && !leavingConfirmed, (e) => {
+  // (bothReady is our own signal to router.replace() away to match-session
+  // below -- excluding that keeps this guard from blocking that legitimate,
+  // in-app navigation) and route it through the same confirm-then-forfeit
+  // flow as the explicit "Cancel Match" button.
+  usePreventRemove(isMatched && !bothReady && !leavingConfirmed, (e) => {
     pendingLeaveActionRef.current = e.data.action;
     setShowLeaveConfirm(true);
   });
@@ -192,7 +230,8 @@ export default function BattleQueueScreen() {
   }, [matchId]);
 
   useEffect(() => {
-    if (!isMatched || myReady || readySentRef.current || connectionStatus !== "open") return;
+    // Already counting down -- the server has our ready, nothing to (re)send.
+    if (!isMatched || myReady || matchUnderway || readySentRef.current || connectionStatus !== "open") return;
     const sent = sendReady();
     if (sent) {
       readySentRef.current = true;
@@ -200,7 +239,20 @@ export default function BattleQueueScreen() {
     }
     const timer = setTimeout(() => setReadyRetryTick((n) => n + 1), 1000);
     return () => clearTimeout(timer);
-  }, [isMatched, myReady, connectionStatus, sendReady, readyRetryTick]);
+  }, [isMatched, myReady, matchUnderway, connectionStatus, sendReady, readyRetryTick]);
+
+  // Sent, but the server hasn't confirmed it (no player_ready for us, no
+  // countdown) -- e.g. it failed to record it, or the reply was lost on a
+  // slow connection. Send it again; readying up twice is harmless server-side.
+  useEffect(() => {
+    if (!isMatched || myReady || matchUnderway || connectionStatus !== "open") return;
+    const timer = setTimeout(() => {
+      if (!readySentRef.current) return;
+      readySentRef.current = false;
+      setReadyRetryTick((n) => n + 1);
+    }, READY_CONFIRM_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [isMatched, myReady, matchUnderway, connectionStatus, readyRetryTick]);
 
   // Not "matched" -> we're no longer holding a queue slot, so an unmount
   // from here on shouldn't cancel a queue entry that doesn't exist anymore.
@@ -225,9 +277,7 @@ export default function BattleQueueScreen() {
     const timer = setTimeout(() => setVersusIntroDone(true), 5000);
     return () => clearTimeout(timer);
   }, [matchId]);
-  const bothReady = readyUserIds.size >= 2;
   const readyToLeaveVersusIntro = versusIntroDone && bothReady;
-  const matchStatus = matchState?.status;
 
   // Hands off once VersusIntro's own reveal is done and both sides are
   // ready: straight to match-session.tsx if question generation already
@@ -363,26 +413,38 @@ export default function BattleQueueScreen() {
   // manual cache-clear is needed.
   useEffect(() => {
     if (matchState?.status !== "cancelled" || selfCancelledRef.current || !subject) return;
-    Toast.show({
-      type: "info",
-      text1: "Opponent left",
-      text2: "Looking for a new match…",
-    });
+    const cancelledMatchId = matchState.match_id;
+    // Tell the player the real reason, once per cancelled match.
+    if (cancelToastShownRef.current !== cancelledMatchId) {
+      cancelToastShownRef.current = cancelledMatchId;
+      Toast.show({ type: "info", ...cancelReasonMessage(matchState.reason) });
+    }
+    if (handledCancelRef.current === cancelledMatchId) return;
+    handledCancelRef.current = cancelledMatchId;
     joinQueue(subject, {
       onSuccess: () => {
         holdingQueueSlotRef.current = true;
         setPollingEnabled(true);
       },
       onError: (error) => {
+        const detail = error instanceof Error ? error.message : null;
+        // Already back in the queue or already matched again (e.g. another
+        // join got there first) -- that's what we wanted; keep polling and
+        // the matched status takes it from here instead of leaving.
+        if (detail === "You're already in an active battle." || detail === "You're already searching for a match.") {
+          holdingQueueSlotRef.current = detail === "You're already searching for a match.";
+          setPollingEnabled(true);
+          return;
+        }
         Toast.show({
           type: "error",
           text1: "Couldn't rejoin the queue",
-          text2: error instanceof Error ? error.message : "Check your connection and try again.",
+          text2: detail ?? "Check your connection and try again.",
         });
         router.back();
       },
     });
-  }, [matchState?.status, subject, joinQueue, router]);
+  }, [matchState?.status, matchState?.match_id, matchState?.reason, subject, joinQueue, router]);
 
   const opponent = status?.opponent;
   const { data: me } = useUserMeQuery();

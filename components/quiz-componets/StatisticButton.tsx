@@ -1,5 +1,5 @@
 import { Text, TouchableOpacity, View } from "react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
@@ -24,9 +24,11 @@ const FILL_DURATION_MS = 900;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-// Single-proportion donut on the bg-primary header: translucent white track, solid white arc. The arc fills from 0
-// and the centre number counts up in step with it whenever `percent` or `replayKey` changes (Reanimated's default
-// ReduceMotion.System makes it jump straight to the value when the OS "Reduce Motion" setting is on).
+// Single-proportion donut on the bg-primary header: translucent white track, solid white arc, with the centre number
+// counting in step with the arc. A new `percent` (e.g. switching Practice <-> 1v1) animates from wherever the arc is
+// now -- filling up or draining down -- rather than restarting; only a new `replayKey` (the tab being shown again)
+// replays the fill from 0. Reanimated's default ReduceMotion.System makes it jump straight to the value when the OS
+// "Reduce Motion" setting is on.
 function Donut({ percent, label, replayKey }: { percent: number; label: string; replayKey: number }) {
   const r = (DONUT_SIZE - DONUT_STROKE) / 2;
   const circumference = 2 * Math.PI * r;
@@ -36,8 +38,13 @@ function Donut({ percent, label, replayKey }: { percent: number; label: string; 
   const progress = useSharedValue(0);
   const [shown, setShown] = useState(0);
 
+  const lastReplayKeyRef = useRef(replayKey);
+
   useEffect(() => {
-    progress.value = 0;
+    if (lastReplayKeyRef.current !== replayKey) {
+      lastReplayKeyRef.current = replayKey;
+      progress.value = 0;
+    }
     progress.value = withTiming(pct, { duration: FILL_DURATION_MS, easing: Easing.out(Easing.cubic) });
   }, [pct, replayKey, progress]);
 
@@ -119,15 +126,22 @@ export default function StatisticButton({ mode }: StatisticButtonProps) {
   const { data: battleProfile, isLoading: isBattleLoading, refetch: refetchBattleProfile } = useBattleProfileQuery();
   const { data: dailyAnalytics, refetch: refetchDaily } = useDailyAnalyticsQuery(30);
 
-  // Mutations already invalidate these queries, but refetching on focus too
-  // (same as PracticeList) keeps them in sync even if this screen is reached
-  // some other way.
-  // Bumped on every focus so the donut replays its fill animation each time the tab is shown.
+  // Bumped only when the tab is actually shown (not on a mode switch -- this
+  // callback never changes, so useFocusEffect doesn't re-run it for that), so
+  // the donut replays its fill from 0 then, but switching modes just moves it
+  // from one value to the other.
   const [focusCount, setFocusCount] = useState(0);
-
   useFocusEffect(
     useCallback(() => {
       setFocusCount((n) => n + 1);
+    }, [])
+  );
+
+  // Mutations already invalidate these queries, but refetching on focus too
+  // (same as PracticeList) keeps them in sync even if this screen is reached
+  // some other way.
+  useFocusEffect(
+    useCallback(() => {
       if (mode === "practice") {
         refetchAnalytics();
         refetchDaily();
