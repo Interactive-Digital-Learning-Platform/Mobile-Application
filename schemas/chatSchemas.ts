@@ -126,6 +126,38 @@ export const messageResponseSchema = z.object({
   attachments: z.array(messageAttachmentSchema).optional().default([]),
 });
 
+export const shareLinkResponseSchema = z.object({
+  token: z.string().min(1),
+  shared_at: z.string(),
+  message_count: z.number(),
+});
+
+export type ShareLinkResponseType = z.infer<typeof shareLinkResponseSchema>;
+
+// A shared chat is a read-only snapshot: it deliberately carries no
+// conversation/message ids, only what the viewer needs to render it.
+export const sharedMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+  created_at: z.string(),
+  sources: z.array(sourceCitationSchema).optional().default([]),
+  attachments: z
+    .array(z.object({ filename: z.string(), content_type: z.string() }))
+    .optional()
+    .default([]),
+  is_translated: z.boolean().optional().default(false),
+  translated_content: z.string().nullable().optional(),
+});
+
+export const sharedChatResponseSchema = z.object({
+  title: z.string().nullable().optional(),
+  shared_at: z.string(),
+  messages: z.array(sharedMessageSchema),
+});
+
+export type SharedMessageType = z.infer<typeof sharedMessageSchema>;
+export type SharedChatResponseType = z.infer<typeof sharedChatResponseSchema>;
+
 export const messageHistoryResponseSchema = z.object({
   messages: z.array(messageResponseSchema),
   total: z.number(),

@@ -9,9 +9,11 @@ import {
   TextAlignStart,
 } from "lucide-react-native";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Share,
   Text,
   TextInput,
   View,
@@ -48,6 +50,8 @@ import { Drawer } from "react-native-drawer-layout";
 import { useState } from "react";
 import ChatHistorySidebar from "@/components/chat/ChatHistorySidebar";
 import LanguageSelectorModal from "@/components/chat/LanguageSelectorModal";
+import ChatOptionsMenu from "@/components/chat/ChatOptionsMenu";
+import { isShareableMessage, sharedChatUrl } from "@/utils/chatShare";
 
 export default function AIChat() {
   const { user, isLoaded } = useUser();
@@ -62,9 +66,13 @@ export default function AIChat() {
     setLanguage,
     sendMessage,
     isSending,
+    isLoadingConversation,
     chatRef,
     startNewConversation,
     openConversation,
+    deleteConversation,
+    isDeletingConversation,
+    createShareLink,
     ensureConversation,
     stopStreaming,
   } = useChat();
@@ -74,6 +82,7 @@ export default function AIChat() {
 
   const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
   const [isLangModalOpen, setLangModalOpen] = useState<boolean>(false);
+  const [isOptionsMenuOpen, setOptionsMenuOpen] = useState<boolean>(false);
   const [cardSize, setCardSize] = useState<{
     width: number;
     height: number;
@@ -117,7 +126,7 @@ export default function AIChat() {
   });
 
   const handlePickAttachment = async () => {
-    if (isSending) return;
+    if (isSending || isLoadingConversation) return;
 
     const file = await picker.pick();
     if (!file) return;
@@ -134,10 +143,58 @@ export default function AIChat() {
     }
   };
 
+  // Creates the share link while the options panel shows a spinner, then hands
+  // back what to run once the panel has closed.
+  const handleShareChat = async (): Promise<() => void> => {
+    try {
+      const url = sharedChatUrl(await createShareLink());
+      const title = conversationTitle?.trim() || "Chat with Nous";
+
+      return () => {
+        Share.share(
+          {
+            message: `${title}\n\nOpen this chat in Nous:\n${url}`,
+          },
+          { dialogTitle: "Share chat", subject: title },
+        ).catch(showShareError);
+      };
+    } catch {
+      return showShareError;
+    }
+  };
+
+  const showShareError = () => {
+    Toast.show({
+      type: "error",
+      text1: "Couldn't create a share link",
+      text2: "Please check your connection and try again.",
+    });
+  };
+
+  const handleDeleteChat = async () => {
+    try {
+      await deleteConversation();
+      upload.reset();
+      setOptionsMenuOpen(false);
+      Toast.show({ type: "success", text1: "Chat deleted" });
+    } catch {
+      setOptionsMenuOpen(false);
+      Toast.show({
+        type: "error",
+        text1: "Couldn't delete chat",
+        text2: "Please check your connection and try again.",
+      });
+    }
+  };
+
   const inputValue = watch("message");
   const isUploadingAttachment = upload.attachment?.status === "uploading";
   const isSendDisabled =
-    !inputValue?.trim() || isSending || isUploadingAttachment;
+    !inputValue?.trim() ||
+    isSending ||
+    isUploadingAttachment ||
+    isLoadingConversation;
+  const isAttachDisabled = isSending || isLoadingConversation;
 
   const CARD_RADIUS = 28;
   const BORDER_WIDTH = 2.5;
@@ -212,56 +269,68 @@ export default function AIChat() {
                     <Text className="text-white font-amedium text-2xl">Nous</Text>
                   )}
                 </View>
-                <View className="h-auto flex-row items-right rounded-full -mr-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Chat options"
+                  hitSlop={10}
+                  onPress={() => setOptionsMenuOpen(true)}
+                  className="h-auto flex-row items-right rounded-full -mr-2"
+                >
                   <EllipsisVertical color="#ffffff" size={28} />
-                </View>
+                </Pressable>
               </View>
 
-              <FlashList
-                ref={chatRef}
-                data={messages}
-                keyExtractor={(item) => item.localID}
-                renderItem={({ item }) => (
-                  <Message key={item.id} message={item} />
-                )}
-                className="w-full flex-1"
-                contentContainerClassName="w-full h-auto flex-col justify-start"
-                ListHeaderComponent={
-                  messages.length === 0 ? (
-                    <View className="w-full h-auto mb-12 mt-8">
-                      <View className="w-full h-auto justify-center items-center">
-                        <Text className="w-3/4 text-4xl font-amedium text-center text-[#ffffff]">
-                          Hi,{" "}
-                          {isLoaded && user?.username
-                            ? user?.username?.charAt(0).toUpperCase() +
-                              user?.username?.slice(1)
-                            : "..."}
-                          ! ✦
-                        </Text>
-                        <Text className="w-full text-4xl font-amedium text-center text-[#ffffff]">
-                          How can I assist you?
-                        </Text>
-                        <Text className="text-xl font-aregular text-[#ffffff] mt-1">
-                          Your smart learning assistant is ready
-                        </Text>
+              {isLoadingConversation ? (
+                <View className="w-full flex-1 justify-center items-center">
+                  <ActivityIndicator size="large" color={colors.primary} />
+                </View>
+              ) : (
+                <FlashList
+                  ref={chatRef}
+                  data={messages}
+                  keyExtractor={(item) => item.localID}
+                  renderItem={({ item }) => (
+                    <Message key={item.id} message={item} />
+                  )}
+                  className="w-full flex-1"
+                  contentContainerClassName="w-full h-auto flex-col justify-start"
+                  ListHeaderComponent={
+                    messages.length === 0 ? (
+                      <View className="w-full h-auto mb-12 mt-8">
+                        <View className="w-full h-auto justify-center items-center">
+                          <Text className="w-3/4 text-4xl font-amedium text-center text-[#ffffff]">
+                            Hi,{" "}
+                            {isLoaded && user?.username
+                              ? user?.username?.charAt(0).toUpperCase() +
+                                user?.username?.slice(1)
+                              : "..."}
+                            ! ✦
+                          </Text>
+                          <Text className="w-full text-4xl font-amedium text-center text-[#ffffff]">
+                            How can I assist you?
+                          </Text>
+                          <Text className="text-xl font-aregular text-[#ffffff] mt-1">
+                            Your smart learning assistant is ready
+                          </Text>
+                        </View>
+                        <View className="w-full mt-8 flex-row flex-wrap justify-center gap-x-2 items-center gap-y-4">
+                          {quickActions.map((action: QuickActionType, index) => (
+                            <QuickAction
+                              key={index}
+                              icon={action.icon}
+                              title={action.title}
+                              prompt={action.prompt}
+                            />
+                          ))}
+                        </View>
                       </View>
-                      <View className="w-full mt-8 flex-row flex-wrap justify-center gap-x-2 items-center gap-y-4">
-                        {quickActions.map((action: QuickActionType, index) => (
-                          <QuickAction
-                            key={index}
-                            icon={action.icon}
-                            title={action.title}
-                            prompt={action.prompt}
-                          />
-                        ))}
-                      </View>
-                    </View>
-                  ) : null
-                }
-                ListHeaderComponentStyle={{ width: "100%" }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              />
+                    ) : null
+                  }
+                  ListHeaderComponentStyle={{ width: "100%" }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                />
+              )}
               <View style={{ paddingBottom: insets.bottom + 12 }}>
                 <View
                   onLayout={(e) =>
@@ -311,9 +380,9 @@ export default function AIChat() {
                       <View className="flex-row items-center gap-3">
                         <Pressable
                           onPress={handlePickAttachment}
-                          disabled={isSending}
+                          disabled={isAttachDisabled}
                           className="w-9 h-9 rounded-full bg-white justify-center items-center"
-                          style={{ opacity: isSending ? 0.4 : 1 }}
+                          style={{ opacity: isAttachDisabled ? 0.4 : 1 }}
                         >
                           <Plus size={20} color="#6B7280" />
                         </Pressable>
@@ -402,6 +471,30 @@ export default function AIChat() {
           </SafeAreaView>
         </LinearGradient>
         <AttachmentSourceModal {...picker.modalProps} />
+        <ChatOptionsMenu
+          visible={isOptionsMenuOpen}
+          onClose={() => setOptionsMenuOpen(false)}
+          onShare={handleShareChat}
+          shareDisabledReason={
+            isLoadingConversation
+              ? "Loading chat…"
+              : isSending
+                ? "Wait for the reply to finish"
+                : !conversationID || !messages.some(isShareableMessage)
+                  ? "Send a message first"
+                  : undefined
+          }
+          onDelete={handleDeleteChat}
+          deleteDisabledReason={
+            !conversationID
+              ? "Send a message first"
+              : isSending
+                ? "Wait for the reply to finish"
+                : undefined
+          }
+          isDeleting={isDeletingConversation}
+          chatTitle={conversationTitle}
+        />
         <LanguageSelectorModal
           visible={isLangModalOpen}
           selected={language}

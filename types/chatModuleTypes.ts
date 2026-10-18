@@ -143,6 +143,16 @@ export type UserChatsRequest = {
   offset?: number;
 };
 
+export type DeleteConversationRequest = {
+  conversationID: string;
+  userID: string;
+};
+
+export type ShareConversationRequest = {
+  conversationID: string;
+  userID: string;
+};
+
 export type ChatHistorySectionName = "Today" | "Last Week" | "Older";
 
 export type ChatHistoryListItem =
@@ -177,6 +187,7 @@ export type UseChatReturn = {
   isSending: boolean;
   hasMoreHistory: boolean;
   isLoadingHistory: boolean;
+  isLoadingConversation: boolean;
   chatRef: RefObject<FlashListRef<MessageType> | null>;
   language: ChatLanguage;
   setLanguage: (language: ChatLanguage) => void;
@@ -184,6 +195,9 @@ export type UseChatReturn = {
   loadMoreHistory: () => void;
   startNewConversation: () => void;
   openConversation: (conversationID: string, title?: string | null) => void;
+  deleteConversation: () => Promise<void>;
+  createShareLink: () => Promise<string>;
+  isDeletingConversation: boolean;
   ensureConversation: () => Promise<string>;
   stopStreaming: () => void;
 }
