@@ -2,23 +2,31 @@ import { useMemo } from "react";
 import Markdown from "react-native-markdown-display";
 import { MessageType } from "@/types/chatModuleTypes";
 import { Pressable, Text, View } from "react-native";
-import Animated, {
-  SlideInRight,
-  SlideInLeft,
-} from "react-native-reanimated";
+import Animated, { SlideInRight, SlideInLeft } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { ChevronRight, FileText } from "lucide-react-native";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import MessageAttachment from "@/components/chat/MessageAttachment";
 import GeneratedDocumentAttachment from "@/components/chat/GeneratedDocumentAttachment";
-import { chatMarkdownItInstance, chatMarkdownStyle } from "@/constants/markdownStyles";
+import {
+  chatMarkdownItInstance,
+  chatMarkdownStyle,
+} from "@/constants/markdownStyles";
 import { stripInlineCitations } from "@/utils/chatText";
 
 const ASSISTANT_BUBBLE_BG = "#EEF3FB";
 const ASSISTANT_BUBBLE_BORDER = "#E2EAF4";
 const SOURCES_ACCENT = "#3C6DB0";
 
-export default function Message({ message }: { message: MessageType }) {
+export default function Message({
+  message,
+  onViewSources,
+}: {
+  message: MessageType;
+  // Overrides where "View sources" goes; by default it opens the sources
+  // screen for this message's server id.
+  onViewSources?: () => void;
+}) {
   const router = useRouter();
   const isUser = message.role === "user";
 
@@ -37,8 +45,7 @@ export default function Message({ message }: { message: MessageType }) {
       : message.content;
 
   const body = useMemo(
-    () =>
-      isUser || message.isError ? rawBody : stripInlineCitations(rawBody),
+    () => (isUser || message.isError ? rawBody : stripInlineCitations(rawBody)),
     [isUser, message.isError, rawBody],
   );
 
@@ -57,7 +64,12 @@ export default function Message({ message }: { message: MessageType }) {
       entering={isUser ? SlideInRight.duration(200) : SlideInLeft.duration(200)}
       className={`w-full h-auto flex-row ${isUser ? "justify-end" : "justify-start"} mb-5`}
     >
-      <View style={{ maxWidth: "80%", alignItems: isUser ? "flex-end" : "flex-start" }}>
+      <View
+        style={{
+          maxWidth: "80%",
+          alignItems: isUser ? "flex-end" : "flex-start",
+        }}
+      >
         {isUser ? (
           <View
             style={{
@@ -72,9 +84,16 @@ export default function Message({ message }: { message: MessageType }) {
             }}
           >
             {message.attachments?.map((att) => (
-              <MessageAttachment key={att.localID} attachment={att} onUserBubble />
+              <MessageAttachment
+                key={att.localID}
+                attachment={att}
+                onUserBubble
+              />
             ))}
-            <Text selectable className="text-md font-aregular text-white text-justify">
+            <Text
+              selectable
+              className="text-md font-aregular text-white text-justify"
+            >
               {body}
             </Text>
           </View>
@@ -123,7 +142,9 @@ export default function Message({ message }: { message: MessageType }) {
               <View style={{ flexDirection: "row" }}>
                 <Pressable
                   onPress={() =>
-                    router.push(`/(main)/sources/${sourceMessageID}` as any)
+                    onViewSources
+                      ? onViewSources()
+                      : router.push(`/(main)/sources/${sourceMessageID}` as any)
                   }
                   hitSlop={6}
                   android_ripple={{ color: "rgba(60,109,176,0.22)" }}

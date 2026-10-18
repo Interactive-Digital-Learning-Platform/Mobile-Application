@@ -1,5 +1,7 @@
 import {
   createConversation,
+  createShareLink as createShareLinkRequest,
+  deleteConversation as deleteConversationRequest,
   fetchMessageHistory,
   getAttachmentStatus,
   streamMessage,
@@ -61,6 +63,14 @@ export function useChat(): UseChatReturn {
   const [beforeCursor, setBeforeCursor] = useState<string | undefined>(
     undefined,
   );
+  // Set when an existing conversation is opened and cleared once its history has
+  // been mapped into `messages`, so freshly created conversations never show the
+  // history loader.
+  const [hydratingConversationID, setHydratingConversationID] = useState<
+    string | null
+  >(null);
+  const [isDeletingConversation, setIsDeletingConversation] =
+    useState<boolean>(false);
 
   const clearEmbeddedPolls = useCallback(() => {
     embeddedPollTimersRef.current.forEach((timer) => clearTimeout(timer));
@@ -137,7 +147,11 @@ export function useChat(): UseChatReturn {
     [queryClient, user?.id],
   );
 
-  const { data: messageHistory, isLoading: isLoadingHistory } = useQuery({
+  const {
+    data: messageHistory,
+    isLoading: isLoadingHistory,
+    isError: isHistoryError,
+  } = useQuery({
     queryKey: ["ai-messages", conversationID],
     queryFn: () => fetchMessageHistory(conversationID!),
     enabled: Boolean(conversationID),
@@ -175,6 +189,7 @@ export function useChat(): UseChatReturn {
     }));
 
     setMessages(mapped);
+    setHydratingConversationID(null);
   }, [messageHistory]);
 
   const scrollToLatestMessage = useCallback(() => {
@@ -486,6 +501,7 @@ export function useChat(): UseChatReturn {
     setConversationTitle(null);
     setMessages([]);
     setBeforeCursor(undefined);
+    setHydratingConversationID(null);
   }, [clearEmbeddedPolls]);
 
   const openConversation = useCallback(
@@ -499,10 +515,73 @@ export function useChat(): UseChatReturn {
       setMessages([]);
       setBeforeCursor(undefined);
       setConversationTitle(title?.trim() || null);
+      setHydratingConversationID(nextConversationID);
       setConversationIDSync(nextConversationID);
     },
     [setConversationIDSync, clearEmbeddedPolls],
   );
+
+  // Deletes the open conversation, then drops it from the sidebar and message
+  // caches and resets to a fresh chat. Throws on failure so the screen can report it.
+  const deleteConversation = useCallback(async () => {
+    const targetConversationID = conversationIDRef.current;
+    if (!targetConversationID) return;
+    if (!user?.id) throw new Error("User session unavailable");
+
+    setIsDeletingConversation(true);
+    try {
+      await deleteConversationRequest({
+        conversationID: targetConversationID,
+        userID: user.id,
+      });
+
+      queryClient.setQueryData<InfiniteData<ChatConversation[]>>(
+        ["ai-conversations", user.id],
+        (data) => {
+          if (!data) return data;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) =>
+              page.filter(
+                (conversation) =>
+                  conversation.conversation_id !== targetConversationID,
+              ),
+            ),
+          };
+        },
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["ai-conversations", user.id],
+      });
+      queryClient.removeQueries({
+        queryKey: ["ai-messages", targetConversationID],
+      });
+
+      if (conversationIDRef.current === targetConversationID) {
+        startNewConversation();
+      }
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }, [user?.id, queryClient, startNewConversation]);
+
+  // Creates or refreshes the open conversation's share link; returns its token.
+  const createShareLink = useCallback(async () => {
+    const targetConversationID = conversationIDRef.current;
+    if (!targetConversationID) throw new Error("No conversation to share");
+    if (!user?.id) throw new Error("User session unavailable");
+
+    return createShareLinkRequest({
+      conversationID: targetConversationID,
+      userID: user.id,
+    });
+  }, [user?.id]);
+
+  const isLoadingConversation =
+    hydratingConversationID !== null &&
+    hydratingConversationID === conversationID &&
+    !isHistoryError;
 
   return {
     messages,
@@ -512,6 +591,7 @@ export function useChat(): UseChatReturn {
     isSending: isStreaming,
     hasMoreHistory: messageHistory?.has_more ?? false,
     isLoadingHistory,
+    isLoadingConversation,
     chatRef,
     language,
     setLanguage,
@@ -519,6 +599,9 @@ export function useChat(): UseChatReturn {
     loadMoreHistory,
     startNewConversation,
     openConversation,
+    deleteConversation,
+    isDeletingConversation,
+    createShareLink,
     ensureConversation,
     stopStreaming,
   };

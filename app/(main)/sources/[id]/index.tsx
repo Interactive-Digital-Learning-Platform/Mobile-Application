@@ -5,23 +5,42 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { FlashList } from "@shopify/flash-list";
 import { ChevronLeft, CloudOff, FileSearch } from "lucide-react-native";
-import { fetchMessageById } from "@/api/chatAPI";
+import { fetchMessageById, fetchSharedChat } from "@/api/chatAPI";
 import { SourceCitationType } from "@/schemas/chatSchemas";
 import SourceListItem from "@/components/chat/SourceListItem";
 import SourceItemSkeleton from "@/components/chat/SourceItemSkeleton";
 
 export default function MessageSources() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // For a shared chat, `id` is the message's position in the snapshot and
+  // `sharedToken` identifies the snapshot (which has no message ids).
+  const { id, sharedToken } = useLocalSearchParams<{
+    id: string;
+    sharedToken?: string;
+  }>();
   const router = useRouter();
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  const messageQuery = useQuery({
     queryKey: ["ai-message", id],
     queryFn: () => fetchMessageById(id),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && !sharedToken,
     staleTime: 60_000,
   });
 
-  const sources: SourceCitationType[] = data?.sources ?? [];
+  const sharedQuery = useQuery({
+    queryKey: ["shared-chat", sharedToken],
+    queryFn: () => fetchSharedChat(sharedToken!),
+    enabled: Boolean(sharedToken),
+    staleTime: 60_000,
+  });
+
+  const { isLoading, isError, refetch, isRefetching } = sharedToken
+    ? sharedQuery
+    : messageQuery;
+
+  const sources: SourceCitationType[] =
+    (sharedToken
+      ? sharedQuery.data?.messages[Number(id)]?.sources
+      : messageQuery.data?.sources) ?? [];
   const ready = !isLoading && !isError;
   const hasSources = sources.length > 0;
 
@@ -137,8 +156,8 @@ export default function MessageSources() {
               className="text-[13px] font-aregular text-[#64748B] text-center"
               style={{ lineHeight: 19 }}
             >
-              The message couldn&apos;t be reached. Check your connection and try
-              again.
+              The message couldn&apos;t be reached. Check your connection and
+              try again.
             </Text>
             <Pressable
               onPress={() => refetch()}
@@ -189,8 +208,8 @@ export default function MessageSources() {
               className="text-[13px] font-aregular text-[#64748B] text-center"
               style={{ lineHeight: 19 }}
             >
-              Nous answered this one from general knowledge — no documents or web
-              pages were cited.
+              Nous answered this one from general knowledge — no documents or
+              web pages were cited.
             </Text>
           </View>
         ) : (
