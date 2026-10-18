@@ -14,13 +14,18 @@ import {
 import { ChatInputValues } from "@/schemas/chatSchemas";
 import {
   ChatAttachment,
+  ChatConversation,
   ChatLanguage,
   MessageType,
   UseChatReturn,
 } from "@/types/chatModuleTypes";
 import { useUser } from "@clerk/expo";
 import { FlashListRef } from "@shopify/flash-list";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  InfiniteData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Streamed tokens are flushed into React state at most once per this interval so
@@ -48,6 +53,9 @@ export function useChat(): UseChatReturn {
 
   const conversationIDRef = useRef<string | null>(null);
   const [conversationID, setConversationID] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string | null>(
+    null,
+  );
   const [language, setLanguage] = useState<ChatLanguage>("English");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [beforeCursor, setBeforeCursor] = useState<string | undefined>(
@@ -89,6 +97,45 @@ export function useChat(): UseChatReturn {
     });
     return id;
   }, [user?.id, setConversationIDSync, queryClient]);
+
+  const applyConversationTitle = useCallback(
+    (targetConversationID: string, title: string) => {
+      if (targetConversationID === conversationIDRef.current) {
+        setConversationTitle(title);
+      }
+
+      let isCached = false;
+
+      queryClient.setQueryData<InfiniteData<ChatConversation[]>>(
+        ["ai-conversations", user?.id],
+        (data) => {
+          if (!data) return data;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) =>
+              page.map((conversation) => {
+                if (conversation.conversation_id !== targetConversationID) {
+                  return conversation;
+                }
+                isCached = true;
+                return conversation.title === title
+                  ? conversation
+                  : { ...conversation, title };
+              }),
+            ),
+          };
+        },
+      );
+
+      if (!isCached) {
+        queryClient.invalidateQueries({
+          queryKey: ["ai-conversations", user?.id],
+        });
+      }
+    },
+    [queryClient, user?.id],
+  );
 
   const { data: messageHistory, isLoading: isLoadingHistory } = useQuery({
     queryKey: ["ai-messages", conversationID],
@@ -348,6 +395,14 @@ export function useChat(): UseChatReturn {
                   : msg.documents,
               }));
 
+              const streamedConversationID = conversationIDRef.current;
+              if (meta?.conversationTitle && streamedConversationID) {
+                applyConversationTitle(
+                  streamedConversationID,
+                  meta.conversationTitle,
+                );
+              }
+
               hasPendingMessagesRef.current = false;
             },
             onError: (error) => {
@@ -390,6 +445,7 @@ export function useChat(): UseChatReturn {
       scrollToLatestMessage,
       queryClient,
       pollEmbeddedAttachment,
+      applyConversationTitle,
     ],
   );
 
@@ -427,12 +483,13 @@ export function useChat(): UseChatReturn {
     isSendingRef.current = false;
     conversationIDRef.current = null;
     setConversationID(null);
+    setConversationTitle(null);
     setMessages([]);
     setBeforeCursor(undefined);
   }, [clearEmbeddedPolls]);
 
   const openConversation = useCallback(
-    (nextConversationID: string) => {
+    (nextConversationID: string, title?: string | null) => {
       if (nextConversationID === conversationIDRef.current) return;
 
       abortControllerRef.current?.abort();
@@ -441,6 +498,7 @@ export function useChat(): UseChatReturn {
       isSendingRef.current = false;
       setMessages([]);
       setBeforeCursor(undefined);
+      setConversationTitle(title?.trim() || null);
       setConversationIDSync(nextConversationID);
     },
     [setConversationIDSync, clearEmbeddedPolls],
@@ -449,6 +507,7 @@ export function useChat(): UseChatReturn {
   return {
     messages,
     conversationID,
+    conversationTitle,
     isStreaming,
     isSending: isStreaming,
     hasMoreHistory: messageHistory?.has_more ?? false,

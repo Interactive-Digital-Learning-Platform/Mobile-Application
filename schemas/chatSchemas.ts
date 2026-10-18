@@ -49,6 +49,7 @@ const doneEventSchema = z.object({
   translation_failed: z.boolean().optional().default(false),
   sources: z.array(sourceCitationSchema).catch([]).default([]),
   documents: z.array(generatedDocumentSchema).catch([]).default([]),
+  conversation_title: z.string().nullish().catch(null),
 });
 
 const errorEventSchema = z.object({
