@@ -1,0 +1,201 @@
+{
+  "synthetic": true,
+  "generatedAt": "2026-10-16T10:23:09.861Z",
+  "modelSha256": "bc1916bc34adaecd699426987cf4c78fcde84c88052d49b070991c92159a84ec",
+  "samples": [
+    {
+      "title": "Both types explained",
+      "noteText": "Sexual reproduction involves fusion of male and female gametes during fertilisation. Asexual reproduction uses one parent without gamete fusion and usually produces genetically identical offspring.",
+      "check": {
+        "state": "ready",
+        "checkedAt": "2026-10-16T10:22:56.857Z",
+        "reviewRequired": true,
+        "suggestions": [
+          {
+            "conceptId": "sci-g10-col-001",
+            "modelConceptId": "sci-g10-col-001",
+            "conceptName": "Sexual and Asexual Reproduction",
+            "prediction": {
+              "status": null,
+              "suggestedStatus": "present",
+              "completeSuggestionWithheld": false,
+              "unsupportedRequiredPoints": [],
+              "policyReason": null,
+              "rawModelStatus": "present",
+              "displaySuggestion": "complete",
+              "scores": {
+                "present": 0.9773543996119411,
+                "partial": 0.02249715447995815,
+                "missing": 0.000148445908100767
+              },
+              "scoresCalibrated": false,
+              "reviewRequired": true,
+              "reason": "Experimental coverage suggestion; lexical evidence is not proof of correctness.",
+              "evidence": {
+                "points": [
+                  {
+                    "pointId": "sexual",
+                    "requirement": "Sexual reproduction involves fusion of male and female gametes during fertilisation.",
+                    "lexicalCoverage": 1,
+                    "candidateEvidence": "Sexual reproduction involves fusion of male and female gametes during fertilisation.",
+                    "start": 0,
+                    "end": 84,
+                    "negatedOrRejectedMatch": true,
+                    "semanticCorrectnessVerified": false
+                  },
+                  {
+                    "pointId": "asexual",
+                    "requirement": "Asexual reproduction involves one parent without gamete fusion, usually producing genetically alike offspring.",
+                    "lexicalCoverage": 1,
+                    "candidateEvidence": "Asexual reproduction uses one parent without gamete fusion and usually produces genetically identical offspring.",
+                    "start": 85,
+                    "end": 197,
+                    "negatedOrRejectedMatch": false,
+                    "semanticCorrectnessVerified": false
+                  }
+                ],
+                "concerns": []
+              },
+              "modelVersion": "english-coverage-v3.1-context-2026-10-09"
+            }
+          }
+        ],
+        "modelVersion": "english-coverage-v3.1-context-2026-10-09",
+        "modelSha256": "bc1916bc34adaecd699426987cf4c78fcde84c88052d49b070991c92159a84ec",
+        "textSha256": "c7da2a5779505678c00777692a93420317759a88fc649d293f06d8b539dfcd32",
+        "lessonId": "synthetic-reproduction"
+      }
+    },
+    {
+      "title": "One required idea omitted",
+      "noteText": "Asexual reproduction involves a single parent without fusion of gametes. The offspring are genetically identical.",
+      "check": {
+        "state": "ready",
+        "checkedAt": "2026-10-16T10:23:02.972Z",
+        "reviewRequired": true,
+        "suggestions": [
+          {
+            "conceptId": "sci-g10-col-001",
+            "modelConceptId": "sci-g10-col-001",
+            "conceptName": "Sexual and Asexual Reproduction",
+            "prediction": {
+              "status": null,
+              "suggestedStatus": "partial",
+              "completeSuggestionWithheld": false,
+              "unsupportedRequiredPoints": [
+                "sexual"
+              ],
+              "policyReason": null,
+              "rawModelStatus": "partial",
+              "displaySuggestion": "partial",
+              "scores": {
+                "present": 0.13635938974943362,
+                "partial": 0.8545921914298746,
+                "missing": 0.009048418820691873
+              },
+              "scoresCalibrated": false,
+              "reviewRequired": true,
+              "reason": "Experimental coverage suggestion; lexical evidence is not proof of correctness.",
+              "evidence": {
+                "points": [
+                  {
+                    "pointId": "sexual",
+                    "requirement": "Sexual reproduction involves fusion of male and female gametes during fertilisation.",
+                    "lexicalCoverage": 0,
+                    "candidateEvidence": null,
+                    "start": null,
+                    "end": null,
+                    "negatedOrRejectedMatch": true,
+                    "semanticCorrectnessVerified": false
+                  },
+                  {
+                    "pointId": "asexual",
+                    "requirement": "Asexual reproduction involves one parent without gamete fusion, usually producing genetically alike offspring.",
+                    "lexicalCoverage": 1,
+                    "candidateEvidence": "Asexual reproduction involves a single parent without fusion of gametes.",
+                    "start": 0,
+                    "end": 72,
+                    "negatedOrRejectedMatch": false,
+                    "semanticCorrectnessVerified": false
+                  }
+                ],
+                "concerns": []
+              },
+              "modelVersion": "english-coverage-v3.1-context-2026-10-09"
+            }
+          }
+        ],
+        "modelVersion": "english-coverage-v3.1-context-2026-10-09",
+        "modelSha256": "bc1916bc34adaecd699426987cf4c78fcde84c88052d49b070991c92159a84ec",
+        "textSha256": "4d169c7a5c2037be10858c6d26e2321ae6b5b077e9039bfe93f81d31aa917bf8",
+        "lessonId": "synthetic-reproduction"
+      }
+    },
+    {
+      "title": "A different topic",
+      "noteText": "Friction opposes the relative motion of surfaces. Lubrication reduces friction, while rough surfaces can increase it.",
+      "check": {
+        "state": "ready",
+        "checkedAt": "2026-10-16T10:23:06.380Z",
+        "reviewRequired": true,
+        "suggestions": [
+          {
+            "conceptId": "sci-g10-col-001",
+            "modelConceptId": "sci-g10-col-001",
+            "conceptName": "Sexual and Asexual Reproduction",
+            "prediction": {
+              "status": null,
+              "suggestedStatus": "missing",
+              "completeSuggestionWithheld": false,
+              "unsupportedRequiredPoints": [
+                "sexual",
+                "asexual"
+              ],
+              "policyReason": null,
+              "rawModelStatus": "missing",
+              "displaySuggestion": "missing",
+              "scores": {
+                "present": 0.00785767246104439,
+                "partial": 0.028228968998174325,
+                "missing": 0.9639133585407813
+              },
+              "scoresCalibrated": false,
+              "reviewRequired": true,
+              "reason": "Experimental coverage suggestion; lexical evidence is not proof of correctness.",
+              "evidence": {
+                "points": [
+                  {
+                    "pointId": "sexual",
+                    "requirement": "Sexual reproduction involves fusion of male and female gametes during fertilisation.",
+                    "lexicalCoverage": 0,
+                    "candidateEvidence": null,
+                    "start": null,
+                    "end": null,
+                    "negatedOrRejectedMatch": false,
+                    "semanticCorrectnessVerified": false
+                  },
+                  {
+                    "pointId": "asexual",
+                    "requirement": "Asexual reproduction involves one parent without gamete fusion, usually producing genetically alike offspring.",
+                    "lexicalCoverage": 0,
+                    "candidateEvidence": null,
+                    "start": null,
+                    "end": null,
+                    "negatedOrRejectedMatch": false,
+                    "semanticCorrectnessVerified": false
+                  }
+                ],
+                "concerns": []
+              },
+              "modelVersion": "english-coverage-v3.1-context-2026-10-09"
+            }
+          }
+        ],
+        "modelVersion": "english-coverage-v3.1-context-2026-10-09",
+        "modelSha256": "bc1916bc34adaecd699426987cf4c78fcde84c88052d49b070991c92159a84ec",
+        "textSha256": "86d86843a7fc443ca1014d5d2dc8dbfd70d5725c197125ecdc380b742c2e046d",
+        "lessonId": "synthetic-reproduction"
+      }
+    }
+  ]
+}

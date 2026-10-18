@@ -14,17 +14,17 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import {
   X,
-  Upload,
   Camera,
   Image as ImageIcon,
   Plus,
   Trash2,
   Layers,
   Sparkles,
-  Info,
+  Check,
+  ShieldCheck,
 } from "lucide-react-native";
 import { useAuth } from "@clerk/expo";
-import { notesApi } from "@/api/notesAPI";
+import { notesApi, RESEARCH_CONSENT_VERSION } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import InputField from "@/components/InputField";
 import Toast from "react-native-toast-message";
@@ -38,9 +38,11 @@ export default function UploadNote() {
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState<10 | 11 | undefined>();
   const [topic, setTopic] = useState("");
+  const [researchConsent, setResearchConsent] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const pickImages = async () => {
+    if(isUploading||images.length>=20)return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Toast.show({
@@ -54,17 +56,18 @@ export default function UploadNote() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
-      selectionLimit: 20,
+      selectionLimit: Math.max(1,20-images.length),
       quality: 0.85,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const newUris = result.assets.map((asset) => asset.uri);
-      setImages((prev) => [...prev, ...newUris]);
+      setImages((prev) => [...prev, ...newUris].slice(0,20));
     }
   };
 
   const takePhoto = async () => {
+    if(isUploading||images.length>=20)return;
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Toast.show({
@@ -80,7 +83,7 @@ export default function UploadNote() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImages((prev) => [...prev, result.assets[0].uri]);
+      setImages((prev) => [...prev, result.assets[0].uri].slice(0,20));
     }
   };
 
@@ -110,17 +113,21 @@ export default function UploadNote() {
     setIsUploading(true);
     try {
       const response = await notesApi.uploadNote(userId, title.trim(), images, {
-        subject,
-        grade,
-        topic,
+        context: {
+          subject,
+          grade,
+          topic,
+        },
+        researchConsent,
+        researchConsentVersion: RESEARCH_CONSENT_VERSION,
       });
       if (response.success) {
         Toast.show({
           type: "success",
           text1: "Upload Complete",
-          text2: `Uploaded ${images.length} page(s). AI analysis started!`,
+          text2: `Uploaded ${images.length} page(s). Analysis continues in the background; check Notes for the result.`,
         });
-        router.replace(`/(main)/notes/${response.data.noteId}` as any);
+        router.replace("/(tabs)/notes");
       } else {
         throw new Error(response.error || "Upload failed");
       }
@@ -129,7 +136,7 @@ export default function UploadNote() {
       Toast.show({
         type: "error",
         text1: "Upload Failed",
-        text2: error.message || "Could not upload note. Please check connection and try again.",
+        text2: (typeof error?.response?.data?.error==='string'?error.response.data.error:error.message) || "Could not upload note. Please check connection and try again.",
       });
       setIsUploading(false);
     }
@@ -344,6 +351,42 @@ export default function UploadNote() {
           <Text style={styles.tipText}>
             <Text style={{ fontWeight: "700", color: "#1E293B" }}>AI Tip: </Text>
             Ensure good lighting and capture all pages in reading order for highest OCR accuracy.
+          </Text>
+        </View>
+
+        <View style={styles.consentCard}>
+          <View style={styles.consentHeader}>
+            <View style={styles.consentIconWrap}>
+              <ShieldCheck size={18} color="#0369A1" strokeWidth={2.2} />
+            </View>
+            <View style={styles.consentHeadingCopy}>
+              <Text style={styles.consentTitle}>Optional research contribution</Text>
+              <Text style={styles.consentOptional}>Your choice will not affect note analysis.</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.consentChoice}
+            onPress={() => setResearchConsent((current) => !current)}
+            disabled={isUploading}
+            activeOpacity={0.75}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: researchConsent, disabled: isUploading }}
+            accessibilityLabel="Allow this note to be used for research and model improvement"
+          >
+            <View style={[styles.checkbox, researchConsent && styles.checkboxChecked]}>
+              {researchConsent && <Check size={15} color="#FFFFFF" strokeWidth={3} />}
+            </View>
+            <Text style={styles.consentText}>
+              I allow a pseudonymized copy of these note images and their OCR text to be
+              reviewed by approved subject experts and used to improve the concept
+              classifier.
+            </Text>
+          </TouchableOpacity>
+
+          <Text style={styles.consentPrivacyText}>
+            Please avoid names or other personal details in your notes. You may withdraw
+            this permission later from the completed note. Consent version {RESEARCH_CONSENT_VERSION}.
           </Text>
         </View>
       </ScrollView>
@@ -724,6 +767,73 @@ const styles = StyleSheet.create({
     color: "#9A3412",
     lineHeight: 18,
     flex: 1,
+  },
+  consentCard: {
+    marginTop: 14,
+    padding: 15,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    backgroundColor: "#F0F9FF",
+  },
+  consentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  consentIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E0F2FE",
+  },
+  consentHeadingCopy: {
+    flex: 1,
+  },
+  consentTitle: {
+    fontSize: 13.5,
+    fontWeight: "700",
+    color: "#0C4A6E",
+  },
+  consentOptional: {
+    marginTop: 2,
+    fontSize: 11.5,
+    color: "#0369A1",
+  },
+  consentChoice: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "#7DD3FC",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    borderColor: "#0284C7",
+    backgroundColor: "#0284C7",
+  },
+  consentText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: "#334155",
+  },
+  consentPrivacyText: {
+    marginTop: 11,
+    marginLeft: 32,
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#64748B",
   },
   footer: {
     padding: 16,

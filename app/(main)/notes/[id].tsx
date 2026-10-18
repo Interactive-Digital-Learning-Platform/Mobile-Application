@@ -6,11 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Animated,
-  Image,
   StatusBar,
   Modal,
   TextInput,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -33,30 +32,25 @@ import {
   CheckCircle2,
   Sparkles,
   Clock,
-  Minimize2,
   Info,
+  ShieldCheck,
 } from "lucide-react-native";
 import Svg, { Circle } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import { materialsApi, notesApi } from "@/api/notesAPI";
-import { getNotesResourceUrl } from "@/api/apiClients";
+import { notesApi } from "@/api/notesAPI";
+import { useNotesMaterials } from "@/hooks/use-notes-materials";
+import { MaterialStatus, materialLabel } from "@/utils/noteMaterials";
+import NoteCoverageBreakdown from "@/components/notes/NoteCoverageBreakdown";
+import { buildNoteCoverage } from "@/utils/noteCoverage";
+import PrivateNoteImage from "@/components/notes/PrivateNoteImage";
 import { colors } from "@/constants/colors";
 import SeverityBadge from "@/components/notes/SeverityBadge";
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-const RING_SIZE = 170;
-const RING_STROKE = 10;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-const PROCESSING_TIPS = [
-  "Clear handwriting and good lighting yield the best diagram and text extraction.",
-  "AI is identifying key topics and calculating your personalized curriculum coverage.",
-  "Building tailored interactive flashcards, quizzes, and revision summaries…",
-  "Analysis keeps running in the background — feel free to explore other tabs anytime!",
-  "Pinpointing learning gaps so you know exactly which areas need more practice.",
-];
+import NoteConceptChecklist from "@/components/notes/NoteConceptChecklist";
+import { useNoteConceptChecklist } from "@/hooks/use-note-concept-checklist";
+import { ChecklistConcept } from "@/utils/noteConceptChecklist";
+import ProcessingNotebook from '@/components/notes/ProcessingNotebook';
+import { useAuth } from "@clerk/expo";
+import { NoteProcessingProgress, processingSummary, processingGroups, elapsedSeconds } from "@/utils/noteProcessing";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +75,7 @@ interface CoverageScores {
 interface ConceptFinding {
   conceptId: string;
   conceptName: string;
+  status?: "present" | "partial" | "missing";
   found: boolean;
   decisionConfidence: number;
   matchMethod: "keyword" | "semantic" | "not_found";
@@ -97,13 +92,14 @@ interface ExplainableGap {
   outcomeDescription: string;
   status: "achieved" | "partially_achieved" | "not_achieved";
   evidence: string;
-  missingConcepts: Array<{
+  missingConcepts: {
     id: string;
     name: string;
     weight: number;
     severity: "high" | "medium" | "low";
     category: string;
-  }>;
+    status?: "partial" | "missing";
+  }[];
   recommendation: string;
   findingStatus?: "covered_in_note" | "not_found_in_note" | "confirmed_learning_gap";
   verificationStatus?: "not_required" | "pending" | "verified";
@@ -117,6 +113,8 @@ interface ExamReadiness {
 }
 
 interface Analysis {
+  englishCoverageCheck?: unknown;
+  qualityWarnings?: string[];
   subject: string;
   topic: string;
   gradeLevel: string;
@@ -124,6 +122,7 @@ interface Analysis {
   lessonNumber?: number;
   lessonId?: string;
   keyConcepts: string[];
+  partialConcepts?: string[];
   strengthAreas: string[];
   missingConcepts: string[];
   conceptFindings?: ConceptFinding[];
@@ -135,8 +134,9 @@ interface Analysis {
   ocrLowQualityWarning?: boolean;
   ocrPageSummary?: {
     totalPages: number;
-    extractedPages: number;
-    failedPages: number;
+    extractedPages?: number;
+    failedPages?: number;
+    qualityState?: "known" | "unknown";
   };
   noteScope?: {
     scope: "complete_lesson_note" | "partial_lesson_note" | "revision_summary" | "exercise_or_worksheet" | "diagram_or_formula_sheet" | "unknown";
@@ -165,14 +165,168 @@ interface Note {
   userGrade?: number;
   userTopic?: string;
   userLessonId?: string;
+  researchConsent?: {
+    status: "not_provided" | "granted" | "withdrawn";
+    version?: string;
+    grantedAt?: string;
+    withdrawnAt?: string;
+  };
   analysis?: Analysis;
   createdAt: string;
+  processingProgress?: NoteProcessingProgress;
 }
 
-interface MaterialsOverview {
-  generatedTypes: string[];
-  missingCount: number;
+type StudentCheckStatus = "needs_input" | "support_requested" | "understood" | "mixed";
+
+interface GapConceptView {
+  id?: string;
+  name: string;
+  weight: number;
+  severity: "high" | "medium" | "low";
+  category?: string;
+  coverageStatus: "partial" | "missing";
+  finding?: ConceptFinding;
 }
+
+interface LearningFindingView {
+  id: string;
+  outcome: string;
+  outcomeStatus: "partially_achieved" | "not_achieved";
+  concepts: GapConceptView[];
+  severity: "high" | "medium" | "low";
+  evidence: string;
+  recommendation: string;
+  studentStatus: StudentCheckStatus;
+  supportRequestedCount: number;
+  understoodCount: number;
+  needsInputCount: number;
+  detectionConfidence?: number;
+  priorityScore: number;
+}
+
+const normalizeConceptName = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/^needs further coverage in this note:\s*/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const toNoteCoverageEvidence = (value: string) =>
+  value
+    .replace(/student demonstrated understanding of/gi, "the uploaded note contains evidence for")
+    .replace(/student fully covered/gi, "the uploaded note fully covers")
+    .replace(/needs work on/gi, "does not fully evidence")
+    .replace(/missed by student/gi, "not evidenced in this upload");
+
+const findConceptFinding = (
+  conceptId: string | undefined,
+  conceptName: string,
+  findings: ConceptFinding[],
+) => {
+  const normalizedName = normalizeConceptName(conceptName);
+  return findings.find(
+    (finding) =>
+      (!!conceptId && finding.conceptId === conceptId) ||
+      normalizeConceptName(finding.conceptName) === normalizedName,
+  );
+};
+
+const buildLearningFindings = (analysis?: Analysis): LearningFindingView[] => {
+  if (!analysis) return [];
+
+  const conceptFindings = analysis.conceptFindings ?? [];
+  const severityRank = { low: 1, medium: 2, high: 3 } as const;
+  const explainable = analysis.explainableGaps ?? [];
+
+  const source = explainable.length > 0
+    ? explainable.map((gap) => ({
+        id: gap.outcomeId,
+        outcome: gap.outcomeDescription,
+        outcomeStatus: gap.status === "not_achieved" ? "not_achieved" as const : "partially_achieved" as const,
+        evidence: toNoteCoverageEvidence(gap.evidence),
+        recommendation: gap.recommendation,
+        concepts: gap.missingConcepts.map((concept) => ({
+          id: concept.id,
+          name: concept.name,
+          weight: concept.weight ?? 1,
+          severity: concept.severity ?? "medium",
+          category: concept.category,
+          coverageStatus: concept.status ?? "missing",
+          finding: findConceptFinding(concept.id, concept.name, conceptFindings),
+        })),
+      }))
+    : analysis.learningGaps.map((gap, index) => ({
+        id: `legacy-${index}`,
+        outcome: gap.concept.replace(/^Needs further coverage in this note:\s*/i, ""),
+        outcomeStatus: "partially_achieved" as const,
+        evidence: "No sufficient note evidence was found for this curriculum concept.",
+        recommendation: gap.suggestion,
+        concepts: gap.concept
+          .replace(/^Needs further coverage in this note:\s*/i, "")
+          .split(/[,/]/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name) => ({
+            name,
+            weight: gap.severity === "high" ? 5 : gap.severity === "medium" ? 3 : 1,
+            severity: gap.severity,
+            coverageStatus: "missing" as const,
+            finding: findConceptFinding(undefined, name, conceptFindings),
+          })),
+      }));
+
+  return source
+    .map((gap) => {
+      const supportRequestedCount = gap.concepts.filter(
+        (concept) => concept.finding?.studentVerification === "needs_help",
+      ).length;
+      const understoodCount = gap.concepts.filter(
+        (concept) => concept.finding?.studentVerification === "understood",
+      ).length;
+      const verifiableCount = gap.concepts.filter((concept) => concept.finding && !concept.finding.found).length;
+      const needsInputCount = Math.max(0, verifiableCount - supportRequestedCount - understoodCount);
+      const studentStatus: StudentCheckStatus = supportRequestedCount > 0 && understoodCount > 0
+        ? "mixed"
+        : supportRequestedCount > 0
+        ? "support_requested"
+        : needsInputCount > 0
+        ? "needs_input"
+        : understoodCount > 0
+        ? "understood"
+        : "needs_input";
+      const severity = gap.concepts.reduce<"high" | "medium" | "low">(
+        (highest, concept) =>
+          severityRank[concept.severity] > severityRank[highest] ? concept.severity : highest,
+        "low",
+      );
+      const confidences = gap.concepts
+        .map((concept) => concept.finding?.decisionConfidence)
+        .filter((value): value is number => typeof value === "number");
+      const detectionConfidence = confidences.length > 0
+        ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
+        : undefined;
+      const highestWeight = Math.max(1, ...gap.concepts.map((concept) => concept.weight));
+      const frequentlyTested = gap.concepts.some((concept) => concept.finding?.isFrequentlyTested);
+      const statusPriority = supportRequestedCount > 0 ? 300 : needsInputCount > 0 ? 200 : 100;
+      const priorityScore =
+        statusPriority +
+        highestWeight * 10 +
+        (frequentlyTested ? 15 : 0) +
+        (detectionConfidence ?? 0) * 10;
+
+      return {
+        ...gap,
+        severity,
+        studentStatus,
+        supportRequestedCount,
+        understoodCount,
+        needsInputCount,
+        detectionConfidence,
+        priorityScore,
+      };
+    })
+    .sort((a, b) => b.priorityScore - a.priorityScore);
+};
 
 // ─── Helper Components ────────────────────────────────────────────────────────
 
@@ -206,8 +360,10 @@ const MaterialCard = ({
   badgeText,
   color,
   isReady,
-  isGeneratingAll,
+  status,
+  disabled,
   onPress,
+  onRetry,
 }: {
   icon: React.ReactNode;
   title: string;
@@ -215,12 +371,17 @@ const MaterialCard = ({
   badgeText?: string;
   color: string;
   isReady: boolean;
-  isGeneratingAll?: boolean;
+  status: MaterialStatus;
+  disabled?: boolean;
   onPress: () => void;
+  onRetry: () => void;
 }) => (
   <TouchableOpacity
-    style={[styles.materialListRow, !isReady && styles.materialListRowDisabled]}
-    onPress={isReady ? onPress : undefined}
+    style={[styles.materialListRow, disabled && !isReady && styles.materialListRowDisabled]}
+    accessibilityRole="button"
+    accessibilityLabel={`${title}. ${materialLabel(status, isReady)}`}
+    disabled={disabled && !isReady}
+    onPress={onPress}
     activeOpacity={0.75}
   >
     {/* Colored left accent */}
@@ -231,8 +392,8 @@ const MaterialCard = ({
     </View>
     {/* Label + meta */}
     <View style={styles.materialListBody}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingRight: 6 }}>
-        <Text style={[styles.materialListLabel, !isReady && { color: "#94A3B8" }]} numberOfLines={1}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4, paddingRight: 6 }}>
+        <Text style={[styles.materialListLabel, !isReady && { color: "#475569" }]} numberOfLines={2}>
           {title}
         </Text>
         {badgeText ? (
@@ -246,18 +407,24 @@ const MaterialCard = ({
           {subtitle}
         </Text>
       ) : null}
-      <Text style={[styles.materialListMeta, { color: isReady ? "#10B981" : (isGeneratingAll ? color : "#94A3B8") }]}>
-        {isReady ? "Ready — tap to open" : isGeneratingAll ? "Generating…" : "Not yet generated"}
+      <Text style={[styles.materialListMeta, { color: isReady ? "#10B981" : (status === "failed" ? "#B45309" : "#64748B") }]}>
+        {materialLabel(status, isReady)}
       </Text>
+      {isReady && status === "failed" && (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Retry updating ${title}`} disabled={disabled}
+          onPress={event => { event.stopPropagation(); onRetry(); }} style={{ alignSelf: "flex-start", paddingVertical: 8 }}>
+          <Text style={{ color: colors.primary, fontWeight: "700", fontSize: 12 }}>Retry update</Text>
+        </TouchableOpacity>
+      )}
     </View>
     {/* Right indicator */}
     <View style={styles.materialListRight}>
       {isReady ? (
         <ChevronRight size={18} color="#CBD5E1" />
-      ) : isGeneratingAll ? (
+      ) : status === "queued" || status === "generating" ? (
         <ActivityIndicator size="small" color={color} />
       ) : (
-        <View style={styles.materialLockDot} />
+        <ChevronRight size={18} color={color} />
       )}
     </View>
   </TouchableOpacity>
@@ -265,277 +432,78 @@ const MaterialCard = ({
 
 // ─── Processing Pipeline Card ────────────────────────────────────────────────
 
-const PIPELINE_STAGES_INFO = [
-  {
-    label: "Scanning Handwriting",
-    detail: "Running optical character recognition on your images…",
-    estimatedEndSec: 8,
-  },
-  {
-    label: "Detecting Subject & Grade",
-    detail: "Identifying subject area, topic, and curriculum level…",
-    estimatedEndSec: 16,
-  },
-  {
-    label: "Matching Curriculum",
-    detail: "Searching curriculum knowledge base & textbook passages…",
-    estimatedEndSec: 24,
-  },
-  {
-    label: "Analyzing Learning Gaps",
-    detail: "Calculating concept coverage and identifying missing knowledge…",
-    estimatedEndSec: 32,
-  },
-];
-
-const EST_TOTAL_SECS = 32;
-
-const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
+const ProcessingView: React.FC<{ createdAt: string; progress?: NoteProcessingProgress; connectionError: boolean; pollPaused:boolean; onCheck:()=>void; onBack: () => void }> = ({
   createdAt,
+  progress,
+  connectionError,
+  pollPaused,onCheck,
   onBack,
 }) => {
   const [elapsedSec, setElapsedSec] = useState(0);
-  const [tipIndex, setTipIndex] = useState(0);
-  const [pipelineExpanded, setPipelineExpanded] = useState(false);
-  const progressAnim = React.useRef(new Animated.Value(0)).current;
+  const stages = processingGroups(progress);
+  const summary = processingSummary(progress);
 
   // Elapsed timer — ticks every second
   useEffect(() => {
-    const startTime = new Date(createdAt).getTime();
     const tick = () => {
-      const elapsed = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
-      setElapsedSec(elapsed);
+      setElapsedSec(elapsedSeconds(progress?.startedAt || createdAt));
     };
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [createdAt]);
+  }, [createdAt, progress?.startedAt]);
 
-  // Rotate helpful learning tips every 4.5 seconds
-  useEffect(() => {
-    const tipInterval = setInterval(() => {
-      setTipIndex((prev) => (prev + 1) % PROCESSING_TIPS.length);
-    }, 4500);
-    return () => clearInterval(tipInterval);
-  }, []);
-
-  // Smooth progress bar animation (capped at 92% until server confirms done)
-  useEffect(() => {
-    const capped = Math.min((elapsedSec / EST_TOTAL_SECS) * 100, 92);
-    Animated.timing(progressAnim, {
-      toValue: capped,
-      duration: 600,
-      useNativeDriver: false,
-    }).start();
-  }, [elapsedSec]);
-
-  // Determine active stage index
-  const activeIdx = (() => {
-    const i = PIPELINE_STAGES_INFO.findIndex((s) => elapsedSec < s.estimatedEndSec);
-    return i === -1 ? PIPELINE_STAGES_INFO.length - 1 : i;
-  })();
-
-  const pct = Math.min(Math.round((elapsedSec / EST_TOTAL_SECS) * 100), 92);
-  const etaSec = Math.max(0, EST_TOTAL_SECS - elapsedSec);
-  const fmtTime = (s: number) =>
-    s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-
-  const strokeDashoffset = progressAnim.interpolate({
-    inputRange: [0, 100],
-    outputRange: [RING_CIRCUMFERENCE, 0],
-    extrapolate: "clamp",
-  });
+  const fmtTime = (s: number) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 
   return (
-    <LinearGradient
-      colors={["#D94E06", "#EA580C", "#FC6E20", "#FF8C50"]}
-      locations={[0, 0.35, 0.7, 1]}
-      style={styles.fullScreenProcessingOrange}
-    >
+    <LinearGradient colors={["#D94E06", "#EA580C", colors.primary, "#FF8C50", "#FFA87A"]} style={styles.processingPage}>
+    <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
       <StatusBar barStyle="light-content" backgroundColor="#D94E06" />
-      <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
-        {/* ── Top Bar ── */}
-        <View style={styles.processingTopBarOrange}>
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.backButtonOrange}
-            activeOpacity={0.75}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronLeft size={20} color="#ffffff" strokeWidth={2.5} />
-            <Text style={styles.backLabelTextOrange}>Notes</Text>
+      <View style={styles.processingNav}>
+        <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to Notes" style={styles.processingBack}>
+          <ChevronLeft size={20} color="#FFFFFF" />
+          <Text style={styles.processingBackText}>Notes</Text>
+        </TouchableOpacity>
+        <View style={styles.processingBadge}><View style={styles.processingBadgeDot} /><Text style={styles.processingBadgeText}>IN PROGRESS</Text></View>
+      </View>
+      <ScrollView contentContainerStyle={styles.processingContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.processingBody}>
+          <View style={styles.processingHero}>
+            <ProcessingNotebook />
+            <Text style={styles.processingTitle}>Let’s explore{`\n`}your big ideas!</Text>
+            <Text style={styles.processingSubtitle}>Your study buddy is reading your notes{`\n`}and connecting the dots.</Text>
+          </View>
+          <View style={styles.processingCard}>
+            <View style={styles.processingCardHeader}>
+              <Text style={styles.processingCardTitle}>Your note’s journey</Text>
+              <View style={styles.processingTime}><Clock size={12} color="#431407" /><Text style={styles.processingTimeText}>{fmtTime(elapsedSec)} elapsed</Text></View>
+            </View>
+            {stages.map((stage, idx) => (
+              <View key={stage.label} style={[styles.processingStep, stage.active && styles.processingStepActive, stage.done && styles.processingStepDone]}>
+                <View style={styles.processingStepRail}>
+                  <View style={[styles.processingStepDot, stage.active && styles.processingStepDotActive, stage.done && styles.processingStepDotDone]}>
+                    {stage.done ? <CheckCircle2 size={18} color="#15803D" /> : stage.active ? <ActivityIndicator size="small" color="#C2410C" /> : <Text style={styles.processingStepNumber}>{idx + 1}</Text>}
+                  </View>
+                </View>
+                <View style={styles.processingStepCopy}>
+                  <Text style={[styles.processingStepLabel, (stage.active || stage.done) && styles.processingStepLabelCurrent]}>{stage.label}</Text>
+                  {stage.active && <Text style={styles.processingStepDetail}>{summary}</Text>}
+                </View>
+              </View>
+            ))}
+            {!stages.some(stage => stage.active) && <Text style={styles.processingStepDetail}>{summary}</Text>}
+            {connectionError && !pollPaused && <View accessibilityRole="alert" style={styles.processingNotice}><AlertCircle size={16} color="#92400E" /><Text style={styles.processingNoticeText}>Connection interrupted. We’re checking again; this won’t restart your analysis.</Text></View>}
+            {pollPaused&&<View style={styles.processingNotice}><Text style={styles.processingNoticeText}>Automatic updates are paused. Your analysis can keep running. Come back later or check again.</Text></View>}
+          </View>
+          <TouchableOpacity onPress={onBack} accessibilityRole="button" style={styles.processingPrimary} activeOpacity={0.85}>
+            <Text style={styles.processingPrimaryText}>Continue to Notes</Text><ChevronRight size={18} color="#9A3412" />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={onBack}
-            style={styles.runInBackgroundBtnOrange}
-            activeOpacity={0.8}
-          >
-            <Minimize2 size={13} color="#ffffff" strokeWidth={2.2} />
-            <Text style={styles.runInBackgroundTextOrange}>Run in Background</Text>
-          </TouchableOpacity>
+          {pollPaused&&<TouchableOpacity onPress={onCheck} accessibilityRole="button" style={[styles.processingPrimary,{marginTop:10}]}><Text style={styles.processingPrimaryText}>Check analysis again</Text></TouchableOpacity>}
+          <Text style={styles.processingFootnote}>No need to wait here. Analysis keeps running.{`\n`}Open this note again to see your results.</Text>
+          {elapsedSec >= 60 && <Text style={styles.processingLongWait}>Multiple pages or handwriting retries can take a few minutes.</Text>}
         </View>
-
-        <ScrollView
-          style={styles.processingScrollView}
-          contentContainerStyle={styles.processingScrollContentOrange}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ── Central Circular Progress Ring (Quiz Screenshots 3 & 4 Style) ── */}
-          <View style={styles.processingHeroOrange}>
-            <View style={styles.circleProgressWrapOrange}>
-              <Svg width={RING_SIZE} height={RING_SIZE} style={styles.circleSvg}>
-                {/* Background Track Circle (Translucent White) */}
-                <Circle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  stroke="rgba(255,255,255,0.25)"
-                  strokeWidth={RING_STROKE}
-                  fill="transparent"
-                />
-                {/* Animated Progress Circle (Bright Pure White) */}
-                <AnimatedCircle
-                  cx={RING_SIZE / 2}
-                  cy={RING_SIZE / 2}
-                  r={RING_RADIUS}
-                  stroke="#FFFFFF"
-                  strokeWidth={RING_STROKE}
-                  fill="transparent"
-                  strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  transform={`rotate(-90, ${RING_SIZE / 2}, ${RING_SIZE / 2})`}
-                />
-              </Svg>
-
-              {/* Inner Content (Frosted Glass Badge with Icon + Percentage) */}
-              <View style={styles.circleInnerContentOrange}>
-                <Sparkles size={28} color="#ffffff" strokeWidth={2.2} />
-                <Text style={styles.circlePctTextOrange}>{pct}%</Text>
-                <Text style={styles.circleEtaTextOrange}>~{fmtTime(etaSec)} left</Text>
-              </View>
-            </View>
-
-            {/* Bold Title & Subtitle */}
-            <Text style={styles.processingMainTitleOrange}>Analyzing Notes</Text>
-            <Text style={styles.processingMainSubtitleOrange}>
-              Transcribing handwriting & mapping curriculum standards
-            </Text>
-
-            {/* Frosted AI Message Pill (Quiz Screenshot 3/4 Style) */}
-            <View style={styles.aiStatusChipOrange}>
-              <Sparkles size={14} color="#ffffff" style={{ marginRight: 6 }} />
-              <Text style={styles.aiStatusChipTextOrange}>
-                {pct < 30
-                  ? "Scanning handwritten pages with OCR…"
-                  : pct < 60
-                  ? "Matching syllabus topics & learning outcomes…"
-                  : pct < 85
-                  ? "Pinpointing knowledge gaps & insights…"
-                  : "Almost ready!"}
-              </Text>
-            </View>
-
-            {/* Animated 4-Dot Progress Indicator */}
-            <View style={styles.dotIndicatorRow}>
-              <View style={[styles.dotItem, pct >= 20 && styles.dotActive]} />
-              <View style={[styles.dotItem, pct >= 45 && styles.dotActive]} />
-              <View style={[styles.dotItem, pct >= 70 && styles.dotActivePill]} />
-              <View style={[styles.dotItem, pct >= 90 && styles.dotActive]} />
-            </View>
-          </View>
-
-          {/* ── Educational Tip Banner ── */}
-          <View style={styles.tipCardOrange}>
-            <View style={styles.tipIconCircle}>
-              <Sparkles size={14} color="#FC6E20" />
-            </View>
-            <Text style={styles.tipTextOrange} numberOfLines={2}>
-              {PROCESSING_TIPS[tipIndex]}
-            </Text>
-          </View>
-
-          {/* ── Collapsible Pipeline Stages Accordion ── */}
-          <View style={styles.pipelineAccordionCard}>
-            <TouchableOpacity
-              style={styles.pipelineAccordionHeader}
-              onPress={() => setPipelineExpanded(!pipelineExpanded)}
-              activeOpacity={0.7}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-                <Clock size={14} color="#ffffff" />
-                <Text style={styles.pipelineAccordionTitle}>
-                  ANALYSIS PIPELINE ({fmtTime(elapsedSec)} elapsed)
-                </Text>
-              </View>
-              {pipelineExpanded ? (
-                <ChevronUp size={16} color="#ffffff" />
-              ) : (
-                <ChevronDown size={16} color="#ffffff" />
-              )}
-            </TouchableOpacity>
-
-            {pipelineExpanded && (
-              <View style={styles.pipelineAccordionList}>
-                {PIPELINE_STAGES_INFO.map((stage, idx) => {
-                  const isDone = idx < activeIdx;
-                  const isActive = idx === activeIdx;
-
-                  return (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.pipelineCardOrange,
-                        isDone && styles.pipelineCardOrangeDone,
-                        isActive && styles.pipelineCardOrangeActive,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.pipelineDotWrapOrange,
-                          isDone && styles.pipelineDotOrangeDone,
-                          isActive && styles.pipelineDotOrangeActive,
-                        ]}
-                      >
-                        {isDone ? (
-                          <CheckCircle2 size={13} color="#16A34A" strokeWidth={2.5} />
-                        ) : isActive ? (
-                          <ActivityIndicator size={10} color="#FC6E20" />
-                        ) : (
-                          <Text style={styles.pipelineIndexTextOrange}>{idx + 1}</Text>
-                        )}
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            styles.pipelineStageNameOrange,
-                            isDone && styles.pipelineStageNameOrangeDone,
-                            isActive && styles.pipelineStageNameOrangeActive,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {stage.label}
-                        </Text>
-                        {isActive && (
-                          <Text style={styles.pipelineStageDescOrange} numberOfLines={2}>
-                            {stage.detail}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-
-          <Text style={styles.processingBottomHintOrange}>
-            ✦ Processing continues in the background — feel free to explore other tabs anytime
-          </Text>
-        </ScrollView>
-      </SafeAreaView>
+      </ScrollView>
+    </SafeAreaView>
     </LinearGradient>
   );
 };
@@ -545,15 +513,25 @@ const ProcessingView: React.FC<{ createdAt: string; onBack: () => void }> = ({
 export default function NoteDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { userId } = useAuth();
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const gapsSectionY = React.useRef<number>(0);
+  const coverageSectionY = React.useRef(0);
+  const photosSectionY = React.useRef(0);
+  const materialsSectionY = React.useRef(0);
+  const textSectionY = React.useRef(0);
 
   const [note, setNote] = useState<Note | null>(null);
-  const [materialsOverview, setMaterialsOverview] = useState<MaterialsOverview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [noteFetchError, setNoteFetchError] = useState(false);
+  const noteFetchInFlight = React.useRef<string|null>(null);
+  const currentNoteId=React.useRef(id);currentNoteId.current=id;
+  const [processingPollPaused,setProcessingPollPaused]=useState(false);
+  const [processingPollSession,setProcessingPollSession]=useState(0);
+  const [retryingAnalysis,setRetryingAnalysis]=useState(false);
   const [verifyingConceptId, setVerifyingConceptId] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<{ conceptId: string; message: string } | null>(null);
   const [ocrExpanded, setOcrExpanded] = useState(false);
   const [imageExpanded, setImageExpanded] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
@@ -564,15 +542,40 @@ export default function NoteDetail() {
   const [contextSubject, setContextSubject] = useState("");
   const [contextTopic, setContextTopic] = useState("");
   const [contextGrade, setContextGrade] = useState<10 | 11 | undefined>();
-  const [coverageExpanded, setCoverageExpanded] = useState(false);
+  const [consentUpdating, setConsentUpdating] = useState(false);
   const [expandedGapIndices, setExpandedGapIndices] = useState<Record<number, boolean>>({});
-  // Guard: ensure auto-generate fires only once per screen mount
-  const hasTriggeredGeneration = React.useRef(false);
+  const [expandedLearningFindingIds, setExpandedLearningFindingIds] = useState<Record<string, boolean>>({});
 
   const status = note?.status ?? "loading";
   const isProcessing = status === "uploaded" || status === "processing";
   const isFailed = status === "failed";
   const isAnalyzed = status === "analyzed";
+  const { overview: materialsOverview, state: materialsState, requestingType, requestError: materialsRequestError,
+    refresh: refreshMaterials, generate: generateMaterial } = useNotesMaterials(id, isAnalyzed);
+  const materialStatus = (type: string): MaterialStatus => requestingType === type
+    ? "queued" : materialsOverview?.states?.find(item => item.type === type)?.status
+      ?? (materialsOverview?.generatedTypes.includes(type) ? "ready" : "not_requested");
+  const materialAction = (type: string) => {
+    if (materialsOverview?.generatedTypes.includes(type)) navigateToMaterial(type);
+    else void generateMaterial(type);
+  };
+  const conceptCoverage = React.useMemo(() => buildNoteCoverage(note?.analysis), [note?.analysis]);
+  const conceptChecks = useNoteConceptChecklist({noteId:id,subject:note?.userSubject || note?.analysis?.subject || "",
+    text:note?.rawText || "",automatic:note?.analysis?.englishCoverageCheck,revision:note?.analysis?.analyzedAt || ""});
+  const learningFindings = React.useMemo(
+    () => buildLearningFindings(note?.analysis),
+    [note?.analysis],
+  );
+  const learningDecisionSummary = React.useMemo(
+    () => ({
+      needsInput: learningFindings.filter((finding) => finding.studentStatus === "needs_input").length,
+      supportRequested: learningFindings.filter(
+        (finding) => finding.studentStatus === "support_requested" || finding.studentStatus === "mixed",
+      ).length,
+      understood: learningFindings.filter((finding) => finding.studentStatus === "understood").length,
+    }),
+    [learningFindings],
+  );
 
   const toggleGapExpand = useCallback((index: number) => {
     setExpandedGapIndices((prev) => ({
@@ -588,17 +591,48 @@ export default function NoteDetail() {
     });
   }, []);
 
+  const openLearningFinding = useCallback((findingId: string) => {
+    setExpandedLearningFindingIds((previous) => ({
+      ...previous,
+      [findingId]: true,
+    }));
+    setTimeout(scrollToGaps, 50);
+  }, [scrollToGaps]);
+
+  const relatedStudyFinding = (concept: ChecklistConcept) => learningFindings.find(finding =>
+    finding.concepts.some(item => [concept.id,concept.curriculumId].some(id => !!id && (item.id === id || item.finding?.conceptId === id))));
+  const studyConcept = (concept: ChecklistConcept) => {
+    if (concept.status === "present" && materialsOverview?.generatedTypes.includes("revision_summary")) {
+      navigateToMaterial("revision_summary");
+      return;
+    }
+    const related = concept.status !== "present" ? relatedStudyFinding(concept) : undefined;
+    if (related) { openLearningFinding(related.id); return; }
+    scrollViewRef.current?.scrollTo({y:Math.max(0,materialsSectionY.current-16),animated:true});
+  };
+  const conceptStudyLabel = (concept: ChecklistConcept) => concept.status === "present" ? "Quick revision" :
+    relatedStudyFinding(concept) ? "Choose study help" : "Study tools";
+  const reviewChecklistText = () => {
+    setOcrExpanded(true);
+    setTimeout(() => scrollViewRef.current?.scrollTo({y:Math.max(0,textSectionY.current-16),animated:true}),80);
+  };
+
   // ── Fetch note ──────────────────────────────────────────────────────────────
   const fetchNote = useCallback(async () => {
+    if (noteFetchInFlight.current===id) return;
+    noteFetchInFlight.current = id;
     try {
       const response = await notesApi.getNote(id);
-      if (response.success) {
+      if (response.success&&currentNoteId.current===id) {
         setNote(response.data);
+        setNoteFetchError(false);
       }
     } catch (error) {
       console.error("Failed to fetch note:", error);
+      if(currentNoteId.current===id)setNoteFetchError(true);
     } finally {
-      setLoading(false);
+      if(currentNoteId.current===id)setLoading(false);
+      if(noteFetchInFlight.current===id)noteFetchInFlight.current = null;
     }
   }, [id]);
 
@@ -608,13 +642,19 @@ export default function NoteDetail() {
   ) => {
     if (!note) return;
     try {
+      setVerificationError(null);
       setVerifyingConceptId(conceptId);
       const response = await notesApi.verifyConceptFinding(note._id, conceptId, status);
       if (response.success && response.data?.note) {
         setNote(response.data.note);
+        refreshMaterials();
       }
     } catch (error) {
       console.error("Failed to save concept verification:", error);
+      setVerificationError({
+        conceptId,
+        message: "Your response could not be saved. Check the connection and try again.",
+      });
     } finally {
       setVerifyingConceptId(null);
     }
@@ -642,78 +682,75 @@ export default function NoteDetail() {
       });
       if (response.success) {
         setContextEditorOpen(false);
-        setMaterialsOverview(null);
         setNote((current) => current ? { ...current, status: "processing" } : current);
         fetchNote();
       }
     } catch (error) {
       console.error("Failed to correct note context:", error);
+      Alert.alert('Could not update lesson details','Check your connection and try again. If analysis is already running, wait for it to finish.');
     } finally {
       setContextSaving(false);
     }
   };
 
-  // ── Fetch materials overview ────────────────────────────────────────────────
-  const fetchMaterials = useCallback(async () => {
-    try {
-      const response = await materialsApi.getMaterials(id);
-      if (response.success) {
-        setMaterialsOverview(response.data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch materials:", error);
-    }
-  }, [id]);
-
-  // ── Manual / Re-trigger material generation ─────────────────────────────────
-  const triggerMaterialGeneration = useCallback(async () => {
-    if (isGenerating) return;
-    setIsGenerating(true);
-    try {
-      console.log("⚙️ Triggering material generation...");
-      await materialsApi.generateMaterials(id);
-      // Wait a moment then fetch materials
-      setTimeout(fetchMaterials, 2000);
-    } catch (error) {
-      console.error("Material generation failed:", error);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [id, isGenerating, fetchMaterials]);
+  const confirmConsentWithdrawal = () => {
+    if (!note || !userId || consentUpdating) return;
+    Alert.alert(
+      "Withdraw research permission?",
+      "This removes the pending expert-review copy and prevents this note from being included in future training datasets. It does not delete your note or analysis.",
+      [
+        { text: "Keep permission", style: "cancel" },
+        {
+          text: "Withdraw",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setConsentUpdating(true);
+              const response = await notesApi.updateResearchConsent(
+                note._id,
+                userId,
+                "withdrawn",
+              );
+              if (!response.success || !response.data?.researchConsent) {
+                throw new Error(response.error || "Consent withdrawal failed");
+              }
+              setNote((current) =>
+                current
+                  ? { ...current, researchConsent: response.data.researchConsent }
+                  : current,
+              );
+              Alert.alert(
+                "Permission withdrawn",
+                "Your note remains available in the app, but it will no longer be collected for future model training.",
+              );
+            } catch (error) {
+              console.error("Failed to withdraw research consent:", error);
+              Alert.alert(
+                "Could not withdraw permission",
+                "Check your connection and try again.",
+              );
+            } finally {
+              setConsentUpdating(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   // ── Polling note while processing ───────────────────────────────────────────
   useEffect(() => {
+    setNote(null);setLoading(true);
     fetchNote();
   }, [fetchNote]);
 
   useEffect(() => {
     if (!isProcessing) return;
+    setProcessingPollPaused(false);
     const interval = setInterval(fetchNote, 3000);
-    return () => clearInterval(interval);
-  }, [isProcessing, fetchNote]);
-
-  // ── When analysis is done, fetch materials & poll while missingCount > 0 ────
-  useEffect(() => {
-    if (!isAnalyzed) return;
-    fetchMaterials();
-  }, [isAnalyzed, fetchMaterials]);
-
-  useEffect(() => {
-    if (!isAnalyzed) return;
-    // Stop polling if all materials have been generated
-    if (materialsOverview && materialsOverview.missingCount === 0 && materialsOverview.generatedTypes.length > 0) {
-      return;
-    }
-
-    // Poll periodically while materials are being generated in the background
-    const interval = setInterval(() => {
-      fetchMaterials();
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [isAnalyzed, materialsOverview?.missingCount, materialsOverview?.generatedTypes.length, fetchMaterials]);
-
-  // ─────────────────────────────────────────────────────────────────────────────
+    const limit=setTimeout(()=>{clearInterval(interval);setProcessingPollPaused(true);},120000);
+    return () => {clearInterval(interval);clearTimeout(limit);};
+  }, [isProcessing, fetchNote,processingPollSession]);
 
   const getCompletenessColor = (score: number) => {
     if (score >= 75) return "#10b981";
@@ -747,7 +784,8 @@ export default function NoteDetail() {
     return (
       <SafeAreaView style={styles.centerContainer}>
         <AlertCircle size={48} color="#ef4444" />
-        <Text style={styles.errorText}>Note not found.</Text>
+        <Text style={styles.errorText}>{noteFetchError ? "Could not load this note. Check your connection and try again." : "Note not found."}</Text>
+        {noteFetchError && <TouchableOpacity style={styles.backBtn} onPress={fetchNote}><Text style={styles.backBtnText}>Try again</Text></TouchableOpacity>}
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>Go Back</Text>
         </TouchableOpacity>
@@ -760,7 +798,7 @@ export default function NoteDetail() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar backgroundColor="#F8F9FB" barStyle="dark-content" />
-        <ProcessingView createdAt={note.createdAt} onBack={() => router.back()} />
+        <ProcessingView createdAt={note.createdAt} progress={note.processingProgress} connectionError={noteFetchError} pollPaused={processingPollPaused} onCheck={()=>{void fetchNote();setProcessingPollSession(n=>n+1);}} onBack={() => router.replace("/(tabs)/notes")} />
       </SafeAreaView>
     );
   }
@@ -780,9 +818,9 @@ export default function NoteDetail() {
           <ChevronLeft size={22} color="#0F172A" />
           <Text style={styles.headerBackLabel}>Notes</Text>
         </TouchableOpacity>
-        <View style={styles.headerStatusBadge}>
-          <CheckCircle2 size={13} color="#15803D" />
-          <Text style={styles.headerStatusText}>Analyzed</Text>
+        <View style={[styles.headerStatusBadge, isFailed && { backgroundColor: "#FEF2F2" }]}>
+          {isFailed ? <AlertCircle size={13} color="#B91C1C" /> : <CheckCircle2 size={13} color="#15803D" />}
+          <Text style={[styles.headerStatusText, isFailed && { color: "#B91C1C" }]}>{isFailed ? "Failed" : "Analyzed"}</Text>
         </View>
       </View>
 
@@ -802,15 +840,70 @@ export default function NoteDetail() {
             <Text style={styles.failedText}>
               {note.errorMessage || "Could not process this image. Please ensure the image is clear and try uploading again."}
             </Text>
-            <TouchableOpacity style={styles.failedRetryBtn} onPress={() => router.back()}>
-              <Text style={styles.failedRetryText}>Go Back & Retry</Text>
+            <TouchableOpacity style={styles.failedRetryBtn} onPress={() => router.replace("/(tabs)/notes")}>
+              <Text style={styles.failedRetryText}>Return to Notes</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={[styles.failedRetryBtn,{marginTop:10}]} disabled={retryingAnalysis} onPress={async()=>{
+              setRetryingAnalysis(true);try{await notesApi.retryAnalysis(id);setNote(current=>current?{...current,status:'processing',processingProgress:undefined}:current);setProcessingPollSession(n=>n+1);}
+              catch{Alert.alert('Could not restart analysis','Check your connection and try again.');}finally{setRetryingAnalysis(false);}
+            }}><Text style={styles.failedRetryText}>{retryingAnalysis?'Starting…':'Retry analysis with these photos'}</Text></TouchableOpacity>
           </View>
         )}
 
         {/* ── Analyzed State ── */}
         {isAnalyzed && note.analysis && (
           <>
+            {note.researchConsent?.status === "granted" && (
+              <View style={styles.researchConsentCard}>
+                <View style={styles.researchConsentIcon}>
+                  <ShieldCheck size={19} color="#0369A1" strokeWidth={2.3} />
+                </View>
+                <View style={styles.researchConsentCopy}>
+                  <Text style={styles.researchConsentTitle}>
+                    Research contribution enabled
+                  </Text>
+                  <Text style={styles.researchConsentBody}>
+                    An approved expert may review a pseudonymized copy of this note to
+                    improve the concept classifier.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={confirmConsentWithdrawal}
+                    disabled={consentUpdating}
+                    activeOpacity={0.75}
+                    style={styles.researchConsentAction}
+                  >
+                    {consentUpdating ? (
+                      <ActivityIndicator size="small" color="#B91C1C" />
+                    ) : (
+                      <Text style={styles.researchConsentActionText}>
+                        Withdraw research permission
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {note.analysis.ocrPageSummary?.qualityState === "unknown" && (
+              <View style={styles.ocrWarningCard}>
+                <AlertTriangle size={20} color="#B45309" strokeWidth={2.4} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ocrWarningTitle}>Check your note photos</Text>
+                  <Text style={styles.ocrWarningText}>
+                    We reused your saved text, but couldn’t confirm that every page was read. Check the text against your photos before using the coverage results.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setImageExpanded(true);
+                      scrollViewRef.current?.scrollTo({ y: Math.max(0, photosSectionY.current - 16), animated: true });
+                    }}
+                    activeOpacity={0.75}
+                    style={{ alignSelf: "flex-start", marginTop: 8 }}
+                  >
+                    <Text style={styles.ocrWarningAction}>Review my photos</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
             {(note.analysis.ocrPageSummary?.failedPages ?? 0) > 0 && (
               <View style={styles.ocrWarningCard}>
                 <AlertTriangle size={20} color="#B45309" strokeWidth={2.4} />
@@ -847,21 +940,42 @@ export default function NoteDetail() {
                 </View>
               </View>
             )}
+            {note.analysis.qualityWarnings?.some(warning => warning.startsWith("Some concept coverage could not be checked reliably.")) && (
+              <View style={styles.ocrWarningCard}>
+                <AlertTriangle size={20} color="#B45309" strokeWidth={2.4} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ocrWarningTitle}>Some topics need your review</Text>
+                  <Text style={styles.ocrWarningText}>
+                    We couldn’t finish checking every concept. A topic name alone doesn’t mean it is fully covered. Review your text before using these results.
+                  </Text>
+                  {note.rawText && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setOcrExpanded(true);
+                        scrollViewRef.current?.scrollTo({ y: Math.max(0, textSectionY.current - 16), animated: true });
+                      }}
+                      activeOpacity={0.75}
+                      style={{ alignSelf: "flex-start", marginTop: 8 }}
+                    >
+                      <Text style={styles.ocrWarningAction}>Review extracted text</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
             {/* ── 1. Top Summary Card (Improvement 1) ── */}
             {(() => {
               const score = note.analysis.overallCompleteness;
               const isLessonCoverage = note.analysis.coverageScores?.coverageScope === "lesson_coverage";
               const scoreColor = getCompletenessColor(score);
-              const totalConcepts =
-                note.analysis.coverageScores?.totalConcepts ||
-                (note.analysis.keyConcepts.length + note.analysis.missingConcepts.length);
-              const coveredCount =
-                note.analysis.coverageScores?.foundConcepts ?? note.analysis.keyConcepts.length;
+              const totalConcepts = conceptCoverage.total;
+              const coveredCount = conceptCoverage.covered.length;
+              const partialCount = conceptCoverage.partial.length;
+              const missingCount = conceptCoverage.missing.length;
+              const attentionCount = learningFindings.length;
               const highPriorityGapsCount = note.analysis.learningGaps.filter(
                 (g) => g.severity === "high"
               ).length;
-              const attentionCount =
-                note.analysis.missingConcepts.length || note.analysis.learningGaps.length;
 
               const ringR = 40;
               const ringC = 2 * Math.PI * ringR;
@@ -953,8 +1067,8 @@ export default function NoteDetail() {
                         <View style={[styles.metricTileIcon, { backgroundColor: "#DCFCE7" }]}>
                           <CheckCircle2 size={13} color="#16A34A" strokeWidth={2.4} />
                         </View>
-                        <Text style={styles.metricTileVal}>{coveredCount}/{totalConcepts}</Text>
-                        <Text style={styles.metricTileLbl}>CONCEPTS</Text>
+                        <Text style={styles.metricTileVal}>{totalConcepts ? `${coveredCount}/${totalConcepts}` : "—"}</Text>
+                        <Text style={styles.metricTileLbl}>COVERED</Text>
                       </View>
 
                       {/* Tile 2: Learning Gaps */}
@@ -977,18 +1091,18 @@ export default function NoteDetail() {
                             highPriorityGapsCount > 0 && { color: "#DC2626" },
                           ]}
                         >
-                          {attentionCount}
+                          {missingCount}
                         </Text>
-                        <Text style={styles.metricTileLbl}>{isLessonCoverage ? "GAPS" : "NOT FOUND"}</Text>
+                        <Text style={styles.metricTileLbl}>NOT FOUND</Text>
                       </View>
 
-                      {/* Tile 3: Mastery Level */}
+                      {/* Tile 3: Partial note coverage */}
                       <View style={styles.metricGridTile}>
                         <View style={[styles.metricTileIcon, { backgroundColor: "#FFF7ED" }]}>
                           <Sparkles size={13} color={colors.primary} strokeWidth={2.4} />
                         </View>
-                        <Text style={styles.metricTileVal}>{score}%</Text>
-                        <Text style={styles.metricTileLbl}>COVERAGE</Text>
+                        <Text style={styles.metricTileVal}>{partialCount}</Text>
+                        <Text style={styles.metricTileLbl}>PARTIAL</Text>
                       </View>
 
                       {/* Tile 4: Revision priority from note coverage */}
@@ -1012,10 +1126,10 @@ export default function NoteDetail() {
                     </View>
                     <Text style={styles.aiMotivationBody}>
                       {score >= 80
-                        ? `Outstanding work! You've mastered ${coveredCount} syllabus outcomes. Complete quick revision cards to solidify full retention.`
+                        ? `Strong note coverage: ${coveredCount} concepts are covered and ${partialCount} partly covered in this upload. Use the revision summary to consolidate what you recorded.`
                         : score >= 50
-                        ? `Great start! You've evidenced ${coveredCount} core concepts. Focus on the ${attentionCount} note-coverage findings below before you revise this lesson.`
-                        : `Building momentum! Your notes cover ${coveredCount} foundational concepts. Use the personalized study flashcards and structured notes to fill the missing syllabus areas.`}
+                        ? `Good foundation: ${coveredCount} concepts are covered and ${partialCount} partly covered in this upload. Check the ${attentionCount} coverage finding${attentionCount === 1 ? "" : "s"} below before choosing what to study.`
+                        : `This upload has ${coveredCount} covered and ${partialCount} partly covered concepts. Review each coverage finding and tell us what you know before personalised support is created.`}
                     </Text>
                   </View>
 
@@ -1028,43 +1142,590 @@ export default function NoteDetail() {
                     >
                       <Target size={14} color="#475569" strokeWidth={2} />
                       <Text style={styles.summarySecondaryBtnText}>
-                        View {attentionCount} Gap{attentionCount !== 1 ? "s" : ""}
+                        Check {attentionCount} Finding{attentionCount !== 1 ? "s" : ""}
                       </Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.summaryPrimaryBtn}
-                      onPress={() => navigateToMaterial("structured_notes")}
+                      onPress={() => navigateToMaterial("revision_summary")}
                       activeOpacity={0.85}
                     >
                       <Zap size={14} color="#FFFFFF" strokeWidth={2} />
-                      <Text style={styles.summaryPrimaryBtnText}>Start Revision</Text>
+                      <Text style={styles.summaryPrimaryBtnText}>Review Summary</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
               );
             })()}
 
+            <NoteConceptChecklist
+              key={`checklist-${note._id}-${note.analysis.analyzedAt}`}
+              concepts={conceptChecks.concepts} pending={conceptChecks.pending}
+              onStudy={studyConcept} studyLabel={conceptStudyLabel} onReviewText={reviewChecklistText}
+              totalConcepts={conceptCoverage.total}
+            />
+
             {/* ── 2. Priority Learning Gap Card (Improvement 2) ── */}
-            {note.analysis.learningGaps.length > 0 && (() => {
+            {learningFindings.length > 0 && (() => {
+              const topFinding = learningFindings[0];
+              const topSupportConcept = topFinding.concepts.find(
+                (concept) => concept.finding?.studentVerification === "needs_help",
+              );
+              const structuredNotesReady = materialsOverview?.generatedTypes.includes("structured_notes") ?? false;
+              const flashcardsReady = materialsOverview?.generatedTypes.includes("flashcards") ?? false;
+              const topNeedsSupport =
+                topFinding.studentStatus === "support_requested" || topFinding.studentStatus === "mixed";
+              const topStatus = topNeedsSupport
+                ? {
+                    label: "Support requested",
+                    description: "Your response has created a personalised study priority.",
+                    color: "#7C3AED",
+                    background: "#F5F3FF",
+                    border: "#DDD6FE",
+                    icon: Brain,
+                  }
+                : topFinding.studentStatus === "understood"
+                ? {
+                    label: "Note improvement only",
+                    description: "You understand this; improve the note without treating it as a knowledge gap.",
+                    color: "#047857",
+                    background: "#ECFDF5",
+                    border: "#A7F3D0",
+                    icon: CheckCircle2,
+                  }
+                : {
+                    label: "Needs your input",
+                    description: "Check your understanding before the system recommends remediation.",
+                    color: "#C2410C",
+                    background: "#FFF7ED",
+                    border: "#FED7AA",
+                    icon: Target,
+                  };
+              const TopStatusIcon = topStatus.icon;
+
+              return (
+                <>
+                  <View style={[styles.learningDecisionCard, { borderColor: topStatus.border }]}>
+                    <View style={styles.learningDecisionHeader}>
+                      <View style={styles.learningDecisionTitleWrap}>
+                        <View style={[styles.learningDecisionIcon, { backgroundColor: topStatus.background }]}>
+                          <TopStatusIcon size={18} color={topStatus.color} strokeWidth={2.2} />
+                        </View>
+                        <View style={styles.learningDecisionTitleCopy}>
+                          <Text style={styles.learningDecisionEyebrow}>NEXT LEARNING DECISION</Text>
+                          <Text style={styles.learningDecisionStatus}>{topStatus.label}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.learningDecisionBadge, { backgroundColor: topStatus.background }]}>
+                        <Text style={[styles.learningDecisionBadgeText, { color: topStatus.color }]}>
+                          {topFinding.severity === "high" ? "HIGH" : topFinding.severity === "medium" ? "MEDIUM" : "LOW"} CURRICULUM PRIORITY
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.learningDecisionOutcome}>{topFinding.outcome}</Text>
+                    <Text style={styles.learningDecisionDescription}>{topStatus.description}</Text>
+
+                    <View style={styles.learningEvidenceStrip}>
+                      <View style={styles.learningEvidenceItem}>
+                        <FileText size={14} color="#64748B" />
+                        <View>
+                          <Text style={styles.learningEvidenceValue}>
+                            {topFinding.concepts.length}
+                          </Text>
+                          <Text style={styles.learningEvidenceLabel}>concepts to check</Text>
+                        </View>
+                      </View>
+                      <View style={styles.learningEvidenceDivider} />
+                      <View style={styles.learningEvidenceItem}>
+                        <ShieldCheck size={14} color="#64748B" />
+                        <View>
+                          <Text style={styles.learningEvidenceValue}>
+                            {typeof topFinding.detectionConfidence === "number"
+                              ? `${Math.round(topFinding.detectionConfidence * 100)}%`
+                              : "—"}
+                          </Text>
+                          <Text style={styles.learningEvidenceLabel}>detection confidence</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.learningDecisionSteps}>
+                      <View style={[styles.learningDecisionStep, styles.learningDecisionStepDone]}>
+                        <Text style={styles.learningDecisionStepNumberDone}>1</Text>
+                        <Text style={styles.learningDecisionStepTextDone}>Evidence checked</Text>
+                      </View>
+                      <View style={styles.learningDecisionStepLine} />
+                      <View
+                        style={[
+                          styles.learningDecisionStep,
+                          topFinding.studentStatus !== "needs_input" && styles.learningDecisionStepDone,
+                        ]}
+                      >
+                        <Text
+                          style={
+                            topFinding.studentStatus !== "needs_input"
+                              ? styles.learningDecisionStepNumberDone
+                              : styles.learningDecisionStepNumber
+                          }
+                        >
+                          2
+                        </Text>
+                        <Text
+                          style={
+                            topFinding.studentStatus !== "needs_input"
+                              ? styles.learningDecisionStepTextDone
+                              : styles.learningDecisionStepText
+                          }
+                        >
+                          Student check
+                        </Text>
+                      </View>
+                      <View style={styles.learningDecisionStepLine} />
+                      <View
+                        style={[
+                          styles.learningDecisionStep,
+                          topNeedsSupport && styles.learningDecisionStepDone,
+                        ]}
+                      >
+                        <Text
+                          style={topNeedsSupport ? styles.learningDecisionStepNumberDone : styles.learningDecisionStepNumber}
+                        >
+                          3
+                        </Text>
+                        <Text
+                          style={topNeedsSupport ? styles.learningDecisionStepTextDone : styles.learningDecisionStepText}
+                        >
+                          Targeted support
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.learningDecisionPrimaryButton,
+                        topNeedsSupport && !structuredNotesReady && styles.learningDecisionPrimaryButtonDisabled,
+                      ]}
+                      disabled={topNeedsSupport && !structuredNotesReady}
+                      onPress={() =>
+                        topNeedsSupport
+                          ? navigateToMaterial(
+                              "structured_notes",
+                              topFinding.id,
+                              topSupportConcept?.name ?? topFinding.concepts[0]?.name,
+                            )
+                          : topFinding.studentStatus === "understood"
+                          ? navigateToMaterial(
+                              "revision_summary",
+                              topFinding.id,
+                              topFinding.concepts[0]?.name,
+                            )
+                          : openLearningFinding(topFinding.id)
+                      }
+                      activeOpacity={0.85}
+                    >
+                      {topNeedsSupport && !structuredNotesReady ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : topNeedsSupport ? (
+                        <BookOpen size={16} color="#FFFFFF" />
+                      ) : (
+                        <Target size={16} color="#FFFFFF" />
+                      )}
+                      <Text style={styles.learningDecisionPrimaryButtonText}>
+                        {topNeedsSupport
+                          ? structuredNotesReady
+                            ? "Continue personalised learning"
+                            : "Preparing personalised support"
+                          : topFinding.studentStatus === "understood"
+                          ? "Improve this note"
+                          : "Check my understanding"}
+                      </Text>
+                      {(!topNeedsSupport || structuredNotesReady) && (
+                        <ChevronRight size={16} color="#FFFFFF" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <View
+                    style={styles.section}
+                    onLayout={(event) => {
+                      gapsSectionY.current = event.nativeEvent.layout.y;
+                    }}
+                  >
+                    <View style={styles.learningFindingsHeader}>
+                      <View style={styles.learningFindingsHeaderCopy}>
+                        <Text style={styles.learningFindingsTitle}>Coverage Findings & Study Decisions</Text>
+                        <Text style={styles.learningFindingsSubtitle}>
+                          Evidence from this upload becomes a learning priority only after your input.
+                        </Text>
+                      </View>
+                      <View style={styles.gapCountPill}>
+                        <Text style={styles.gapCountPillText}>{learningFindings.length}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.learningDecisionSummaryRow}>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipPending]}>
+                        <Target size={13} color="#C2410C" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#C2410C" }]}>
+                          {learningDecisionSummary.needsInput} need input
+                        </Text>
+                      </View>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipSupport]}>
+                        <Brain size={13} color="#7C3AED" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#7C3AED" }]}>
+                          {learningDecisionSummary.supportRequested} support
+                        </Text>
+                      </View>
+                      <View style={[styles.learningSummaryChip, styles.learningSummaryChipUnderstood]}>
+                        <CheckCircle2 size={13} color="#047857" />
+                        <Text style={[styles.learningSummaryChipText, { color: "#047857" }]}>
+                          {learningDecisionSummary.understood} understood
+                        </Text>
+                      </View>
+                    </View>
+
+                    {(note.analysis.ocrLowQualityWarning || note.analysis.noteScope?.scope !== "complete_lesson_note") && (
+                      <View style={styles.learningReliabilityNotice}>
+                        <Info size={14} color="#475569" />
+                        <Text style={styles.learningReliabilityNoticeText}>
+                          {note.analysis.ocrLowQualityWarning
+                            ? "Image readability was limited, so verify these findings before acting on them."
+                            : "This appears to be a partial or specialised note. Missing concepts may exist on other pages."}
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.learningFindingList}>
+                      {(gapsExpanded ? learningFindings : learningFindings.slice(0, 3)).map(
+                        (finding, findingIndex) => {
+                          const isExpanded = !!expandedLearningFindingIds[finding.id];
+                          const hasSupport =
+                            finding.studentStatus === "support_requested" || finding.studentStatus === "mixed";
+                          const isUnderstood = finding.studentStatus === "understood";
+                          const findingStatusConfig = hasSupport
+                            ? { label: "Support requested", color: "#7C3AED", background: "#F5F3FF" }
+                            : isUnderstood
+                            ? { label: "Understood", color: "#047857", background: "#ECFDF5" }
+                            : { label: "Needs your input", color: "#C2410C", background: "#FFF7ED" };
+                          const supportConcept = finding.concepts.find(
+                            (concept) => concept.finding?.studentVerification === "needs_help",
+                          );
+
+                          return (
+                            <View key={finding.id} style={styles.learningFindingCard}>
+                              <View style={styles.learningFindingCardTopRow}>
+                                <Text style={styles.learningFindingIndex}>FINDING {findingIndex + 1}</Text>
+                                <View
+                                  style={[
+                                    styles.learningFindingStatusBadge,
+                                    { backgroundColor: findingStatusConfig.background },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.learningFindingStatusBadgeText,
+                                      { color: findingStatusConfig.color },
+                                    ]}
+                                  >
+                                    {findingStatusConfig.label}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <Text style={styles.learningFindingOutcome}>{finding.outcome}</Text>
+                              <View style={styles.learningFindingMetaRow}>
+                                <Text style={styles.learningFindingMetaText}>
+                                  {finding.concepts.length} concept{finding.concepts.length === 1 ? "" : "s"} to check
+                                </Text>
+                                <View style={styles.learningFindingMetaDot} />
+                                <Text style={styles.learningFindingMetaText}>
+                                  {finding.severity} curriculum priority
+                                </Text>
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.learningFindingExpandButton}
+                                onPress={() =>
+                                  setExpandedLearningFindingIds((previous) => ({
+                                    ...previous,
+                                    [finding.id]: !previous[finding.id],
+                                  }))
+                                }
+                                activeOpacity={0.75}
+                              >
+                                <Text style={styles.learningFindingExpandButtonText}>
+                                  {isExpanded ? "Hide evidence and actions" : "Review evidence and decide"}
+                                </Text>
+                                {isExpanded ? (
+                                  <ChevronUp size={16} color={colors.primary} />
+                                ) : (
+                                  <ChevronDown size={16} color={colors.primary} />
+                                )}
+                              </TouchableOpacity>
+
+                              {isExpanded && (
+                                <View style={styles.learningFindingDrawer}>
+                                  <View style={styles.learningEvidenceCard}>
+                                    <View style={styles.learningEvidenceCardHeader}>
+                                      <FileText size={14} color="#475569" />
+                                      <Text style={styles.learningEvidenceCardTitle}>What the system observed</Text>
+                                    </View>
+                                    <Text style={styles.learningEvidenceCardText}>{finding.evidence}</Text>
+                                    <Text style={styles.learningEvidenceMethodText}>
+                                      Detection confidence: {typeof finding.detectionConfidence === "number"
+                                        ? `${Math.round(finding.detectionConfidence * 100)}%`
+                                        : "not available"}. This measures the note analysis—not your knowledge.
+                                    </Text>
+                                  </View>
+
+                                  <Text style={styles.learningConceptListTitle}>CHECK EACH CONCEPT</Text>
+                                  <View style={styles.learningConceptList}>
+                                    {finding.concepts.map((concept) => {
+                                      const verification = concept.finding?.studentVerification ?? "unverified";
+                                      const canVerify = Boolean(
+                                        concept.finding &&
+                                          (concept.finding.status !== "present" || !concept.finding.found),
+                                      );
+                                      const isVerifying = verifyingConceptId === concept.finding?.conceptId;
+
+                                      return (
+                                        <View key={concept.id ?? concept.name} style={styles.learningConceptCard}>
+                                          <View style={styles.learningConceptHeader}>
+                                            <View style={styles.learningConceptHeaderCopy}>
+                                              <Text style={styles.learningConceptName}>{concept.name}</Text>
+                                              <Text style={styles.learningConceptMeta}>
+                                                {concept.coverageStatus === "partial" ? "Partly evidenced" : "Not evidenced"}
+                                                {concept.category ? ` · ${concept.category}` : ""}
+                                                {` · importance ${concept.weight}/5`}
+                                              </Text>
+                                            </View>
+                                            {concept.finding?.isFrequentlyTested && (
+                                              <View style={styles.learningExamBadge}>
+                                                <Star size={11} color="#B45309" fill="#FDE68A" />
+                                                <Text style={styles.learningExamBadgeText}>Exam relevant</Text>
+                                              </View>
+                                            )}
+                                          </View>
+
+                                          {canVerify ? (
+                                            <>
+                                              <Text style={styles.learningSelfCheckPrompt}>
+                                                Be honest: could you explain this concept without looking at the note?
+                                              </Text>
+                                              <View style={styles.learningSelfCheckButtons}>
+                                                <TouchableOpacity
+                                                  style={[
+                                                    styles.learningSelfCheckButton,
+                                                    styles.learningSelfCheckKnowButton,
+                                                    verification === "understood" && styles.learningSelfCheckKnowButtonSelected,
+                                                  ]}
+                                                  disabled={Boolean(verifyingConceptId)}
+                                                  onPress={() =>
+                                                    concept.finding &&
+                                                    verifyConceptFinding(concept.finding.conceptId, "understood")
+                                                  }
+                                                  activeOpacity={0.8}
+                                                >
+                                                  {isVerifying ? (
+                                                    <ActivityIndicator size="small" color="#047857" />
+                                                  ) : (
+                                                    <CheckCircle2 size={15} color="#047857" />
+                                                  )}
+                                                  <Text style={styles.learningSelfCheckKnowText}>
+                                                    {verification === "understood" ? "I know this ✓" : "I know this"}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                  style={[
+                                                    styles.learningSelfCheckButton,
+                                                    styles.learningSelfCheckSupportButton,
+                                                    verification === "needs_help" && styles.learningSelfCheckSupportButtonSelected,
+                                                  ]}
+                                                  disabled={Boolean(verifyingConceptId)}
+                                                  onPress={() =>
+                                                    concept.finding &&
+                                                    verifyConceptFinding(concept.finding.conceptId, "needs_help")
+                                                  }
+                                                  activeOpacity={0.8}
+                                                >
+                                                  {isVerifying ? (
+                                                    <ActivityIndicator size="small" color="#7C3AED" />
+                                                  ) : (
+                                                    <Brain size={15} color="#7C3AED" />
+                                                  )}
+                                                  <Text style={styles.learningSelfCheckSupportText}>
+                                                    {verification === "needs_help" ? "Support requested ✓" : "I need support"}
+                                                  </Text>
+                                                </TouchableOpacity>
+                                              </View>
+                                              {concept.finding && verificationError?.conceptId === concept.finding.conceptId && (
+                                                <Text style={styles.learningVerificationErrorText}>
+                                                  {verificationError.message}
+                                                </Text>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <Text style={styles.learningVerificationUnavailable}>
+                                              Student self-check is unavailable for this legacy finding.
+                                            </Text>
+                                          )}
+                                        </View>
+                                      );
+                                    })}
+                                  </View>
+
+                                  <View style={styles.learningRecommendationCard}>
+                                    <View style={styles.learningRecommendationHeader}>
+                                      <BookOpen size={14} color="#475569" />
+                                      <Text style={styles.learningRecommendationTitle}>Recommended next step</Text>
+                                    </View>
+                                    <Text style={styles.learningRecommendationText}>{finding.recommendation}</Text>
+                                  </View>
+
+                                  {hasSupport ? (
+                                    <View style={styles.personalisedSupportCard}>
+                                      <View style={styles.personalisedSupportHeader}>
+                                        <Sparkles size={16} color="#7C3AED" />
+                                        <View style={styles.personalisedSupportHeaderCopy}>
+                                          <Text style={styles.personalisedSupportTitle}>Personalised support plan</Text>
+                                          <Text style={styles.personalisedSupportSubtitle}>
+                                            Built only from concepts you marked for support.
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      {structuredNotesReady || flashcardsReady ? (
+                                        <View style={styles.personalisedSupportActions}>
+                                          {structuredNotesReady && (
+                                            <TouchableOpacity
+                                              style={styles.personalisedSupportPrimaryButton}
+                                              onPress={() =>
+                                                navigateToMaterial(
+                                                  "structured_notes",
+                                                  finding.id,
+                                                  supportConcept?.name ?? finding.concepts[0]?.name,
+                                                )
+                                              }
+                                            >
+                                              <BookOpen size={15} color="#FFFFFF" />
+                                              <Text style={styles.personalisedSupportPrimaryText}>Learn concept</Text>
+                                            </TouchableOpacity>
+                                          )}
+                                          {flashcardsReady && (
+                                            <TouchableOpacity
+                                              style={styles.personalisedSupportSecondaryButton}
+                                              onPress={() =>
+                                                navigateToMaterial(
+                                                  "flashcards",
+                                                  finding.id,
+                                                  supportConcept?.name ?? finding.concepts[0]?.name,
+                                                )
+                                              }
+                                            >
+                                              <Layers size={15} color="#7C3AED" />
+                                              <Text style={styles.personalisedSupportSecondaryText}>Practice cards</Text>
+                                            </TouchableOpacity>
+                                          )}
+                                        </View>
+                                      ) : (
+                                        <View style={styles.personalisedSupportPreparing}>
+                                          <ActivityIndicator size="small" color="#7C3AED" />
+                                          <Text style={styles.personalisedSupportPreparingText}>
+                                            Preparing targeted notes and practice cards…
+                                          </Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                  ) : isUnderstood ? (
+                                    <View style={styles.understoodDecisionCard}>
+                                      <CheckCircle2 size={16} color="#047857" />
+                                      <View style={styles.understoodDecisionCopy}>
+                                        <Text style={styles.understoodDecisionText}>
+                                          Recorded as a note-coverage omission, not a student-confirmed support need.
+                                        </Text>
+                                        <TouchableOpacity
+                                          style={styles.understoodDecisionAction}
+                                          onPress={() =>
+                                            navigateToMaterial(
+                                              "revision_summary",
+                                              finding.id,
+                                              finding.concepts[0]?.name,
+                                            )
+                                          }
+                                        >
+                                          <Text style={styles.understoodDecisionActionText}>Improve my note</Text>
+                                          <ChevronRight size={13} color="#047857" />
+                                        </TouchableOpacity>
+                                      </View>
+                                    </View>
+                                  ) : (
+                                    <View style={styles.pendingDecisionCard}>
+                                      <Target size={15} color="#C2410C" />
+                                      <Text style={styles.pendingDecisionText}>
+                                        Complete the self-check above to unlock the right next step.
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
+                          );
+                        },
+                      )}
+                    </View>
+
+                    {learningFindings.length > 3 && (
+                      <TouchableOpacity
+                        style={styles.viewAllGapsBtn}
+                        onPress={() => setGapsExpanded(!gapsExpanded)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.viewAllGapsText}>
+                          {gapsExpanded ? "Show fewer findings" : `View all ${learningFindings.length} findings`}
+                        </Text>
+                        {gapsExpanded ? (
+                          <ChevronUp size={14} color={colors.primary} />
+                        ) : (
+                          <ChevronDown size={14} color={colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    <View style={styles.learningResearchNote}>
+                      <ShieldCheck size={15} color="#475569" />
+                      <Text style={styles.learningResearchNoteText}>
+                        Research-safe interpretation: absence from one note is evidence about note coverage only. A support request is student-reported and should later be validated with practice or a diagnostic assessment.
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              );
+            })()}
+
+            {false && (note?.analysis?.learningGaps.length ?? 0) > 0 && (() => {
+              const legacyAnalysis = note?.analysis;
+              if (!legacyAnalysis) return null;
               const topGap =
-                note.analysis.learningGaps.find((g) => g.severity === "high") ||
-                note.analysis.learningGaps.find((g) => g.severity === "medium") ||
-                note.analysis.learningGaps[0];
+                legacyAnalysis!.learningGaps.find((g) => g.severity === "high") ||
+                legacyAnalysis!.learningGaps.find((g) => g.severity === "medium") ||
+                legacyAnalysis!.learningGaps[0];
 
               const topExplainableGap =
-                note.analysis.explainableGaps?.find(
+                legacyAnalysis!.explainableGaps?.find(
                   (eg) =>
                     eg.outcomeDescription === topGap.concept ||
                     eg.missingConcepts.some((mc) => topGap.concept.includes(mc.name))
-                ) || note.analysis.explainableGaps?.[0];
+                ) || legacyAnalysis!.explainableGaps?.[0];
+
+              if (!topExplainableGap) return null;
 
               const isHigh = topGap.severity === "high";
               const isMedium = topGap.severity === "medium";
 
               const missingList =
-                topExplainableGap && topExplainableGap.missingConcepts.length > 0
-                  ? topExplainableGap.missingConcepts.map((c) => c.name)
+                topExplainableGap && topExplainableGap!.missingConcepts.length > 0
+                  ? topExplainableGap!.missingConcepts.map((c) => c.name)
                   : topGap.concept.split(/[,/]/).map((s) => s.trim()).filter(Boolean);
 
               const outcomeStatusText =
@@ -1121,7 +1782,7 @@ export default function NoteDetail() {
                       <Text style={styles.whyGapTitle}>Why this is a gap</Text>
                     </View>
                     <Text style={styles.whyGapExplanation}>
-                      {topExplainableGap && topExplainableGap.missingConcepts.length > 0
+                      {topExplainableGap && topExplainableGap!.missingConcepts.length > 0
                         ? `Key required concepts are missing from your handwritten notes for this learning outcome.`
                         : `Your notes have incomplete coverage for this core syllabus requirement.`}
                     </Text>
@@ -1167,7 +1828,7 @@ export default function NoteDetail() {
                         <View style={styles.explainerSection}>
                           <Text style={styles.explainerSubhead}>Evidence found in your notes:</Text>
                           <View style={styles.explainerQuoteBox}>
-                            <Text style={styles.explainerQuoteText}>"{topExplainableGap.evidence}"</Text>
+                            <Text style={styles.explainerQuoteText}>{topExplainableGap!.evidence}</Text>
                           </View>
                         </View>
                       ) : null}
@@ -1212,7 +1873,7 @@ export default function NoteDetail() {
             })()}
 
             {/* ── 3. Note Coverage Findings ── */}
-            {note.analysis.learningGaps.length > 0 && (
+            {false && (note?.analysis?.learningGaps.length ?? 0) > 0 && (
               <View
                 style={styles.section}
                 onLayout={(e) => {
@@ -1226,20 +1887,20 @@ export default function NoteDetail() {
                     <Text style={styles.gapsSectionTitle}>Not Covered in This Note</Text>
                   </View>
                   <View style={styles.gapCountPill}>
-                    <Text style={styles.gapCountPillText}>{note.analysis.learningGaps.length}</Text>
+                    <Text style={styles.gapCountPillText}>{note!.analysis!.learningGaps.length}</Text>
                   </View>
                 </View>
 
                 <Text style={styles.sectionSubtitle}>
-                  {note.analysis.noteScope?.scope === "complete_lesson_note"
+                  {note!.analysis!.noteScope?.scope === "complete_lesson_note"
                     ? "These are curriculum concepts not found in this lesson note. They are not assumed to be knowledge gaps."
                     : "This upload appears to be a partial or specialised note. These concepts were not found here and are not assumed to be knowledge gaps."}
                 </Text>
 
                 <View style={styles.gapsList}>
                 {(gapsExpanded
-                  ? note.analysis.learningGaps
-                  : note.analysis.learningGaps.slice(0, 3)
+                  ? note!.analysis!.learningGaps
+                  : note!.analysis!.learningGaps.slice(0, 3)
                 ).map((gap, i) => {
                   const isCardExpanded = !!expandedGapIndices[i];
                   const isHigh = gap.severity === "high";
@@ -1428,7 +2089,7 @@ export default function NoteDetail() {
                 })}
                 </View>
 
-                {note.analysis.learningGaps.length > 3 && (
+                {note!.analysis!.learningGaps.length > 3 && (
                   <TouchableOpacity
                     style={styles.viewAllGapsBtn}
                     onPress={() => setGapsExpanded(!gapsExpanded)}
@@ -1437,7 +2098,7 @@ export default function NoteDetail() {
                     <Text style={styles.viewAllGapsText}>
                       {gapsExpanded
                         ? "Show less"
-                        : `View all ${note.analysis.learningGaps.length} findings`}
+                        : `View all ${note!.analysis!.learningGaps.length} findings`}
                     </Text>
                     {gapsExpanded
                       ? <ChevronUp size={14} color={colors.primary} />
@@ -1462,19 +2123,20 @@ export default function NoteDetail() {
             {/* ── 4. What You Covered Well (Strengths - Improvement 6) ── */}
             {((note.analysis.strengthAreas && note.analysis.strengthAreas.length > 0) ||
               (note.analysis.keyConcepts && note.analysis.keyConcepts.length > 0)) && (() => {
-              const strengths =
-                note.analysis.strengthAreas && note.analysis.strengthAreas.length > 0
+              const checkedNames = new Set(conceptChecks.concepts.map(c => normalizeConceptName(c.name)));
+              const strengths = (note.analysis.strengthAreas && note.analysis.strengthAreas.length > 0
                   ? note.analysis.strengthAreas
-                  : note.analysis.keyConcepts.slice(0, 4);
+                  : note.analysis.keyConcepts.slice(0, 4)).filter(name => !checkedNames.has(normalizeConceptName(name)));
+              if (!strengths.length) return null;
 
               return (
                 <View style={styles.section}>
                   <View style={styles.sectionTitleRow}>
                     <TrendingUp size={17} color="#16A34A" />
-                    <Text style={[styles.sectionTitle, { color: "#16A34A" }]}>What You Covered Well</Text>
+                    <Text style={[styles.sectionTitle, { color: "#16A34A" }]}>Topics Detected by the Lesson Checker</Text>
                   </View>
                   <Text style={styles.sectionSubtitle}>
-                    {strengths.length} concept{strengths.length !== 1 ? "s" : ""} adequately covered in your handwritten notes
+                    {strengths.length} topic{strengths.length !== 1 ? "s" : ""} detected. A mention does not establish complete or correct coverage. Open a concept in your checklist to review its supporting text.
                   </Text>
                   <View style={styles.strengthList}>
                     {strengths.map((area, i) => (
@@ -1489,10 +2151,10 @@ export default function NoteDetail() {
                         {/* Verified Status Badges */}
                         <View style={styles.strengthBadgesWrap}>
                           <View style={styles.strengthBadgeItem}>
-                            <Text style={styles.strengthBadgeText}>✓ Concept adequately covered</Text>
+                            <Text style={styles.strengthBadgeText}>Topic detected</Text>
                           </View>
                           <View style={styles.strengthBadgeItem}>
-                            <Text style={styles.strengthBadgeText}>✓ Learning outcome verified</Text>
+                            <Text style={styles.strengthBadgeText}>Understanding not verified</Text>
                           </View>
                         </View>
                       </View>
@@ -1502,191 +2164,54 @@ export default function NoteDetail() {
               );
             })()}
 
-            {/* ── 5. Curriculum Coverage & Visual Concept Map (Improvement 7 & 8) ── */}
-            {(note.analysis.keyConcepts.length > 0 || note.analysis.missingConcepts.length > 0) && (() => {
-              const coveredConcepts = note.analysis.keyConcepts || [];
-              const missingConcepts = note.analysis.missingConcepts || [];
-              const totalCount = coveredConcepts.length + missingConcepts.length;
-              const score = note.analysis.overallCompleteness;
-              const isLessonCoverage = note.analysis.coverageScores?.coverageScope === "lesson_coverage";
-              const scoreColor = getCompletenessColor(score);
-              const coveredPct = totalCount > 0 ? Math.round((coveredConcepts.length / totalCount) * 100) : 0;
-              const missingPct = totalCount > 0 ? 100 - coveredPct : 0;
-
-              return (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeaderRow}>
-                    <View style={styles.sectionTitleRow}>
-                      <BookOpen size={17} color={colors.primaryBlack} />
-                      <Text style={styles.sectionTitle}>{isLessonCoverage ? "Curriculum Coverage" : "Note Coverage"}</Text>
-                    </View>
-                    <View style={[styles.coverageScoreBadge, { backgroundColor: `${scoreColor}15`, borderColor: `${scoreColor}40` }]}>
-                      <Text style={[styles.coverageScoreText, { color: scoreColor }]}>{score}%</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.sectionSubtitle}>
-                    {isLessonCoverage
-                      ? `${totalCount} total concepts mapped to official curriculum standards`
-                      : `${totalCount} curriculum concepts checked against this upload only`}
-                  </Text>
-
-                  {/* ── Multi-Segment Visual Concept Coverage Bar (Improvement 8) ── */}
-                  <View style={styles.coverageBarContainer}>
-                    <View style={styles.coverageBarTrack}>
-                      <View style={[styles.coverageBarCovered, { flex: coveredConcepts.length || 1 }]} />
-                      {missingConcepts.length > 0 && (
-                        <View style={[styles.coverageBarMissing, { flex: missingConcepts.length }]} />
-                      )}
-                    </View>
-                    <View style={styles.coverageBarLegendRow}>
-                      <View style={styles.coverageBarLegendItem}>
-                        <View style={styles.coverageLegendDotCovered} />
-                        <Text style={styles.coverageBarLegendText}>Covered: {coveredConcepts.length} ({coveredPct}%)</Text>
-                      </View>
-                      <View style={styles.coverageBarLegendItem}>
-                        <View style={styles.coverageLegendDotMissing} />
-                        <Text style={styles.coverageBarLegendText}>Missing: {missingConcepts.length} ({missingPct}%)</Text>
-                      </View>
-                    </View>
-                  </View>
-
-
-                  {/* Compact 3-Column Summary Tiles */}
-                  <View style={styles.coverageSummaryRow}>
-                    <View style={[styles.coverageSummaryTile, { borderColor: "#BBF7D0", backgroundColor: "#F0FDF4" }]}>
-                      <CheckCircle2 size={14} color="#16A34A" />
-                      <Text style={[styles.coverageSummaryNum, { color: "#16A34A" }]}>{coveredConcepts.length}</Text>
-                      <Text style={styles.coverageSummaryLabel}>Covered</Text>
-                    </View>
-
-                    <View style={[styles.coverageSummaryTile, { borderColor: "#FECACA", backgroundColor: "#FEF2F2" }]}>
-                      <AlertCircle size={14} color="#DC2626" />
-                      <Text style={[styles.coverageSummaryNum, { color: "#DC2626" }]}>{missingConcepts.length}</Text>
-                      <Text style={styles.coverageSummaryLabel}>Missing</Text>
-                    </View>
-
-                    <View style={[styles.coverageSummaryTile, { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" }]}>
-                      <Layers size={14} color="#64748B" />
-                      <Text style={[styles.coverageSummaryNum, { color: "#334155" }]}>{totalCount}</Text>
-                      <Text style={styles.coverageSummaryLabel}>Total</Text>
-                    </View>
-                  </View>
-
-                  {/* Expand / Collapse Toggle Button */}
-                  <TouchableOpacity
-                    style={styles.coverageToggleBtn}
-                    onPress={() => setCoverageExpanded(!coverageExpanded)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.coverageToggleBtnText}>
-                      {coverageExpanded ? "Hide Concept Breakdown ▲" : `View All ${totalCount} Concepts with Progress ▼`}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Expanded Grouped Concept Sections with Progress Bars */}
-                  {coverageExpanded && (
-                    <View style={styles.coverageGroupedContainer}>
-                      {/* Covered Group */}
-                      {coveredConcepts.length > 0 && (
-                        <View style={styles.coverageGroupBlock}>
-                          <View style={styles.coverageGroupHeader}>
-                            <CheckCircle2 size={14} color="#16A34A" />
-                            <Text style={styles.coverageGroupTitle}>
-                              Covered in Notes ({coveredConcepts.length})
-                            </Text>
-                          </View>
-                          <View style={styles.coverageGroupList}>
-                            {coveredConcepts.map((concept, i) => (
-                              <View key={`cov-${i}`} style={styles.coverageItemCovered}>
-                                <View style={styles.coverageCheckCircle}>
-                                  <Text style={styles.coverageCheckCircleText}>✓</Text>
-                                </View>
-                                <Text style={styles.coverageConceptCoveredText}>{concept}</Text>
-                                <View style={styles.miniProgressBarWrap}>
-                                  <View style={[styles.miniProgressBarFill, { width: "100%", backgroundColor: "#16A34A" }]} />
-                                </View>
-                                <Text style={[styles.miniProgressPct, { color: "#16A34A" }]}>100%</Text>
-                              </View>
-                            ))}
-                          </View>
-                        </View>
-                      )}
-
-                      {/* Missing Group */}
-                      {missingConcepts.length > 0 && (
-                        <View style={styles.coverageGroupBlock}>
-                          <View style={styles.coverageGroupHeader}>
-                            <AlertTriangle size={14} color="#DC2626" />
-                            <Text style={[styles.coverageGroupTitle, { color: "#DC2626" }]}>
-                              Missing from Notes ({missingConcepts.length})
-                            </Text>
-                          </View>
-                          <View style={styles.coverageGroupList}>
-                            {missingConcepts.map((concept, i) => (
-                              <View key={`mis-${i}`} style={styles.coverageItemMissing}>
-                                <View style={styles.coverageCrossCircle}>
-                                  <Text style={styles.coverageCrossCircleText}>✕</Text>
-                                </View>
-                                <Text style={styles.coverageConceptMissingText}>{concept}</Text>
-                                <View style={styles.miniProgressBarWrap}>
-                                  <View style={[styles.miniProgressBarFill, { width: "0%", backgroundColor: "#DC2626" }]} />
-                                </View>
-                                <Text style={[styles.miniProgressPct, { color: "#DC2626" }]}>0%</Text>
-                              </View>
-                            ))}
-                          </View>
-                        </View>
-                      )}
-
-                      <Text style={styles.methodologyFootnote}>
-                        * Concept-level coverage is derived from deterministic keyword and semantic matching against official curriculum standards.
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })()}
+            <View onLayout={event => { coverageSectionY.current = event.nativeEvent.layout.y; }}>
+              <NoteCoverageBreakdown
+                key={note._id}
+                coverage={conceptCoverage}
+                score={note.analysis.overallCompleteness}
+                weighted={typeof note.analysis.coverageScores?.weightedCoverage === "number"}
+                lessonCoverage={note.analysis.coverageScores?.coverageScope === "lesson_coverage"}
+              />
+            </View>
 
             {/* ── 6. Personalized Study Materials ── */}
-            <View style={styles.section}>
+            <View style={styles.section} onLayout={event => { materialsSectionY.current = event.nativeEvent.layout.y; }}>
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionTitleRow}>
                   <Sparkles size={17} color={colors.primaryBlack} />
                   <Text style={styles.sectionTitle}>Personalized Study Materials</Text>
                 </View>
-                {isGenerating || (!materialsOverview) || (materialsOverview.missingCount > 0 && materialsOverview.generatedTypes.length < 7) ? (
-                  <View style={styles.generatingBadge}>
-                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 5 }} />
-                    <Text style={styles.generatingBadgeText}>
-                      {materialsOverview && materialsOverview.generatedTypes.length > 0
-                        ? `${materialsOverview.generatedTypes.length}/7 Ready`
-                        : "Generating…"}
-                    </Text>
-                  </View>
-                ) : materialsOverview && materialsOverview.missingCount === 0 ? (
-                  <View style={[styles.generatingBadge, { backgroundColor: "#DCFCE7" }]}>
-                    <CheckCircle2 size={13} color="#16A34A" style={{ marginRight: 4 }} />
-                    <Text style={[styles.generatingBadgeText, { color: "#16A34A" }]}>All Ready</Text>
-                  </View>
-                ) : materialsOverview && materialsOverview.missingCount > 0 ? (
-                  <TouchableOpacity style={styles.regenBtn} onPress={triggerMaterialGeneration}>
-                    <Text style={styles.regenBtnText}>Re-generate</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              <Text style={[styles.sectionSubtitle, { marginTop: -8 }]}>
-                Synthesized from your handwritten notes, official textbook passages, and identified learning gaps
-              </Text>
-
-              {(!materialsOverview || materialsOverview.missingCount > 0 || isGenerating) && (
-                <View style={styles.generatingInfoBanner}>
-                  <Sparkles size={14} color={colors.primary} />
-                  <Text style={styles.generatingInfoText}>
-                    AI is generating your personalized study materials. Ready items can be opened immediately.
+                <View style={[styles.generatingBadge, { backgroundColor: "#FFF0E6" }]}>
+                  {materialsOverview?.hasActiveJobs && materialsState !== "error" && materialsState !== "paused"
+                    ? <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 5 }} /> : null}
+                  <Text style={[styles.generatingBadgeText, { color: "#B45309" }]}>
+                    {materialsOverview ? `${materialsOverview.generatedTypes.length} ready` : "Study tools"}
                   </Text>
                 </View>
+              </View>
+              <Text style={[styles.sectionSubtitle, { marginTop: -8 }]}>
+                Open your ready materials, or choose a study tool to create.
+              </Text>
+              <View style={styles.generatingInfoBanner}>
+                <Sparkles size={14} color={colors.primary} />
+                <Text style={styles.generatingInfoText}>
+                  {materialsRequestError ?? (materialsState === "error"
+                    ? "We couldn't check your materials. Tap Check again to reconnect."
+                    : materialsState === "paused"
+                    ? "This is taking a little longer. You can keep using the app and check again later."
+                    : !materialsOverview
+                    ? "Checking your study materials…"
+                    : materialsOverview.hasActiveJobs
+                    ? "Your chosen materials are being created. You can open ready items or come back later."
+                    : materialsOverview.states?.some(item => item.status === "failed")
+                    ? "Some materials couldn't finish. Tap a failed tool to try again. Your ready items are still available."
+                    : "Your revision summary is created automatically. Other tools are optional — tap one when you need it.")}
+                </Text>
+              </View>
+              {(materialsState === "error" || materialsState === "paused") && (
+                <TouchableOpacity style={[styles.regenBtn, { alignSelf: "flex-start", marginBottom: 12 }]} onPress={refreshMaterials} accessibilityRole="button">
+                  <Text style={styles.regenBtnText}>Check again</Text>
+                </TouchableOpacity>
               )}
 
               <View style={styles.materialsList}>
@@ -1697,8 +2222,10 @@ export default function NoteDetail() {
                   subtitle="Complete lesson note with your handwriting + official textbook knowledge & highlighted gap remediations"
                   color="#3B82F6"
                   isReady={materialsOverview?.generatedTypes.includes("structured_notes") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("structured_notes")}
+                  status={materialStatus("structured_notes")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("structured_notes"))}
+                  onPress={() => materialAction("structured_notes")}
+                  onRetry={() => { void generateMaterial("structured_notes"); }}
                 />
                 <MaterialCard
                   icon={<Layers size={20} color="#8B5CF6" />}
@@ -1707,8 +2234,10 @@ export default function NoteDetail() {
                   subtitle="Practice cards prioritizing the concepts missing from your handwritten notes"
                   color="#8B5CF6"
                   isReady={materialsOverview?.generatedTypes.includes("flashcards") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("flashcards")}
+                  status={materialStatus("flashcards")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("flashcards"))}
+                  onPress={() => materialAction("flashcards")}
+                  onRetry={() => { void generateMaterial("flashcards"); }}
                 />
                 <MaterialCard
                   icon={<BookOpen size={20} color="#6366F1" />}
@@ -1717,8 +2246,10 @@ export default function NoteDetail() {
                   subtitle="Official curriculum-aligned definitions for all key terms in this lesson"
                   color="#6366F1"
                   isReady={materialsOverview?.generatedTypes.includes("definitions") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("definitions")}
+                  status={materialStatus("definitions")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("definitions"))}
+                  onPress={() => materialAction("definitions")}
+                  onRetry={() => { void generateMaterial("definitions"); }}
                 />
                 <MaterialCard
                   icon={<Layers size={20} color="#EC4899" />}
@@ -1727,8 +2258,10 @@ export default function NoteDetail() {
                   subtitle="Hierarchical concept tree showing the complete lesson structure"
                   color="#EC4899"
                   isReady={materialsOverview?.generatedTypes.includes("mindmap") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("mindmap")}
+                  status={materialStatus("mindmap")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("mindmap"))}
+                  onPress={() => materialAction("mindmap")}
+                  onRetry={() => { void generateMaterial("mindmap"); }}
                 />
                 <MaterialCard
                   icon={<FileText size={20} color="#10B981" />}
@@ -1737,8 +2270,10 @@ export default function NoteDetail() {
                   subtitle="Compact exam-focused revision summary covering essential equations and facts"
                   color="#10B981"
                   isReady={materialsOverview?.generatedTypes.includes("revision_summary") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("revision_summary")}
+                  status={materialStatus("revision_summary")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("revision_summary"))}
+                  onPress={() => materialAction("revision_summary")}
+                  onRetry={() => { void generateMaterial("revision_summary"); }}
                 />
                 <MaterialCard
                   icon={<Target size={20} color="#EF4444" />}
@@ -1747,8 +2282,10 @@ export default function NoteDetail() {
                   subtitle="Numbered learning checklist distinguishing what you covered vs gaps"
                   color="#EF4444"
                   isReady={materialsOverview?.generatedTypes.includes("learning_points") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("learning_points")}
+                  status={materialStatus("learning_points")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("learning_points"))}
+                  onPress={() => materialAction("learning_points")}
+                  onRetry={() => { void generateMaterial("learning_points"); }}
                 />
                 <MaterialCard
                   icon={<Play size={20} color="#F59E0B" />}
@@ -1757,8 +2294,10 @@ export default function NoteDetail() {
                   subtitle="Spoken podcast-style teacher explanation addressing your notes and explaining your gaps"
                   color="#F59E0B"
                   isReady={materialsOverview?.generatedTypes.includes("audio") ?? false}
-                  isGeneratingAll={isGenerating}
-                  onPress={() => navigateToMaterial("audio")}
+                  status={materialStatus("audio")}
+                  disabled={!materialsOverview || !!requestingType || ["queued", "generating"].includes(materialStatus("audio"))}
+                  onPress={() => materialAction("audio")}
+                  onRetry={() => { void generateMaterial("audio"); }}
                 />
               </View>
             </View>
@@ -1767,7 +2306,7 @@ export default function NoteDetail() {
             {(() => {
               const allPages = note.imageUrls && note.imageUrls.length > 0 ? note.imageUrls : [note.imageUrl];
               return (
-                <View style={styles.section}>
+                <View style={styles.section} onLayout={event => { photosSectionY.current = event.nativeEvent.layout.y; }}>
                   <TouchableOpacity
                     style={styles.collapseHeader}
                     onPress={() => setImageExpanded(!imageExpanded)}
@@ -1799,8 +2338,8 @@ export default function NoteDetail() {
                             ))}
                           </ScrollView>
                           <View style={styles.noteImageWrap}>
-                            <Image
-                              source={{ uri: getNotesResourceUrl(allPages[selectedPageIndex] || allPages[0]) }}
+                            <PrivateNoteImage
+                              path={allPages[selectedPageIndex] || allPages[0]}
                               style={styles.noteImage}
                               resizeMode="contain"
                             />
@@ -1812,8 +2351,8 @@ export default function NoteDetail() {
                           </View>
                         </>
                       ) : (
-                        <Image
-                          source={{ uri: getNotesResourceUrl(allPages[0]) }}
+                        <PrivateNoteImage
+                          path={allPages[0]}
                           style={styles.noteImage}
                           resizeMode="contain"
                         />
@@ -1826,7 +2365,7 @@ export default function NoteDetail() {
 
             {/* ── 8. Extracted Text (Collapsible) ── */}
             {note.rawText ? (
-              <View style={styles.section}>
+              <View style={styles.section} onLayout={event => { textSectionY.current = event.nativeEvent.layout.y; }}>
                 <TouchableOpacity
                   style={styles.collapseHeader}
                   onPress={() => setOcrExpanded(!ocrExpanded)}
@@ -1969,6 +2508,48 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   contextSaveText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  researchConsentCard: {
+    flexDirection: "row",
+    gap: 11,
+    marginHorizontal: 18,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    backgroundColor: "#F0F9FF",
+  },
+  researchConsentIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E0F2FE",
+  },
+  researchConsentCopy: { flex: 1 },
+  researchConsentTitle: {
+    fontSize: 13.5,
+    fontWeight: "800",
+    color: "#0C4A6E",
+  },
+  researchConsentBody: {
+    marginTop: 3,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#0369A1",
+  },
+  researchConsentAction: {
+    alignSelf: "flex-start",
+    minHeight: 30,
+    justifyContent: "center",
+    marginTop: 6,
+  },
+  researchConsentActionText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: "#B91C1C",
+  },
   ocrWarningCard: {
     flexDirection: "row",
     gap: 12,
@@ -2042,7 +2623,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
 
   // ── Failed state card ────────────────────────────────────────────────────
-  failedCard: {
+  failedCardLegacy: {
     margin: 20,
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -2056,7 +2637,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  failedIconWrap: {
+  failedIconWrapLegacy: {
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -2065,295 +2646,66 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
-  failedTitle: {
+  failedTitleLegacy: {
     fontSize: 18,
     fontWeight: "700",
     color: "#991B1B",
     marginBottom: 8,
   },
-  failedText: {
+  failedTextLegacy: {
     fontSize: 13.5,
     color: "#6B7280",
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 20,
   },
-  failedRetryBtn: {
+  failedRetryBtnLegacy: {
     backgroundColor: "#DC2626",
     paddingHorizontal: 20,
     paddingVertical: 11,
     borderRadius: 12,
   },
-  failedRetryText: {
+  failedRetryTextLegacy: {
     color: "#fff",
     fontWeight: "600",
     fontSize: 13.5,
   },
 
-  // ── Full-Screen AI Processing State (Quiz Screenshots 3 & 4 Style) ────────
-  fullScreenProcessingOrange: {
-    flex: 1,
-  },
-  processingTopBarOrange: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  backButtonOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.22)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  backLabelTextOrange: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  runInBackgroundBtnOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.22)",
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.35)",
-  },
-  runInBackgroundTextOrange: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  processingScrollView: {
-    flex: 1,
-  },
-  processingScrollContentOrange: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 36,
-    alignItems: "center",
-  },
-  processingHeroOrange: {
-    alignItems: "center",
-    width: "100%",
-    marginBottom: 18,
-  },
-  circleProgressWrapOrange: {
-    width: 170,
-    height: 170,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-    position: "relative",
-  },
-  circleSvg: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
-  circleInnerContentOrange: {
-    position: "absolute",
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: "rgba(255, 255, 255, 0.18)",
-    borderWidth: 2,
-    borderColor: "rgba(255, 255, 255, 0.40)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  circlePctTextOrange: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: "#ffffff",
-    marginTop: 2,
-  },
-  circleEtaTextOrange: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "rgba(255, 255, 255, 0.90)",
-    marginTop: 1,
-  },
-  processingMainTitleOrange: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#ffffff",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  processingMainSubtitleOrange: {
-    fontSize: 13,
-    color: "rgba(255, 255, 255, 0.90)",
-    marginTop: 4,
-    textAlign: "center",
-    lineHeight: 18,
-    paddingHorizontal: 16,
-  },
-  aiStatusChipOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.22)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.35)",
-  },
-  aiStatusChipTextOrange: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  dotIndicatorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 14,
-  },
-  dotItem: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "rgba(255, 255, 255, 0.35)",
-  },
-  dotActive: {
-    backgroundColor: "#ffffff",
-  },
-  dotActivePill: {
-    width: 18,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#ffffff",
-  },
-  tipCardOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-    width: "100%",
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  tipIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#FFF7ED",
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  tipTextOrange: {
-    flex: 1,
-    fontSize: 12,
-    color: "#334155",
-    lineHeight: 17,
-    fontWeight: "500",
-  },
-  pipelineAccordionCard: {
-    width: "100%",
-    backgroundColor: "rgba(255, 255, 255, 0.16)",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.28)",
-    marginBottom: 14,
-  },
-  pipelineAccordionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  pipelineAccordionTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: 0.6,
-  },
-  pipelineAccordionList: {
-    marginTop: 12,
-    gap: 8,
-  },
-  pipelineCardOrange: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.94)",
-    borderRadius: 12,
-    padding: 11,
-    gap: 10,
-  },
-  pipelineCardOrangeDone: {
-    backgroundColor: "#ffffff",
-  },
-  pipelineCardOrangeActive: {
-    backgroundColor: "#ffffff",
-    borderWidth: 1.5,
-    borderColor: "#EA580C",
-  },
-  pipelineDotWrapOrange: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#F1F5F9",
-    justifyContent: "center",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-  pipelineDotOrangeDone: {
-    backgroundColor: "#DCFCE7",
-  },
-  pipelineDotOrangeActive: {
-    backgroundColor: "#FFEDD5",
-  },
-  pipelineIndexTextOrange: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#64748B",
-  },
-  pipelineStageNameOrange: {
-    fontSize: 12.5,
-    fontWeight: "600",
-    color: "#475569",
-  },
-  pipelineStageNameOrangeDone: {
-    color: "#0F172A",
-    fontWeight: "700",
-  },
-  pipelineStageNameOrangeActive: {
-    color: "#C2410C",
-    fontWeight: "800",
-  },
-  pipelineStageDescOrange: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  processingBottomHintOrange: {
-    fontSize: 11.5,
-    color: "rgba(255, 255, 255, 0.85)",
-    fontWeight: "500",
-    textAlign: "center",
-    marginTop: 2,
-    marginBottom: 10,
-  },
+  processingPage: { flex: 1, backgroundColor: colors.primary },
+  processingNav: { width: "100%", maxWidth: 640, alignSelf: "center", paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  processingBack: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, borderRadius: 22, backgroundColor: "rgba(91, 28, 0, 0.22)" },
+  processingBackText: { fontSize: 14, fontWeight: "600", color: "#FFFFFF" },
+  processingBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: "rgba(91, 28, 0, 0.22)" },
+  processingBadgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  processingBadgeText: { fontSize: 10, letterSpacing: 1, fontWeight: "700", color: "#FFFFFF" },
+  processingContent: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 8, paddingBottom: 24, alignItems: "center", justifyContent: "center" },
+  processingBody: { width: "100%", maxWidth: 440 },
+  processingHero: { alignItems: "center", marginBottom: 22 },
+  processingTitle: { fontSize: 28, lineHeight: 34, letterSpacing: -0.8, fontWeight: "800", color: "#FFFFFF", textAlign: "center" },
+  processingSubtitle: { fontSize: 14, lineHeight: 21, color: "#431407", textAlign: "center", marginTop: 12, fontWeight: "500" },
+  processingCard: { backgroundColor: "rgba(255, 255, 255, 0.18)", borderWidth: 1, borderColor: "rgba(255, 255, 255, 0.35)", borderRadius: 22, padding: 12, marginBottom: 20 },
+  processingCardHeader: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between", marginBottom: 12, paddingHorizontal: 6, paddingTop: 5 },
+  processingCardTitle: { fontSize: 13, fontWeight: "700", color: "#431407" },
+  processingTime: { flexDirection: "row", alignItems: "center", gap: 5 },
+  processingTimeText: { fontSize: 11, color: "#431407", fontVariant: ["tabular-nums"] },
+  processingStep: { flexDirection: "row", gap: 12, alignItems: "center", padding: 10, borderRadius: 14, marginBottom: 4 },
+  processingStepActive: { backgroundColor: "#FFF7ED" },
+  processingStepDone: { backgroundColor: "rgba(255, 255, 255, 0.24)" },
+  processingStepRail: { width: 30, alignItems: "center" },
+  processingStepDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255, 255, 255, 0.32)", alignItems: "center", justifyContent: "center" },
+  processingStepDotActive: { backgroundColor: "#FFF0E5" },
+  processingStepDotDone: { backgroundColor: "#ECFDF3" },
+  processingStepNumber: { fontSize: 12, fontWeight: "600", color: "#7C2D12" },
+  processingStepCopy: { flex: 1 },
+  processingStepLabel: { fontSize: 13, lineHeight: 18, fontWeight: "500", color: "#431407" },
+  processingStepLabelCurrent: { color: "#431407", fontWeight: "700" },
+  processingStepDetail: { fontSize: 12, lineHeight: 18, color: "#9A3412", marginTop: 5 },
+  processingNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#FFFBEB", borderRadius: 10, padding: 12, marginTop: 8 },
+  processingNoticeText: { flex: 1, fontSize: 12, lineHeight: 18, color: "#92400E" },
+  processingPrimary: { minHeight: 52, borderRadius: 14, backgroundColor: "#FFFFFF", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, padding: 14 },
+  processingPrimaryText: { fontSize: 14, fontWeight: "700", color: "#9A3412" },
+  processingFootnote: { fontSize: 12, lineHeight: 19, color: "#431407", textAlign: "center", marginTop: 14 },
+  processingLongWait: { fontSize: 11, lineHeight: 17, color: "#431407", textAlign: "center", marginTop: 12 },
 
   // ── Top Summary Card (Redesigned for Improvement 1 & Quiz Screenshots 1 & 6) ──
   topSummaryCard: {
@@ -2429,7 +2781,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F1F5F9",
   },
-  heroScoreRingWrap: {
+  heroScoreRingWrapLegacy: {
     width: 106,
     height: 106,
     position: "relative",
@@ -2437,17 +2789,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
-  heroScoreRingInner: {
+  heroScoreRingInnerLegacy: {
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
   },
-  heroScorePct: {
+  heroScorePctLegacy: {
     fontSize: 20,
     fontWeight: "900",
     lineHeight: 24,
   },
-  heroScoreLabel: {
+  heroScoreLabelLegacy: {
     fontSize: 9,
     fontWeight: "600",
     color: "#64748B",
@@ -2524,12 +2876,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  summaryActionsRow: {
+  summaryActionsRowLegacy: {
     flexDirection: "row",
     gap: 10,
     marginTop: 2,
   },
-  summarySecondaryBtn: {
+  summarySecondaryBtnLegacy: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -2541,13 +2893,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 14,
   },
-  summarySecondaryBtnText: {
+  summarySecondaryBtnTextLegacy: {
     fontSize: 12.5,
     fontWeight: "700",
     color: "#334155",
     letterSpacing: -0.2,
   },
-  summaryPrimaryBtn: {
+  summaryPrimaryBtnLegacy: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -2555,7 +2907,7 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.primary,
     paddingVertical: 12,
-    paddingHorizontal: 10,ght: 24,
+    paddingHorizontal: 10,
     letterSpacing: -0.3,
   },
   summaryBodyRow: {
@@ -2884,6 +3236,490 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   // Each gap card: white, clean, left border indicates priority
+  learningDecisionCard: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    padding: 18,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  learningDecisionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  learningDecisionTitleWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  learningDecisionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  learningDecisionTitleCopy: { flex: 1 },
+  learningDecisionEyebrow: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: "#64748B",
+  },
+  learningDecisionStatus: {
+    marginTop: 2,
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  learningDecisionBadge: {
+    maxWidth: 100,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 9,
+  },
+  learningDecisionBadgeText: {
+    fontSize: 8.5,
+    lineHeight: 11,
+    fontWeight: "900",
+    textAlign: "center",
+    color: "#475569",
+  },
+  learningDecisionOutcome: {
+    marginTop: 15,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    color: "#172033",
+  },
+  learningDecisionDescription: {
+    marginTop: 5,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  learningEvidenceStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 15,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  learningEvidenceItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  learningEvidenceDivider: {
+    width: 1,
+    height: 30,
+    marginHorizontal: 10,
+    backgroundColor: "#E2E8F0",
+  },
+  learningEvidenceValue: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#334155",
+  },
+  learningEvidenceLabel: {
+    marginTop: 1,
+    fontSize: 9.5,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  learningDecisionSteps: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+  },
+  learningDecisionStep: {
+    flex: 1,
+    alignItems: "center",
+    gap: 5,
+  },
+  learningDecisionStepDone: {},
+  learningDecisionStepLine: {
+    width: 14,
+    height: 1,
+    marginBottom: 19,
+    backgroundColor: "#CBD5E1",
+  },
+  learningDecisionStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+    color: "#94A3B8",
+    fontSize: 11,
+    lineHeight: 21,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  learningDecisionStepNumberDone: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FC6E20",
+    color: "#FFFFFF",
+    fontSize: 11,
+    lineHeight: 24,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  learningDecisionStepText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#94A3B8",
+    textAlign: "center",
+  },
+  learningDecisionStepTextDone: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#C2410C",
+    textAlign: "center",
+  },
+  learningDecisionPrimaryButton: {
+    minHeight: 46,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "#FC6E20",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  learningDecisionPrimaryButtonDisabled: { opacity: 0.65 },
+  learningDecisionPrimaryButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  learningFindingsHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  learningFindingsHeaderCopy: { flex: 1 },
+  learningFindingsTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "800",
+    color: "#172033",
+  },
+  learningFindingsSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#64748B",
+  },
+  learningDecisionSummaryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 7,
+    marginTop: 12,
+  },
+  learningSummaryChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  learningSummaryChipPending: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA" },
+  learningSummaryChipSupport: { backgroundColor: "#F5F3FF", borderColor: "#DDD6FE" },
+  learningSummaryChipUnderstood: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
+  learningSummaryChipText: { fontSize: 10.5, fontWeight: "800" },
+  learningReliabilityNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  learningReliabilityNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  learningFindingList: { gap: 11, marginTop: 14 },
+  learningFindingCard: {
+    padding: 15,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.035,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  learningFindingCardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  learningFindingIndex: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.65,
+    color: "#94A3B8",
+  },
+  learningFindingStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  learningFindingStatusBadgeText: { fontSize: 9.5, fontWeight: "900" },
+  learningFindingOutcome: {
+    marginTop: 9,
+    fontSize: 14.5,
+    lineHeight: 20,
+    fontWeight: "800",
+    color: "#1E293B",
+  },
+  learningFindingMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 7,
+    gap: 6,
+  },
+  learningFindingMetaText: { fontSize: 10.5, fontWeight: "600", color: "#64748B" },
+  learningFindingMetaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "#CBD5E1" },
+  learningFindingExpandButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
+  },
+  learningFindingExpandButtonText: { fontSize: 11.5, fontWeight: "800", color: colors.primary },
+  learningFindingDrawer: { gap: 13, marginTop: 14 },
+  learningEvidenceCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  learningEvidenceCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  learningEvidenceCardTitle: { fontSize: 11.5, fontWeight: "800", color: "#475569" },
+  learningEvidenceCardText: {
+    marginTop: 7,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+    color: "#334155",
+  },
+  learningEvidenceMethodText: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#64748B",
+  },
+  learningConceptListTitle: {
+    fontSize: 9.5,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    color: "#64748B",
+  },
+  learningConceptList: { gap: 9 },
+  learningConceptCard: {
+    padding: 12,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  learningConceptHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  learningConceptHeaderCopy: { flex: 1 },
+  learningConceptName: { fontSize: 13, lineHeight: 18, fontWeight: "800", color: "#1E293B" },
+  learningConceptMeta: { marginTop: 3, fontSize: 9.5, lineHeight: 14, fontWeight: "600", color: "#94A3B8" },
+  learningExamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: "#FFFBEB",
+  },
+  learningExamBadgeText: { fontSize: 8.5, fontWeight: "800", color: "#B45309" },
+  learningSelfCheckPrompt: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  learningSelfCheckButtons: { flexDirection: "row", gap: 8, marginTop: 9 },
+  learningSelfCheckButton: {
+    flex: 1,
+    minHeight: 42,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  learningSelfCheckKnowButton: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0" },
+  learningSelfCheckKnowButtonSelected: { backgroundColor: "#DCFCE7", borderColor: "#22C55E" },
+  learningSelfCheckSupportButton: { backgroundColor: "#FAF5FF", borderColor: "#E9D5FF" },
+  learningSelfCheckSupportButtonSelected: { backgroundColor: "#EDE9FE", borderColor: "#8B5CF6" },
+  learningSelfCheckKnowText: { fontSize: 10.5, fontWeight: "800", color: "#047857" },
+  learningSelfCheckSupportText: { fontSize: 10.5, fontWeight: "800", color: "#7C3AED" },
+  learningVerificationErrorText: {
+    marginTop: 7,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  learningVerificationUnavailable: {
+    marginTop: 9,
+    fontSize: 10.5,
+    lineHeight: 15,
+    fontWeight: "600",
+    color: "#94A3B8",
+  },
+  learningRecommendationCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#FFFBEB",
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  learningRecommendationHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  learningRecommendationTitle: { fontSize: 11.5, fontWeight: "800", color: "#92400E" },
+  learningRecommendationText: { marginTop: 6, fontSize: 11.5, lineHeight: 17, fontWeight: "500", color: "#78350F" },
+  personalisedSupportCard: {
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DDD6FE",
+  },
+  personalisedSupportHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  personalisedSupportHeaderCopy: { flex: 1 },
+  personalisedSupportTitle: { fontSize: 12.5, fontWeight: "900", color: "#5B21B6" },
+  personalisedSupportSubtitle: { marginTop: 2, fontSize: 10.5, lineHeight: 15, fontWeight: "600", color: "#7C3AED" },
+  personalisedSupportActions: { flexDirection: "row", gap: 8, marginTop: 11 },
+  personalisedSupportPrimaryButton: {
+    flex: 1,
+    minHeight: 41,
+    borderRadius: 11,
+    backgroundColor: "#7C3AED",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  personalisedSupportPrimaryText: { fontSize: 10.5, fontWeight: "800", color: "#FFFFFF" },
+  personalisedSupportSecondaryButton: {
+    flex: 1,
+    minHeight: 41,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#C4B5FD",
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+  },
+  personalisedSupportSecondaryText: { fontSize: 10.5, fontWeight: "800", color: "#7C3AED" },
+  personalisedSupportPreparing: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    padding: 9,
+    borderRadius: 9,
+    backgroundColor: "#FFFFFF",
+  },
+  personalisedSupportPreparingText: { flex: 1, fontSize: 10.5, lineHeight: 15, fontWeight: "700", color: "#6D28D9" },
+  understoodDecisionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 11,
+    borderRadius: 11,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+  },
+  understoodDecisionCopy: { flex: 1 },
+  understoodDecisionText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "700", color: "#047857" },
+  understoodDecisionAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginTop: 7,
+    paddingVertical: 3,
+  },
+  understoodDecisionActionText: { fontSize: 10.5, fontWeight: "900", color: "#047857" },
+  pendingDecisionCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 11,
+    borderRadius: 11,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+  },
+  pendingDecisionText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "700", color: "#C2410C" },
+  learningResearchNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  learningResearchNoteText: { flex: 1, fontSize: 10.5, lineHeight: 16, fontWeight: "600", color: "#475569" },
+
   gapCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
@@ -3501,253 +4337,4 @@ const styles = StyleSheet.create({
     fontWeight: "400",
   },
 
-  // ── Curriculum Coverage Grouped & Collapsible (Improvement 7) ──────────────
-  coverageScoreBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  coverageScoreText: {
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  coverageSummaryRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  coverageSummaryTile: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderWidth: 1,
-    gap: 3,
-  },
-  coverageSummaryNum: {
-    fontSize: 17,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  coverageSummaryLabel: {
-    fontSize: 10.5,
-    color: "#64748B",
-    fontWeight: "600",
-  },
-  coverageToggleBtn: {
-    backgroundColor: "#F8FAFC",
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  coverageToggleBtnText: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    color: colors.primary,
-  },
-  coverageGroupedContainer: {
-    marginTop: 14,
-    gap: 14,
-  },
-  coverageGroupBlock: {
-    backgroundColor: "#F8FAFC",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-  },
-  coverageGroupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  coverageGroupTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#166534",
-  },
-  coverageGroupList: {
-    gap: 6,
-  },
-  coverageItemCovered: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#F1F5F9",
-  },
-  coverageCheckCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverageCheckCircleText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#16A34A",
-  },
-  coverageConceptCoveredText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#334155",
-    flex: 1,
-  },
-  coverageItemMissing: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#FFFFFF",
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-  },
-  coverageCrossCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverageCrossCircleText: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#DC2626",
-  },
-  coverageConceptMissingText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#991B1B",
-    flex: 1,
-  },
-
-  // ── Visual Concept Map (Improvement 8) ────────────────────────────────────
-  coverageBarContainer: {
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  coverageBarTrack: {
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#F1F5F9",
-    flexDirection: "row",
-    overflow: "hidden",
-  },
-  coverageBarCovered: {
-    backgroundColor: "#16A34A",
-  },
-  coverageBarMissing: {
-    backgroundColor: "#EF4444",
-  },
-  coverageBarLegendRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 6,
-  },
-  coverageBarLegendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  coverageLegendDotCovered: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-  },
-  coverageLegendDotMissing: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#EF4444",
-  },
-  coverageBarLegendText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  conceptMapPillGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 10,
-  },
-  conceptMapPillCovered: {
-    backgroundColor: "#F0FDF4",
-    borderWidth: 1,
-    borderColor: "#DCFCE7",
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-  },
-  conceptMapPillCoveredText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#15803D",
-  },
-  conceptMapPillMissing: {
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-  },
-  conceptMapPillMissingText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#DC2626",
-  },
-  conceptMapPillMore: {
-    backgroundColor: "#F1F5F9",
-    paddingHorizontal: 7,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-  },
-  conceptMapPillMoreText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#64748B",
-  },
-  miniProgressBarWrap: {
-    width: 44,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#E2E8F0",
-    overflow: "hidden",
-    marginHorizontal: 6,
-  },
-  miniProgressBarFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  miniProgressPct: {
-    fontSize: 11,
-    fontWeight: "700",
-    width: 32,
-    textAlign: "right",
-  },
-  methodologyFootnote: {
-    fontSize: 10.5,
-    color: "#94A3B8",
-    fontStyle: "italic",
-    textAlign: "center",
-    marginTop: 8,
-    lineHeight: 15,
-  },
 });
