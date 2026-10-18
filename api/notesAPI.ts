@@ -1,4 +1,4 @@
-import { notesClient } from "@/api/apiClients";
+import { notesClient } from "@/api/notesClients";
 import { Platform } from "react-native";
 
 export interface NoteUploadContext {
@@ -7,6 +7,15 @@ export interface NoteUploadContext {
   topic?: string;
   lessonId?: string;
 }
+
+export interface NoteUploadOptions {
+  context?: NoteUploadContext;
+  researchConsent?: boolean;
+  researchConsentVersion?: string;
+}
+
+export const RESEARCH_CONSENT_VERSION =
+  process.env.EXPO_PUBLIC_RESEARCH_CONSENT_VERSION?.trim() || "1.0";
 
 export const notesApi = {
   // Get all notes for a user
@@ -17,7 +26,12 @@ export const notesApi = {
 
   // Get a single note by ID
   getNote: async (noteId: string) => {
-    const response = await notesClient.get(`/notes/${noteId}`);
+    const response = await notesClient.get(`/notes/${noteId}`,{timeout:15000});
+    return response.data;
+  },
+
+  retryAnalysis:async(noteId:string)=>{
+    const response=await notesClient.post(`/notes/${noteId}/process`,{}, {timeout:15000});
     return response.data;
   },
 
@@ -41,6 +55,20 @@ export const notesApi = {
     return response.data;
   },
 
+  updateResearchConsent: async (
+    noteId: string,
+    userId: string,
+    status: "granted" | "withdrawn",
+    version?: string,
+  ) => {
+    const response = await notesClient.patch(`/notes/${noteId}/research-consent`, {
+      userId,
+      status,
+      ...(version ? { version } : {}),
+    });
+    return response.data;
+  },
+
   // Delete a note
   deleteNote: async (noteId: string) => {
     const response = await notesClient.delete(`/notes/${noteId}`);
@@ -52,7 +80,7 @@ export const notesApi = {
     userId: string,
     title: string,
     fileUris: string | string[],
-    context?: NoteUploadContext,
+    options?: NoteUploadOptions,
   ) => {
     try {
       const uris = Array.isArray(fileUris) ? fileUris : [fileUris];
@@ -94,10 +122,18 @@ export const notesApi = {
 
       formData.append("userId", userId);
       formData.append("title", title);
+      const context = options?.context;
       if (context?.subject?.trim()) formData.append("subject", context.subject.trim());
       if (context?.grade) formData.append("grade", String(context.grade));
       if (context?.topic?.trim()) formData.append("topic", context.topic.trim());
       if (context?.lessonId?.trim()) formData.append("lessonId", context.lessonId.trim());
+      formData.append("researchConsent", String(options?.researchConsent === true));
+      if (options?.researchConsent) {
+        formData.append(
+          "researchConsentVersion",
+          options.researchConsentVersion || RESEARCH_CONSENT_VERSION,
+        );
+      }
 
       const apiResponse = await notesClient.post(
         "/notes/upload-and-process",
@@ -115,7 +151,7 @@ export const notesApi = {
       console.error("Upload error details:", error);
       if (error.message === "Network Error" && Platform.OS !== "web") {
         throw new Error(
-          "Network Error: make sure EXPO_PUBLIC_API_GATEWAY_URL uses your computer's local IP instead of localhost.",
+          "We couldn't reach Notes. Check your connection and try again.",
         );
       }
       throw error;
@@ -125,8 +161,8 @@ export const notesApi = {
 
 export const materialsApi = {
   // Get all materials for a note (summary)
-  getMaterials: async (noteId: string) => {
-    const response = await notesClient.get(`/materials/${noteId}`);
+  getMaterials: async (noteId: string, signal?: AbortSignal) => {
+    const response = await notesClient.get(`/materials/${noteId}`, { signal, timeout: 15000 });
     return response.data;
   },
 
@@ -137,10 +173,10 @@ export const materialsApi = {
   },
 
   // Trigger material generation (all or specific types)
-  generateMaterials: async (noteId: string, types?: string[]) => {
+  generateMaterials: async (noteId: string, types?: string[], signal?: AbortSignal) => {
     const response = await notesClient.post(`/materials/${noteId}/generate`, {
       types,
-    });
+    }, { signal, timeout: 15000 });
     return response.data;
   },
 };

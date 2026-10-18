@@ -45,8 +45,9 @@ import Svg, {
   G,
 } from "react-native-svg";
 import { notesApi } from "@/api/notesAPI";
-import { notesClient } from "@/api/apiClients";
+import { notesClient } from "@/api/notesClients";
 import Toast from "react-native-toast-message";
+import { NoteProcessingProgress, processingSummary } from "@/utils/noteProcessing";
 
 type NoteStatus = "all" | "processing" | "analyzed" | "failed";
 
@@ -197,6 +198,7 @@ const HeaderWaveBackground = () => (
 );
 
 interface Note {
+  processingProgress?: NoteProcessingProgress;
   _id: string;
   title: string;
   status: string;
@@ -750,7 +752,13 @@ export default function NotesHome() {
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   const effectiveProfile = useMemo(
-    () => learningProfile ?? buildLocalLearningProfile(notes),
+    () => {
+      const latest=notes.find(note=>note.status==='analyzed'&&note.analysis);
+      // Analysis is published before the profile update. Use the current note
+      // snapshot while that background aggregate still lacks the new result.
+      if(!learningProfile||latest&&!learningProfile.recentSessions.some(session=>session.noteId===latest._id))return buildLocalLearningProfile(notes);
+      return learningProfile;
+    },
     [learningProfile, notes]
   );
   const trackedNoteCount = effectiveProfile.totalNotesAnalyzed;
@@ -888,18 +896,22 @@ export default function NotesHome() {
           ) : null}
         </View>
 
-        {/* Slim Progress Bar */}
-        <View style={styles.progressBarTrack}>
+        {isProcessing && <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <ActivityIndicator size="small" color="#D97706" />
+          <Text style={[styles.cardTopicText, { flex: 1 }]}>{processingSummary(item.processingProgress)} · Running in background</Text>
+        </View>}
+        {/* Coverage is available only after analysis; never invent job progress. */}
+        {isAnalyzed && <View style={styles.progressBarTrack}>
           <View
             style={[
               styles.progressBarFill,
               {
-                width: isAnalyzed ? `${Math.min(completeness, 100)}%` : isProcessing ? "40%" : "100%",
+                width: `${Math.min(completeness, 100)}%`,
                 backgroundColor: barColor,
               },
             ]}
           />
-        </View>
+        </View>}
 
         {/* Primary Action Button (View Analysis & Materials) */}
         {isAnalyzed && (
@@ -1003,7 +1015,24 @@ export default function NotesHome() {
 
       {/* ── Lower Content Area ── */}
       <View style={styles.lowerContainer}>
-        {/* ── Pill Filter Switcher ── */}
+        {__DEV__ && <>
+        <TouchableOpacity onPress={() => router.push("/(main)/notes/model-demo" as any)} accessibilityRole="button" style={styles.modelDemoLink}>
+          <Sparkles size={16} color="#4F46E5" />
+          <Text style={styles.modelDemoText}>Try Science model examples</Text>
+          <ChevronRight size={16} color="#4F46E5" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/(main)/notes/history-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
+          <Landmark size={16} color="#4F46E5" />
+          <Text style={styles.modelDemoText}>Try History model examples</Text>
+          <ChevronRight size={16} color="#4F46E5" />
+        </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/(main)/notes/ict-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
+            <Code2 size={16} color="#4F46E5" />
+            <Text style={styles.modelDemoText}>Try ICT model examples</Text>
+            <ChevronRight size={16} color="#4F46E5" />
+          </TouchableOpacity>
+        </>}
+          {/* ── Pill Filter Switcher ── */}
         <View style={styles.filtersRow}>
           {FILTER_TABS.map((tab) => {
             const count =
@@ -1824,6 +1853,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
+  modelDemoLink: {flexDirection:"row",alignItems:"center",gap:7,paddingVertical:11,marginBottom:6},
+  modelDemoText: {fontSize:12,fontWeight:"600",color:"#4F46E5"},
   fabButton: {
     position: "absolute",
     bottom: 24,

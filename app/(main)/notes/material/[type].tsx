@@ -33,13 +33,13 @@ import {
 } from "lucide-react-native";
 
 import {
-  getNotesResourceUrl,
   notesAssetsClient,
-} from "@/api/apiClients";
+} from "@/api/notesClients";
 import { materialsApi } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import Markdown from "react-native-markdown-display";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useNotesAsset } from "@/hooks/use-notes-asset";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -494,9 +494,9 @@ const AudioPlayerView = ({
   fallbackScript: string | null;
 }) => {
   const isScript = audioUrl.endsWith(".txt");
-  const fullUrl = getNotesResourceUrl(audioUrl);
+  const { uri, error, retry } = useNotesAsset(isScript ? undefined : audioUrl);
 
-  const player = useAudioPlayer(isScript ? undefined : { uri: fullUrl });
+  const player = useAudioPlayer(uri ? { uri } : undefined);
   const status = useAudioPlayerStatus(player);
 
   const isPlaying = status.playing;
@@ -524,8 +524,7 @@ const AudioPlayerView = ({
         <View style={styles.infoRow}>
           <Info size={18} color={colors.primary} />
           <Text style={styles.infoText}>
-            Audio generation requires a configured ElevenLabs key. Here is the lesson
-            transcript instead.
+            Audio isn’t available for this lesson yet. You can read the lesson below.
           </Text>
         </View>
         <Text style={styles.transcriptLabel}>LESSON TRANSCRIPT</Text>
@@ -536,10 +535,14 @@ const AudioPlayerView = ({
     );
   }
 
+  if (!uri) return <View style={styles.playerCard}>
+    {error ? <><Text style={styles.infoText}>Could not load your audio lesson.</Text><TouchableOpacity accessibilityRole="button" onPress={retry} style={{ padding: 14 }}><Text style={{ color: "#9A3412" }}>Try again</Text></TouchableOpacity></> : <><ActivityIndicator color={colors.primary} /><Text style={styles.infoText}>Loading your audio lesson…</Text></>}
+  </View>;
+
   return (
     <View style={styles.playerCard}>
       {/* Play/Pause button */}
-      <TouchableOpacity style={styles.playBtn} onPress={togglePlay} activeOpacity={0.85}>
+      <TouchableOpacity style={styles.playBtn} onPress={togglePlay} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={isPlaying ? "Pause audio lesson" : "Play audio lesson"}>
         {isPlaying ? (
           <Pause size={44} color="#fff" fill="#fff" />
         ) : (

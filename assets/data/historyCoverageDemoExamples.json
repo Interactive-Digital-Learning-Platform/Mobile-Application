@@ -1,0 +1,34 @@
+{
+  "synthetic": true,
+  "realHandwritingIncluded": false,
+  "samples": [
+    {
+      "id": "british-complete",
+      "title": "Complete example",
+      "text": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes. Trincomalee harbour was strategically important for naval security around India.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11
+    },
+    {
+      "id": "british-partial",
+      "title": "Partial example",
+      "text": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11
+    },
+    {
+      "id": "british-missing",
+      "title": "Missing example",
+      "text": "Literary sources include books and written documents. Archaeological sources include coins and buildings.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11
+    },
+    {
+      "id": "kandy-complete-ocr-noise",
+      "title": "OCR error / review",
+      "text": "The Kandyan kingdom came under Britlsh rule in 18l5. This ended the independent Kandyan monarchy and expanded Britlsh control over the whole island.",
+      "conceptId": "hist-g11-l02-c04",
+      "grade": 11
+    }
+  ]
+}

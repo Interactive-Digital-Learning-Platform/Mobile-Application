@@ -8,7 +8,16 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:science-review": "node --test scripts/test-science-review-schema.cjs",
+    "test:coverage-schema": "node --test scripts/test-english-coverage-schema.cjs",
+    "test:history-schema": "node --test scripts/test-history-coverage-schema.cjs",
+    "test:ict-schema": "node --test scripts/test-ict-coverage-schema.cjs",
+    "test:note-processing": "node --test scripts/test-note-processing.cjs",
+    "test:science-model-status": "node --test scripts/test-science-model-status.cjs",
+    "test:note-coverage": "node --test scripts/test-note-coverage.cjs",
+    "test:note-materials": "node --test scripts/test-note-materials.cjs",
+    "test:notes-auth": "node --test scripts/test-notes-auth.cjs"
   },
   "dependencies": {
     "@clerk/expo": "^3.1.6",
