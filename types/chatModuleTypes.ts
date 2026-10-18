@@ -121,6 +121,7 @@ export type StreamCallbacks = {
       translationFailed?: boolean;
       sources?: SourceCitationType[];
       documents?: GeneratedDocumentType[];
+      conversationTitle?: string | null;
     },
   ) => void;
   onError: (error: string) => void;
@@ -171,6 +172,7 @@ export type AIChatSidebarProps = {
 export type UseChatReturn = {
   messages: MessageType[];
   conversationID: string | null;
+  conversationTitle: string | null;
   isStreaming: boolean;
   isSending: boolean;
   hasMoreHistory: boolean;
@@ -181,7 +183,7 @@ export type UseChatReturn = {
   sendMessage: (values: ChatInputValues, attachment?: ChatAttachment) => Promise<void>;
   loadMoreHistory: () => void;
   startNewConversation: () => void;
-  openConversation: (conversationID: string) => void;
+  openConversation: (conversationID: string, title?: string | null) => void;
   ensureConversation: () => Promise<string>;
   stopStreaming: () => void;
 }

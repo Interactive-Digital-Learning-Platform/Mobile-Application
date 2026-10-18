@@ -206,6 +206,7 @@ export const streamMessage = async ({
             translationFailed: parsed.translation_failed,
             sources: parsed.sources,
             documents: parsed.documents,
+            conversationTitle: parsed.conversation_title,
           });
           es.close();
           complete(() => resolve());

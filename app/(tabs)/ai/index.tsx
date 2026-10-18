@@ -57,6 +57,7 @@ export default function AIChat() {
   const {
     messages,
     conversationID,
+    conversationTitle,
     language,
     setLanguage,
     sendMessage,
@@ -165,7 +166,7 @@ export default function AIChat() {
           }}
           onConversationPress={(conversation) => {
             upload.reset();
-            openConversation(conversation.conversation_id);
+            openConversation(conversation.conversation_id, conversation.title);
             setDrawerOpen(false);
           }}
         />
@@ -198,7 +199,19 @@ export default function AIChat() {
                   color="#ffffff"
                   onPress={() => setDrawerOpen((prev) => !prev)}
                 />
-                <Text className="text-white font-amedium text-2xl">Nous</Text>
+                <View className="flex-1 items-center mx-4">
+                  {conversationTitle ? (
+                    <Text
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      className="text-white font-amedium text-xl"
+                    >
+                      {conversationTitle}
+                    </Text>
+                  ) : (
+                    <Text className="text-white font-amedium text-2xl">Nous</Text>
+                  )}
+                </View>
                 <View className="h-auto flex-row items-right rounded-full -mr-2">
                   <EllipsisVertical color="#ffffff" size={28} />
                 </View>
