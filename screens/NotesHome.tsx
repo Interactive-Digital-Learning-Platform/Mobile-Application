@@ -1036,23 +1036,6 @@ export default function NotesHome() {
           <Text accessibilityRole="alert" style={{ color: "#9A3412", lineHeight: 21 }}>{fetchError} Your previously loaded notes are still shown.</Text>
           <TouchableOpacity accessibilityRole="button" onPress={() => { void fetchNotes(true); }} disabled={refreshing} style={{ paddingVertical: 10 }}><Text style={{ color: "#C2410C", fontWeight: "700" }}>{refreshing ? "Trying again…" : "Try again"}</Text></TouchableOpacity>
         </View>}
-        {__DEV__ && <>
-        <TouchableOpacity onPress={() => router.push("/(main)/notes/model-demo" as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-          <Sparkles size={16} color="#4F46E5" />
-          <Text style={styles.modelDemoText}>Try Science model examples</Text>
-          <ChevronRight size={16} color="#4F46E5" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/(main)/notes/history-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-          <Landmark size={16} color="#4F46E5" />
-          <Text style={styles.modelDemoText}>Try History model examples</Text>
-          <ChevronRight size={16} color="#4F46E5" />
-        </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(main)/notes/ict-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-            <Code2 size={16} color="#4F46E5" />
-            <Text style={styles.modelDemoText}>Try ICT model examples</Text>
-            <ChevronRight size={16} color="#4F46E5" />
-          </TouchableOpacity>
-        </>}
           {/* ── Pill Filter Switcher ── */}
         <View style={styles.filtersRow}>
           {FILTER_TABS.map((tab) => {
@@ -1874,8 +1857,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
-  modelDemoLink: {flexDirection:"row",alignItems:"center",gap:7,paddingVertical:11,marginBottom:6},
-  modelDemoText: {fontSize:12,fontWeight:"600",color:"#4F46E5"},
   fabButton: {
     position: "absolute",
     bottom: 24,
