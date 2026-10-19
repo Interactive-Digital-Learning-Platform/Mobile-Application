@@ -7,10 +7,10 @@
 // `participants` array, not a `{me, opponent}` split.
 
 import {
+  BattleEndReason,
   BattleMatchStateResponse,
   BattleParticipantResult,
   BattleQuestionPublic,
-  ParticipantQuestionResult,
 } from "@/types/battleModuleTypes";
 
 export interface BattleWsConnectedEvent {
@@ -45,37 +45,42 @@ export interface BattleWsMatchStartedEvent {
   subject: string;
   difficulty: string;
   question_count: number;
+  // When the match clock runs out, and the server's clock at send time.
+  ends_at: string;
+  server_time: string;
 }
 
-// Pushed once per question boundary (including the very first, right after
-// match_started) — lockstep play, both players receive the SAME
-// question_index/question at the SAME instant.
-export interface BattleWsQuestionStartedEvent {
-  type: "question_started";
+// Sent only to the player it's for: question 0 to everyone when the match
+// starts, then each player's next question right after their answer/skip is
+// saved (the same again for a repeated Next/Skip). finished=true with
+// question=null once they've moved past the last one. Never says whether
+// the answer was right.
+export interface BattleWsNextQuestionEvent {
+  type: "next_question";
   question_index: number;
-  question: BattleQuestionPublic;
-  time_remaining_seconds: number;
+  question: BattleQuestionPublic | null;
+  finished: boolean;
+  ends_at: string;
+  server_time: string;
 }
 
-// Grading is deferred to the reveal boundary now (see
-// BattleWsQuestionResultEvent below) — this is just a lightweight
-// "your (re)submission was accepted" ack, never reveals correctness.
-export interface BattleWsAnswerAcknowledgedEvent {
-  type: "answer_acknowledged";
-  question_id: number;
-  selected_option: string;
-}
-
-// Pushed once per question, at the reveal boundary (last
-// BATTLE_ANSWER_REVEAL_SECONDS of its window) — both players receive the
-// SAME event (results for both participants), simultaneously, regardless of
-// who (if anyone) answered. Replaces the old instant-per-submission
-// answer_acknowledged(grading)/opponent_answered pair entirely.
-export interface BattleWsQuestionResultEvent {
-  type: "question_result";
+// Broadcast after each saved answer/skip so the opponent's progress bar
+// moves -- how far a player is, never whether they were right. A player
+// also receives their own.
+export interface BattleWsPlayerProgressEvent {
+  type: "player_progress";
+  user_id: number;
   question_order: number;
-  results: ParticipantQuestionResult[];
-  correct_answer: string | null;
+  answered: boolean; // false = skipped
+  answered_count: number;
+}
+
+// Answered by api/battleSocket.ts itself with a pong (the round trip feeds
+// the server's network allowance for the speed bonus) -- never reaches the
+// hook.
+export interface BattleWsPingEvent {
+  type: "ping";
+  nonce: number;
 }
 
 export interface BattleWsPlayerDisconnectedEvent {
@@ -94,6 +99,7 @@ export interface BattleWsPlayerReconnectedEvent {
 export interface BattleWsMatchFinishedEvent {
   type: "match_finished";
   winner_user_id: number | null;
+  end_reason?: BattleEndReason | null;
   participants: BattleParticipantResult[];
 }
 
@@ -113,9 +119,9 @@ export type BattleWsInboundEvent =
   | BattleWsPlayerReadyEvent
   | BattleWsCountdownStartedEvent
   | BattleWsMatchStartedEvent
-  | BattleWsQuestionStartedEvent
-  | BattleWsAnswerAcknowledgedEvent
-  | BattleWsQuestionResultEvent
+  | BattleWsNextQuestionEvent
+  | BattleWsPlayerProgressEvent
+  | BattleWsPingEvent
   | BattleWsPlayerDisconnectedEvent
   | BattleWsPlayerReconnectedEvent
   | BattleWsMatchFinishedEvent
@@ -126,4 +132,6 @@ export type BattleWsInboundEvent =
 export type BattleWsOutboundMessage =
   | { type: "ready" }
   | { type: "answer"; question_id: number; selected_option: string }
+  | { type: "skip"; question_id: number }
+  | { type: "pong"; nonce: number }
   | { type: "forfeit" };

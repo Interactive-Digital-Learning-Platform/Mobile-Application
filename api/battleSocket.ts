@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { SERVICE_URLS } from "@/api/apiClients";
 import { battleWsInboundEventSchema } from "@/schemas/battleWsSchemas";
 import { BattleWsInboundEvent, BattleWsOutboundMessage } from "@/types/battleWsTypes";
@@ -22,17 +23,39 @@ export interface BattleSocketHandle {
   // use this; queued server-side confirmation still arrives as its own
   // inbound event (e.g. "player_ready").
   sendReady: () => boolean;
+  // Next / Skip -- same "was it written to the socket" return as sendReady.
   sendAnswer: (questionId: number, selectedOption: string) => boolean;
+  sendSkip: (questionId: number) => boolean;
   sendForfeit: () => void;
   close: () => void;
 }
 
-function buildBattleWsUrl(matchId: number, token: string): string {
+function buildBattleWsUrl(matchId: number): string {
   // SERVICE_URLS.battle is http(s)://<gateway>/api/battle — swap scheme to
   // ws(s) and append the same /api/v1 prefix battleClient uses, since nginx
   // proxies the WS upgrade through the identical gateway path.
   const wsBase = SERVICE_URLS.battle.replace(/^http/, "ws");
-  return `${wsBase}/api/v1/battle/match/${matchId}/ws?token=${encodeURIComponent(token)}`;
+  return `${wsBase}/api/v1/battle/match/${matchId}/ws`;
+}
+
+// React Native's WebSocket accepts a third `{ headers }` argument (iOS + Android); the DOM typings this project
+// compiles against only declare two, so describe the native constructor explicitly.
+type NativeWebSocketCtor = new (
+  url: string,
+  protocols: string | string[] | null,
+  options: { headers: Record<string, string> }
+) => WebSocket;
+
+function openBattleWs(matchId: number, token: string): WebSocket {
+  const url = buildBattleWsUrl(matchId);
+  // Browsers can't set handshake headers, so web keeps the ?token= fallback (the server redacts it from its logs).
+  if (Platform.OS === "web") {
+    return new WebSocket(`${url}?token=${encodeURIComponent(token)}`);
+  }
+  // Native: send the Clerk JWT as a header (React Native's third WebSocket arg) -- unlike a query string it never
+  // lands in the gateway's or the service's access logs.
+  const NativeWebSocket = WebSocket as unknown as NativeWebSocketCtor;
+  return new NativeWebSocket(url, null, { headers: { Authorization: `Bearer ${token}` } });
 }
 
 export function connectBattleSocket(
@@ -40,7 +63,7 @@ export function connectBattleSocket(
   token: string,
   callbacks: BattleSocketCallbacks
 ): BattleSocketHandle {
-  const ws = new WebSocket(buildBattleWsUrl(matchId, token));
+  const ws = openBattleWs(matchId, token);
 
   const send = (message: BattleWsOutboundMessage): boolean => {
     if (ws.readyState !== WebSocket.OPEN) return false;
@@ -55,6 +78,12 @@ export function connectBattleSocket(
   ws.onmessage = (event) => {
     try {
       const parsed = battleWsInboundEventSchema.parse(JSON.parse(event.data as string));
+      if (parsed.type === "ping") {
+        // Answer straight away -- the server times this round trip and takes
+        // it off the speed-bonus clock, so any delay here would only hurt.
+        send({ type: "pong", nonce: parsed.nonce });
+        return;
+      }
       callbacks.onEvent(parsed as BattleWsInboundEvent);
     } catch (error) {
       console.warn("[BattleWS] Parse error", error, "raw:", event.data);
@@ -73,6 +102,7 @@ export function connectBattleSocket(
     sendReady: () => send({ type: "ready" }),
     sendAnswer: (questionId, selectedOption) =>
       send({ type: "answer", question_id: questionId, selected_option: selectedOption }),
+    sendSkip: (questionId) => send({ type: "skip", question_id: questionId }),
     sendForfeit: () => send({ type: "forfeit" }),
     close: () => ws.close(),
   };

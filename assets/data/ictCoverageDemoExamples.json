@@ -1,0 +1,60 @@
+{
+  "synthetic": true,
+  "independentAccuracyEvaluation": false,
+  "samples": [
+    {
+      "id": "cpu-complete",
+      "title": "Complete CPU note",
+      "conceptId": "ict-g10-u02-cpu",
+      "grade": 10,
+      "text": "The CPU contains an ALU for calculations and comparisons, a control unit that directs operations, and registers that temporarily hold working data and results.",
+      "expectedStatus": "present",
+      "sourceRecordId": "ict-g10-u02-cpu-review-1"
+    },
+    {
+      "id": "cpu-partial",
+      "title": "Partial CPU note",
+      "conceptId": "ict-g10-u02-cpu",
+      "grade": 10,
+      "text": "The arithmetic and logic unit carries out calculations and logical comparisons in the CPU.",
+      "expectedStatus": "partial",
+      "sourceRecordId": "ict-g10-u02-cpu-review-2"
+    },
+    {
+      "id": "cpu-missing",
+      "title": "Unrelated note",
+      "conceptId": "ict-g10-u02-cpu",
+      "grade": 10,
+      "text": "A plotter draws detailed plans on paper, while speakers produce sound output.",
+      "expectedStatus": "missing",
+      "sourceRecordId": "ict-g10-u02-cpu-review-3"
+    },
+    {
+      "id": "ram-conflict",
+      "title": "Conflicting RAM/ROM note",
+      "conceptId": "ict-g10-u02-ram-rom",
+      "grade": 10,
+      "text": "RAM permanently retains the boot instructions without electricity. ROM is the temporary workspace that is erased whenever power is removed.",
+      "expectedStatus": null,
+      "sourceRecordId": "ict-g10-u02-ram-rom-review-3"
+    },
+    {
+      "id": "dns-complete",
+      "title": "Complete DNS note",
+      "conceptId": "ict-g11-u03-dns",
+      "grade": 11,
+      "text": "DNS translates a domain name, such as school.example, into the corresponding IP address. The computer can then use that address to connect to the requested server.",
+      "expectedStatus": "present",
+      "sourceRecordId": "ict-g11-u03-dns-review-1"
+    },
+    {
+      "id": "bcc-conflict",
+      "title": "Conflicting email note",
+      "conceptId": "ict-g11-u03-cc-bcc",
+      "grade": 11,
+      "text": "Cc sends copies to additional recipients. Bcc also sends copies, but every To and Cc recipient can see the Bcc address list.",
+      "expectedStatus": null,
+      "sourceRecordId": "ict-g11-u03-cc-bcc-review-3"
+    }
+  ]
+}

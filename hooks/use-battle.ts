@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cancelQueue,
+  fetchBattleAnalytics,
   fetchBattleHistory,
   fetchBattleProfile,
   fetchLeaderboard,
@@ -14,8 +15,13 @@ export const battleKeys = {
   all:        ["battle"] as const,
   leaderboard: (subject: string, page: number) => ["battle", "leaderboard", subject, page] as const,
   profile:    ["battle", "profile"] as const,
+  analytics:  ["battle", "analytics"] as const,
   queueStatus: ["battle", "queue", "status"] as const,
   availability: ["battle", "availability"] as const,
+  // A finished-first match's own state, polled from the home screen while
+  // waiting on the opponent (BattleResultWatcher) -- also what the match
+  // screen starts from when that match is reopened, so it opens instantly.
+  pendingResult: (matchId: number | null) => ["battle", "pending-result", matchId] as const,
   history:    (subject: string | null, page: number) => ["battle", "history", subject, page] as const,
 };
 
@@ -33,6 +39,14 @@ export function useBattleProfileQuery() {
     queryKey: battleKeys.profile,
     queryFn: fetchBattleProfile,
     staleTime: 30 * 1000,
+  });
+}
+
+export function useBattleAnalyticsQuery() {
+  return useQuery({
+    queryKey: battleKeys.analytics,
+    queryFn: fetchBattleAnalytics,
+    staleTime: 60 * 1000,
   });
 }
 

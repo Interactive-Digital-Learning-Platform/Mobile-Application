@@ -46,6 +46,11 @@ app-example
 /android
 
 # Environment variable files
-.env
+.env*
+!.env.example
+
+# Local Expo diagnostics and logs
+*.log
+/diagnostic-dist/
 
 dev-docs

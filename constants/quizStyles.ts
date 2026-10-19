@@ -1,6 +1,6 @@
 import {
   Calculator, FlaskConical, Landmark, BookOpen,
-  Globe, Code2, HelpCircle, Shuffle,
+  Globe, Code2, HeartPulse, HelpCircle, Shuffle,
   type LucideIcon,
 } from "lucide-react-native";
 import { capitalize } from "@/constants/quizHelpers";
@@ -78,13 +78,17 @@ export const ICON_COLORS = {
   violet600:  "#7c3aed",
 } as const;
 
+// This static list is the fallback subject picker for grades without
+// curriculum data (see useCurriculumQuery) — CreateQuizModal prefers the
+// live curriculum's subject list whenever one exists for the chosen grade.
 export const SUBJECT_ICONS: Record<string, LucideIcon> = {
   Mathematics: Calculator,
   Science:     FlaskConical,
   History:     Landmark,
   English:     BookOpen,
   Geography:   Globe,
-  Programming: Code2,
+  ICT:         Code2,
+  "Health and Physical Education": HeartPulse,
 };
 
 export { HelpCircle as SubjectIconFallback };

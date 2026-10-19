@@ -2,7 +2,11 @@ import { ViewStyle, TextStyle, ImageSourcePropType } from "react-native";
 import { LucideIcon } from "lucide-react-native";
 import { RefObject } from "react";
 import { FlashListRef } from "@shopify/flash-list";
-import { ChatInputValues } from "@/schemas/chatSchemas";
+import {
+  ChatInputValues,
+  GeneratedDocumentType,
+  SourceCitationType,
+} from "@/schemas/chatSchemas";
 
 
 export type customButtonType = {
@@ -99,8 +103,10 @@ export type MessageType = {
   isError? : boolean,
   type: string,
   citations? : CitationType[],
+  sources? : SourceCitationType[],
   tokens?: number,
   attachments?: ChatAttachment[],
+  documents?: GeneratedDocumentType[],
   translationFailed?: boolean,
   isTranslated?: boolean,
   translatedContent?: string
@@ -109,7 +115,15 @@ export type MessageType = {
 export type StreamCallbacks = {
   onConversationCreated?: (conversationID: string) => void,
   onToken: (token: string) => void;
-  onDone: (messageID: string, meta?: { translationFailed?: boolean }) => void;
+  onDone: (
+    messageID: string,
+    meta?: {
+      translationFailed?: boolean;
+      sources?: SourceCitationType[];
+      documents?: GeneratedDocumentType[];
+      conversationTitle?: string | null;
+    },
+  ) => void;
   onError: (error: string) => void;
 }
 
@@ -127,6 +141,16 @@ export type UserChatsRequest = {
   userID: string;
   limit?: number;
   offset?: number;
+};
+
+export type DeleteConversationRequest = {
+  conversationID: string;
+  userID: string;
+};
+
+export type ShareConversationRequest = {
+  conversationID: string;
+  userID: string;
 };
 
 export type ChatHistorySectionName = "Today" | "Last Week" | "Older";
@@ -158,17 +182,22 @@ export type AIChatSidebarProps = {
 export type UseChatReturn = {
   messages: MessageType[];
   conversationID: string | null;
+  conversationTitle: string | null;
   isStreaming: boolean;
   isSending: boolean;
   hasMoreHistory: boolean;
   isLoadingHistory: boolean;
+  isLoadingConversation: boolean;
   chatRef: RefObject<FlashListRef<MessageType> | null>;
   language: ChatLanguage;
   setLanguage: (language: ChatLanguage) => void;
   sendMessage: (values: ChatInputValues, attachment?: ChatAttachment) => Promise<void>;
   loadMoreHistory: () => void;
   startNewConversation: () => void;
-  openConversation: (conversationID: string) => void;
+  openConversation: (conversationID: string, title?: string | null) => void;
+  deleteConversation: () => Promise<void>;
+  createShareLink: () => Promise<string>;
+  isDeletingConversation: boolean;
   ensureConversation: () => Promise<string>;
   stopStreaming: () => void;
 }

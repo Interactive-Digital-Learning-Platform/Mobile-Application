@@ -19,20 +19,37 @@ const tokenEventSchema = z.object({
   token: z.string(),
 });
 
+export const sourceCitationSchema = z.object({
+  filename: z.string().nullish(),
+  page: z.number().nullish(),
+  score: z.number().nullish(),
+  title: z.string().nullish(),
+  url: z.string().nullish(),
+  provider: z.string().nullish(),
+  snippet: z.string().nullish(),
+});
+
+export type SourceCitationType = z.infer<typeof sourceCitationSchema>;
+
+export const generatedDocumentSchema = z.object({
+  document_id: z.string(),
+  filename: z.string(),
+  mime_type: z.string().optional().default("application/pdf"),
+  page_count: z.number().nullish(),
+  download_url: z.string().nullish(),
+  expires_at: z.string().nullish(),
+  status: z.string().optional().default("completed"),
+});
+
+export type GeneratedDocumentType = z.infer<typeof generatedDocumentSchema>;
+
 const doneEventSchema = z.object({
   type: z.literal("done"),
   message_id: z.string(),
   translation_failed: z.boolean().optional().default(false),
-  sources: z
-    .array(
-      z.object({
-        filename: z.string().optional(),
-        page: z.number().nullish(),
-        score: z.number().nullish(),
-      }),
-    )
-    .catch([])
-    .default([]),
+  sources: z.array(sourceCitationSchema).catch([]).default([]),
+  documents: z.array(generatedDocumentSchema).catch([]).default([]),
+  conversation_title: z.string().nullish().catch(null),
 });
 
 const errorEventSchema = z.object({
@@ -48,12 +65,6 @@ export const sseEventSchema = z.discriminatedUnion("type", [
 ]);
 
 export type SSEEvent = z.infer<typeof sseEventSchema>;
-
-export const sourceCitationSchema = z.object({
-  filename: z.string(),
-  page: z.number(),
-  score: z.number(),
-});
 
 export const attachmentStatusSchema = z.enum([
   "uploaded",
@@ -111,8 +122,41 @@ export const messageResponseSchema = z.object({
   is_translated: z.boolean().optional().default(false),
   translated_content: z.string().nullable().optional(),
   sources: z.array(sourceCitationSchema).optional().default([]),
+  documents: z.array(generatedDocumentSchema).optional().default([]),
   attachments: z.array(messageAttachmentSchema).optional().default([]),
 });
+
+export const shareLinkResponseSchema = z.object({
+  token: z.string().min(1),
+  shared_at: z.string(),
+  message_count: z.number(),
+});
+
+export type ShareLinkResponseType = z.infer<typeof shareLinkResponseSchema>;
+
+// A shared chat is a read-only snapshot: it deliberately carries no
+// conversation/message ids, only what the viewer needs to render it.
+export const sharedMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.string(),
+  created_at: z.string(),
+  sources: z.array(sourceCitationSchema).optional().default([]),
+  attachments: z
+    .array(z.object({ filename: z.string(), content_type: z.string() }))
+    .optional()
+    .default([]),
+  is_translated: z.boolean().optional().default(false),
+  translated_content: z.string().nullable().optional(),
+});
+
+export const sharedChatResponseSchema = z.object({
+  title: z.string().nullable().optional(),
+  shared_at: z.string(),
+  messages: z.array(sharedMessageSchema),
+});
+
+export type SharedMessageType = z.infer<typeof sharedMessageSchema>;
+export type SharedChatResponseType = z.infer<typeof sharedChatResponseSchema>;
 
 export const messageHistoryResponseSchema = z.object({
   messages: z.array(messageResponseSchema),

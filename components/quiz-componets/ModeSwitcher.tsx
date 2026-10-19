@@ -1,5 +1,5 @@
-import React, { useCallback } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect } from "react";
+import { TouchableOpacity, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,75 +16,88 @@ interface ModeSwitcherProps {
   onModeChange: (mode: QuizMode) => void;
 }
 
-const TRACK_PADDING = 4;
 const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.8 };
+const UNDERLINE_HEIGHT = 3;
+const INACTIVE_TAB_COLOR = "rgba(255,255,255,0.65)";
 
+// Compact underline tabs, styled for the bg-primary header (white active tab + underline, translucent white inactive).
+// The parent can also change `mode` itself (swipe on the list, or a ?mode= route param),
+// so the underline follows the `mode` prop rather than only reacting to taps here.
 export default function ModeSwitcher({ mode, onModeChange }: ModeSwitcherProps) {
-  const trackWidthSV = useSharedValue(0);
   const progress = useSharedValue(mode === "online" ? 1 : 0);
+  const practiceX = useSharedValue(0);
+  const practiceW = useSharedValue(0);
+  const onlineX = useSharedValue(0);
+  const onlineW = useSharedValue(0);
 
-  const onTrackLayout = useCallback((e: any) => {
-    trackWidthSV.value = e.nativeEvent.layout.width;
-  }, [trackWidthSV]);
+  useEffect(() => {
+    progress.value = withSpring(mode === "online" ? 1 : 0, SPRING_CONFIG);
+  }, [mode, progress]);
 
   const handlePress = useCallback(
     (selected: QuizMode) => {
-      if (selected === mode) return;
-      progress.value = withSpring(selected === "online" ? 1 : 0, SPRING_CONFIG);
-      onModeChange(selected);
+      if (selected !== mode) onModeChange(selected);
     },
-    [mode, onModeChange, progress]
+    [mode, onModeChange]
   );
 
-  const thumbTranslateStyle = useAnimatedStyle(() => {
-    const thumbWidth = (trackWidthSV.value - TRACK_PADDING * 2) / 2;
-    return {
-      transform: [{ translateX: interpolate(progress.value, [0, 1], [0, thumbWidth]) }],
-    };
-  });
+  const onPracticeLayout = useCallback((e: LayoutChangeEvent) => {
+    practiceX.value = e.nativeEvent.layout.x;
+    practiceW.value = e.nativeEvent.layout.width;
+  }, [practiceX, practiceW]);
 
-  const thumbColorStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.primary500]),
-    shadowColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.primary500]),
+  const onOnlineLayout = useCallback((e: LayoutChangeEvent) => {
+    onlineX.value = e.nativeEvent.layout.x;
+    onlineW.value = e.nativeEvent.layout.width;
+  }, [onlineX, onlineW]);
+
+  const underlineStyle = useAnimatedStyle(() => ({
+    width: interpolate(progress.value, [0, 1], [practiceW.value, onlineW.value]),
+    transform: [{ translateX: interpolate(progress.value, [0, 1], [practiceX.value, onlineX.value]) }],
   }));
 
   const practiceTextStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], [ICON_COLORS.white, ICON_COLORS.slate400]),
+    color: interpolateColor(progress.value, [0, 1], [ICON_COLORS.white, INACTIVE_TAB_COLOR]),
   }));
 
   const onlineTextStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(progress.value, [0, 1], [ICON_COLORS.slate400, ICON_COLORS.white]),
-  }));
-
-  const badgeColorStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(progress.value, [0, 1], [ICON_COLORS.primary500, ICON_COLORS.blue500]),
+    color: interpolateColor(progress.value, [0, 1], [INACTIVE_TAB_COLOR, ICON_COLORS.white]),
   }));
 
   return (
-    <View className="items-center gap-[14px]">
-      <View
-        className="flex-row w-[90%] h-14 p-1 rounded-[28px] bg-slate-100 overflow-hidden relative shadow shadow-black/10"
-        onLayout={onTrackLayout}
-      >
-        <Animated.View
-          className="absolute top-1 left-1 w-[50%] h-12 rounded-[24px] shadow-md"
-          style={[thumbColorStyle, thumbTranslateStyle]}
-        />
-
-        <TouchableOpacity className="flex-1 flex-row justify-center items-center gap-[6px] z-10" activeOpacity={0.85} onPress={() => handlePress("practice")}>
-          <Animated.Text className="text-[15px] font-bold " style={practiceTextStyle}>
+    <View className="items-center">
+      <View className="flex-row gap-8 relative pb-1.5" accessibilityRole="tablist">
+        <TouchableOpacity
+          onLayout={onPracticeLayout}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          onPress={() => handlePress("practice")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === "practice" }}
+        >
+          <Animated.Text className="text-[15px] font-bold" style={practiceTextStyle}>
             Practice
-          </Animated.Text>  
+          </Animated.Text>
         </TouchableOpacity>
 
-        <TouchableOpacity className="flex-1 flex-row justify-center items-center gap-[6px] z-10" activeOpacity={0.85} onPress={() => handlePress("online")}>
-          <Animated.Text className="text-[15px] font-bold " style={onlineTextStyle}>
+        <TouchableOpacity
+          onLayout={onOnlineLayout}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          onPress={() => handlePress("online")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: mode === "online" }}
+        >
+          <Animated.Text className="text-[15px] font-bold" style={onlineTextStyle}>
             Online 1v1
           </Animated.Text>
         </TouchableOpacity>
-      </View>
 
-      
+        <Animated.View
+          className="absolute bottom-0 left-0 rounded-full bg-white"
+          style={[{ height: UNDERLINE_HEIGHT }, underlineStyle]}
+        />
+      </View>
     </View>
   );
 }

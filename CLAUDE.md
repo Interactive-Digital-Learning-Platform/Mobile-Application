@@ -28,7 +28,8 @@ Requires a `.env` (see `.env.example`) with:
 - `app/index.tsx` — entry redirect: waits on Clerk's `isLoaded`, then routes to `/(tabs)/ai` if signed in, else `/(auth)/sign-in`.
 - `app/(auth)/` — sign-in / sign-up / verify-email stack, unauthenticated.
 - `app/(tabs)/` — main authenticated app, a bottom `Tabs` navigator with five screens: `ai` (chat), `quiz`, `notes` (its own nested `Stack` with `[id]`, `upload`, `material/[type]`), `lab`, `profile`.
-- `app/(main)/` and `app/(onboarding)/` — currently thin `Slot` wrappers (scaffolded, not yet built out).
+- `app/(main)/` — `Slot` wrapper for screens outside the tabs (sources, notes, quiz, battle, profile). `app/(main)/shared/[token].tsx` is the read-only shared-chat viewer, opened by the deep link from `sharedChatUrl` (`utils/chatShare.ts`); it works signed out, since `GET /shared/{token}` is public.
+- `app/(onboarding)/` — currently a thin `Slot` wrapper (scaffolded, not yet built out).
 - Root `app/_layout.tsx` wraps everything in `KeyboardProvider` → `QueryClientProviderCom` → `ClerkProviderCom`, loads custom fonts (`Author-*`), and holds the global `Toast` host.
 
 ### API layer
