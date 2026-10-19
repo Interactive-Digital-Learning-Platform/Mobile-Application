@@ -167,6 +167,14 @@ export function useBattleMatch(matchId: number | null) {
       setMatchState(state);
       syncClock(state.server_time);
       if (state.review) setReview(state.review);
+      // A finished match's snapshot carries the result too -- keep it, so the results popup shows however this
+      // screen learned the match ended. Without this, a socket that dropped right before match_finished (and
+      // was then rightly not reconnected, the match being over) left "Match over" with no results at all.
+      if (state.status === "completed" && state.result) {
+        isTerminalRef.current = true;
+        const result = state.result;
+        setFinalResult((prev) => prev ?? result);
+      }
       const pending = pendingMoveRef.current;
       if (!pending) return;
       if (state.status === "active" && state.question?.question_id === pending.questionId) {
