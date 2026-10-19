@@ -1,6 +1,7 @@
 import { notesErrorMessage } from "@/utils/noteErrors";
 import React,{useEffect,useRef,useState} from 'react';
-import {View,Text,TouchableOpacity,TextInput,ActivityIndicator,StyleSheet} from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import {scienceCoverageApi} from '@/api/scienceCoverageAPI';
 import {ScienceConcept,SavedScienceReview} from '@/schemas/scienceReviewSchemas';
 import EnglishCoverageCard from './EnglishCoverageCard';

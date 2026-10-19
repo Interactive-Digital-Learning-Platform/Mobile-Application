@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Text, useWindowDimensions, View } from "react-native";
+import { useWindowDimensions, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { LinearGradient } from "expo-linear-gradient";
 import { Shield, Trophy } from "lucide-react-native";
 import Animated, {
@@ -243,7 +244,7 @@ export default function VersusIntro({
         pointerEvents="none"
       >
         <Animated.Text
-          className="text-white font-black"
+          className="text-white font-abold"
           style={[
             vLetterStyle,
             {
@@ -255,7 +256,7 @@ export default function VersusIntro({
           V
         </Animated.Text>
         <Animated.Text
-          className="text-white font-black"
+          className="text-white font-abold"
           style={[
             sLetterStyle,
             {

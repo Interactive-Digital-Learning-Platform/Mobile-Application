@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut, runOnJS } from "react-native-reanimated";
 import { colors } from "@/constants/colors";

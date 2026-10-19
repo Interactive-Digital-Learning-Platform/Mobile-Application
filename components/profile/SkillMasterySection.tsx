@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Brain, AlertTriangle, Sparkles, TrendingUp } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import type { SubjectAnalytics } from "@/types/quizModuleTypes";

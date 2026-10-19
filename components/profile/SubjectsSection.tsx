@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { BookOpen } from "lucide-react-native";
 import DifficultyBadge from "@/components/quiz-componets/DifficultyBadge";
 import type { SubjectAnalytics } from "@/types/quizModuleTypes";

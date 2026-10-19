@@ -1,6 +1,7 @@
 import { notesErrorMessage } from "@/utils/noteErrors";
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, TouchableOpacity, TextInput, Modal, ScrollView, ActivityIndicator, StyleSheet} from 'react-native';
+import { View, TouchableOpacity, Modal, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import {ictCoverageApi} from '@/api/ictCoverageAPI';
 import {ICTConcept, ICTReview, ICTReference} from '@/schemas/ictCoverageSchemas';
 

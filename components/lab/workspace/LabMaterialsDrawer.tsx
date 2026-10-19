@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Modal, Pressable, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from "react-native-reanimated";
 import { Check, ChevronDown, Droplet, Hammer, Plus, Search, X } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

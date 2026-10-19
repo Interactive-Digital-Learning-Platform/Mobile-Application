@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { TouchableOpacity, View, Alert, ActivityIndicator } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useState } from "react";
 import { Trash2, type LucideIcon } from "lucide-react-native";
 import { ICON_COLORS, getSubjectIcon, formatSubjectLabel, type Difficulty } from "@/constants/quizStyles";

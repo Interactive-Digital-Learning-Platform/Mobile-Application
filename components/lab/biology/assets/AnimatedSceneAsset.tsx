@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Cloud, Droplet, Leaf, LucideIcon, Sprout, Sun } from "lucide-react-native";
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from "react-native-reanimated";
 import { AnimatedSceneAssetProps, GeneratedAssetType } from "@/types/lab";

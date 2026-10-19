@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Sparkles, RefreshCw, ChevronDown, ChevronUp } from "lucide-react-native";
 import { useAnalyticsFeedbackQuery } from "@/hooks/use-quiz";
 import { filterTestSubjects } from "@/constants/quizHelpers";

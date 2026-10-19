@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Brain, ChevronDown, ChevronUp } from "lucide-react-native";
 import { scienceModelStatus, savedScienceVersion, ScienceCheckAction } from "@/utils/scienceModelStatus";
 import { colors } from "@/constants/colors";

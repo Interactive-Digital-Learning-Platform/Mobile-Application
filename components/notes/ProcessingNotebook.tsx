@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, AppState, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, Animated, AppState, Easing, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Sparkles, Star } from "lucide-react-native";
 
 const MESSAGES = ["One page at a time. You’ve got this!", "Big ideas can start with little notes.", "Curiosity is your superpower!", "Keep learning. Keep wondering."];

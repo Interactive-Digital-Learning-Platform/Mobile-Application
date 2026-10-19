@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ClipboardList } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

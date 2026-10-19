@@ -1,8 +1,12 @@
 import { useState } from "react";
 import {
-  View, Text, TouchableOpacity, ActivityIndicator,
-  type LayoutChangeEvent, type GestureResponderEvent,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  type LayoutChangeEvent,
+  type GestureResponderEvent,
 } from "react-native";
+import { scaleForAuthor, Text } from "@/components/ui/AppText";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import { CalendarDays } from "lucide-react-native";
 import { useDailyAnalyticsQuery } from "@/hooks/use-quiz";
@@ -123,7 +127,7 @@ function ProgressBars({ daily }: { daily: DailyActivityPoint[] }) {
             {Y_TICKS.map((tick) => (
               <G key={tick}>
                 <Line x1={PAD.left} x2={PAD.left + plotW} y1={y(tick)} y2={y(tick)} stroke={GRID_COLOR} strokeWidth={1} />
-                <SvgText x={PAD.left - 6} y={y(tick) + 3} fontSize={9} fill={AXIS_TEXT_COLOR} textAnchor="end">{`${tick}`}</SvgText>
+                <SvgText x={PAD.left - 6} y={y(tick) + 3} fontSize={scaleForAuthor(9)} fontFamily="Author-Regular" fill={AXIS_TEXT_COLOR} textAnchor="end">{`${tick}`}</SvgText>
               </G>
             ))}
 
@@ -141,7 +145,7 @@ function ProgressBars({ daily }: { daily: DailyActivityPoint[] }) {
                   />
                   {isSelected && (
                     <SvgText
-                      x={cx(i)} y={y(d.progress_score) - 5} fontSize={10} fontWeight="800"
+                      x={cx(i)} y={y(d.progress_score) - 5} fontSize={scaleForAuthor(10)} fontFamily="Author-Bold"
                       fill={ICON_COLORS.slate800} textAnchor="middle"
                     >
                       {`${Math.round(d.progress_score)}`}
@@ -153,9 +157,9 @@ function ProgressBars({ daily }: { daily: DailyActivityPoint[] }) {
 
             {daily.map((d, i) => (
               <SvgText
-                key={`x-${d.date}`} x={cx(i)} y={CHART_HEIGHT - 4} fontSize={9}
+                key={`x-${d.date}`} x={cx(i)} y={CHART_HEIGHT - 4} fontSize={scaleForAuthor(9)}
                 fill={i === selected ? ICON_COLORS.slate800 : AXIS_TEXT_COLOR}
-                fontWeight={i === selected ? "700" : "400"} textAnchor="middle"
+                fontFamily={i === selected ? "Author-Bold" : "Author-Regular"} textAnchor="middle"
               >
                 {formatDay(d.date, { weekday: "narrow" })}
               </SvgText>

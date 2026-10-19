@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RefreshCw, Database, ChevronLeft, TriangleAlert } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

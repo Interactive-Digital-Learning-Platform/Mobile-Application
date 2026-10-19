@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { AlertTriangle, Eye, Sparkles, X } from "lucide-react-native";
 

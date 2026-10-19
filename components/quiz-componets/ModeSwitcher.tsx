@@ -7,6 +7,7 @@ import Animated, {
   interpolate,
   interpolateColor,
 } from "react-native-reanimated";
+import { scaleForAuthor } from "@/components/ui/AppText";
 import { ICON_COLORS } from "@/constants/quizStyles";
 
 export type QuizMode = "practice" | "online";
@@ -75,7 +76,7 @@ export default function ModeSwitcher({ mode, onModeChange }: ModeSwitcherProps) 
           accessibilityRole="tab"
           accessibilityState={{ selected: mode === "practice" }}
         >
-          <Animated.Text className="text-[15px] font-bold" style={practiceTextStyle}>
+          <Animated.Text className="font-abold" style={[{ fontSize: scaleForAuthor(15) }, practiceTextStyle]}>
             Practice
           </Animated.Text>
         </TouchableOpacity>
@@ -88,7 +89,7 @@ export default function ModeSwitcher({ mode, onModeChange }: ModeSwitcherProps) 
           accessibilityRole="tab"
           accessibilityState={{ selected: mode === "online" }}
         >
-          <Animated.Text className="text-[15px] font-bold" style={onlineTextStyle}>
+          <Animated.Text className="font-abold" style={[{ fontSize: scaleForAuthor(15) }, onlineTextStyle]}>
             Online 1v1
           </Animated.Text>
         </TouchableOpacity>

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, Text, TextInput, View } from "react-native";
+import { Modal, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS } from "react-native-reanimated";
 import { colors } from "@/constants/colors";

@@ -2,11 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { scaleForAuthor, Text, TextInput } from "@/components/ui/AppText";
 import {
   ArrowUp,
   BookOpen,
@@ -167,64 +166,70 @@ export default function StudyStructuredNotes({
     [],
   );
   const readingStyles = useMemo(
-    () => ({
-      body: { fontSize, lineHeight: fontSize * 1.7, color: "#334155" },
-      heading1: {
-        fontSize: fontSize + 9,
-        lineHeight: fontSize * 2,
-        color: "#27364B",
-        fontWeight: "700" as const,
-        marginBottom: 12,
-      },
-      heading2: {
-        fontSize: fontSize + 5,
-        lineHeight: fontSize * 1.8,
-        color: "#27364B",
-        fontWeight: "700" as const,
-        marginTop: 4,
-        marginBottom: 12,
-      },
-      heading3: {
-        fontSize: fontSize + 1,
-        lineHeight: fontSize * 1.6,
-        color: "#9A3412",
-        fontWeight: "700" as const,
-        marginTop: 14,
-        marginBottom: 8,
-      },
-      paragraph: { marginBottom: 12 },
-      list_item: { marginBottom: 7 },
-      bullet_list: { marginBottom: 12 },
-      ordered_list: { marginBottom: 12 },
-      strong: { color: "#27364B", fontWeight: "700" as const },
-      em: { color: "#526176" },
-      blockquote: {
-        backgroundColor: "#FFF7ED",
-        borderLeftColor: "#FDBA74",
-        borderLeftWidth: 3,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        marginVertical: 12,
-      },
-      code_inline: {
-        backgroundColor: "#F1F5F9",
-        color: "#9A3412",
-        fontSize: fontSize - 1,
-        fontFamily: "monospace",
-      },
-      fence: {
-        backgroundColor: "#F1F5F9",
-        color: "#334155",
-        fontSize: fontSize - 2,
-        padding: 12,
-        borderRadius: 10,
-      },
-      table: { borderColor: "#CBD5E1", borderWidth: 1, marginVertical: 8 },
-      tr: { borderBottomColor: "#E2E8F0", borderBottomWidth: 1 },
-      th: { backgroundColor: "#FFF7ED", padding: 10 },
-      td: { padding: 10 },
-      hr: { backgroundColor: "#E2E8F0", height: 1, marginVertical: 14 },
-    }),
+    () => {
+      // Sizes were chosen for the system font; Author draws smaller (see AppText).
+      const size = scaleForAuthor(fontSize);
+      return {
+        body: { fontSize: size, lineHeight: size * 1.7, color: "#334155", fontFamily: "Author-Regular" },
+        heading1: {
+          fontSize: size + 9,
+          lineHeight: size * 2,
+          color: "#27364B",
+          fontFamily: "Author-Bold",
+          marginBottom: 12,
+        },
+        heading2: {
+          fontSize: size + 5,
+          lineHeight: size * 1.8,
+          color: "#27364B",
+          fontFamily: "Author-Bold",
+          marginTop: 4,
+          marginBottom: 12,
+        },
+        heading3: {
+          fontSize: size + 1,
+          lineHeight: size * 1.6,
+          color: "#9A3412",
+          fontFamily: "Author-Bold",
+          marginTop: 14,
+          marginBottom: 8,
+        },
+        paragraph: { marginBottom: 12 },
+        list_item: { marginBottom: 7 },
+        bullet_list: { marginBottom: 12 },
+        bullet_list_icon: { fontFamily: "Author-Regular" },
+        ordered_list_icon: { fontFamily: "Author-Regular" },
+        ordered_list: { marginBottom: 12 },
+        strong: { color: "#27364B", fontFamily: "Author-Bold" },
+        em: { color: "#526176", fontFamily: "Author-Italic" },
+        blockquote: {
+          backgroundColor: "#FFF7ED",
+          borderLeftColor: "#FDBA74",
+          borderLeftWidth: 3,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginVertical: 12,
+        },
+        code_inline: {
+          backgroundColor: "#F1F5F9",
+          color: "#9A3412",
+          fontSize: fontSize - 1,
+          fontFamily: "monospace",
+        },
+        fence: {
+          backgroundColor: "#F1F5F9",
+          color: "#334155",
+          fontSize: fontSize - 2,
+          padding: 12,
+          borderRadius: 10,
+        },
+        table: { borderColor: "#CBD5E1", borderWidth: 1, marginVertical: 8 },
+        tr: { borderBottomColor: "#E2E8F0", borderBottomWidth: 1 },
+        th: { backgroundColor: "#FFF7ED", padding: 10 },
+        td: { padding: 10 },
+        hr: { backgroundColor: "#E2E8F0", height: 1, marginVertical: 14 },
+      };
+    },
     [fontSize],
   );
   const hasCoverage = Object.values(overview.counts).some((value) => value > 0);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { scaleForAuthor, Text } from "@/components/ui/AppText";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
   FadeIn,
@@ -101,7 +102,8 @@ export default function MatchStartPopup() {
         key={stepIndex}
         entering={FadeIn.duration(250)}
         exiting={FadeOut.duration(150)}
-        className="text-white/70 text-xs font-semibold text-center"
+        className="text-white/70 font-asemibold text-center"
+        style={{ fontSize: scaleForAuthor(12) }}
       >
         {text}
       </Animated.Text>

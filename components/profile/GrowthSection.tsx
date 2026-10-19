@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Sprout, Flame, CalendarCheck2, Award } from "lucide-react-native";
 import type { GrowthAnalytics } from "@/types/quizModuleTypes";
 import { ICON_COLORS } from "@/constants/quizStyles";

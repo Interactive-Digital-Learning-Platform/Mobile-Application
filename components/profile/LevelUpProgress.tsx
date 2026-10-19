@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Check } from "lucide-react-native";
 import type { SubjectAnalytics } from "@/types/quizModuleTypes";
 import { capitalize } from "@/constants/quizHelpers";

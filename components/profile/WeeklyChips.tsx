@@ -1,4 +1,5 @@
-import { View, Text, ScrollView } from "react-native";
+import { View, ScrollView } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ClipboardList, ListChecks, Timer, ArrowUp, ArrowDown, Minus, type LucideIcon } from "lucide-react-native";
 import { useDailyAnalyticsQuery } from "@/hooks/use-quiz";
 import Skeleton from "@/components/Skeleton";

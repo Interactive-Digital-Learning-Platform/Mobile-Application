@@ -1,5 +1,6 @@
 import { ComponentType } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { BiologyCanvasProps, BiologyVisualizationStageType } from "@/types/lab";
 import PhotosynthesisCanvas from "./canvases/PhotosynthesisCanvas";
 import WaterCycleCanvas from "./canvases/WaterCycleCanvas";

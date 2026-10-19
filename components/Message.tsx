@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import Markdown from "react-native-markdown-display";
 import { MessageType } from "@/types/chatModuleTypes";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { SlideInRight, SlideInLeft } from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { ChevronRight, FileText } from "lucide-react-native";

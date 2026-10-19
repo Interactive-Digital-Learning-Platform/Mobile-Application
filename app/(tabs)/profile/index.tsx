@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -9,7 +8,8 @@ import {
   Alert,
   StatusBar,
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { Text } from "@/components/ui/AppText";
+import { router, useFocusEffect, useNavigationContainerRef } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   User,
@@ -112,6 +112,7 @@ export default function Profile() {
   const { data: user } = useUserMeQuery();
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
+  const rootNavigation = useNavigationContainerRef();
   const {
     data: analytics,
     isLoading: analyticsLoading,
@@ -159,7 +160,12 @@ export default function Profile() {
               await signOut();
               await clearStatsCache();
               queryClient.clear();
-              router.replace("/");
+              // Start a fresh history at sign-in. A plain replace left the signed-in screens behind it, so the
+              // header back button / Android back / iOS swipe returned to them with no user (errors everywhere).
+              rootNavigation.reset({
+                index: 0,
+                routes: [{ name: "(auth)", state: { index: 0, routes: [{ name: "sign-in" }] } }],
+              });
             } catch {
               setSigningOut(false);
               Alert.alert("Couldn't log out", "Please check your connection and try again.");

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Check, X } from "lucide-react-native";
 import { VisualizationQuestionProps } from "@/types/lab";
 import Button from "@/components/ui/Button";

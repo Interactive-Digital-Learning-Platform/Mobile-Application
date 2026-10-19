@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
-  Text,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   StyleSheet,
   AppState,
 } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";

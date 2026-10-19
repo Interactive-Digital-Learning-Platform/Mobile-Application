@@ -3,10 +3,10 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useIsFocused } from "@react-navigation/native";
 import {
   BookOpen,

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import { scaleForAuthor, Text } from "@/components/ui/AppText";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
@@ -245,33 +245,35 @@ function NoteMaterialScreen({ id, type, targetGapId, targetConcept }: {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const markdownStyles = {
-  body: { fontSize: 15, color: "#374151", fontWeight: "400" as const, lineHeight: 25 },
+  body: { fontSize: scaleForAuthor(15), color: "#374151", fontFamily: "Author-Regular", lineHeight: scaleForAuthor(25) },
   heading1: {
-    fontSize: 22,
-    fontWeight: "800" as const,
+    fontSize: scaleForAuthor(22),
+    fontFamily: "Author-Bold",
     color: colors.primaryBlack,
     marginTop: 4,
     marginBottom: 12,
   },
   heading2: {
-    fontSize: 18,
-    fontWeight: "700" as const,
+    fontSize: scaleForAuthor(18),
+    fontFamily: "Author-Bold",
     color: "#1E293B",
     marginTop: 14,
     marginBottom: 8,
   },
   heading3: {
-    fontSize: 15,
-    fontWeight: "600" as const,
+    fontSize: scaleForAuthor(15),
+    fontFamily: "Author-Semibold",
     color: "#334155",
     marginTop: 10,
     marginBottom: 6,
   },
   paragraph: { marginBottom: 10 },
   list_item: { marginBottom: 6, paddingLeft: 4 },
-  strong: { fontWeight: "700" as const, color: colors.primaryBlack },
-  em: { fontStyle: "italic" as const, color: colors.primary },
+  strong: { fontFamily: "Author-Bold", color: colors.primaryBlack },
+  em: { fontFamily: "Author-Italic", color: colors.primary },
   bullet_list: { marginBottom: 10 },
+  bullet_list_icon: { fontFamily: "Author-Regular" },
+  ordered_list_icon: { fontFamily: "Author-Regular" },
   ordered_list: { marginBottom: 10 },
   code_inline: {
     backgroundColor: "#F1F5F9",
