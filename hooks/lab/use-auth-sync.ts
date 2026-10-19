@@ -3,8 +3,12 @@ import { useAuth, useUser } from "@clerk/expo";
 import { syncUser } from "@/api/lab";
 import { setAuthToken, clearAuthToken } from "@/providers/labAuthToken";
 
+const RETRY_DELAY_MS = 5000;
+
 // Syncs the signed-in Clerk user to the backend and stores the returned backend JWT,
 // which labClient (api/apiClients.ts) then attaches to every subsequent request.
+// Retries until it succeeds, so starting the app before the lab service is up doesn't
+// leave every Lab request unauthenticated for the rest of the session.
 export const useAuthSync = () => {
   const { isSignedIn } = useAuth();
   const { user } = useUser();
@@ -21,6 +25,9 @@ export const useAuthSync = () => {
 
     if (syncedClerkId.current === user.id) return;
 
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
     const sync = async () => {
       try {
         const token = await syncUser({
@@ -28,13 +35,21 @@ export const useAuthSync = () => {
           name: user.fullName || user.username || "Student",
           email: user.primaryEmailAddress?.emailAddress,
         });
+        if (cancelled) return;
         await setAuthToken(token);
         syncedClerkId.current = user.id;
       } catch (error) {
-        console.error("[useAuthSync] Failed to sync user:", error);
+        if (cancelled) return;
+        console.error("[useAuthSync] Failed to sync user, retrying:", error);
+        retryTimer = setTimeout(sync, RETRY_DELAY_MS);
       }
     };
 
     sync();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+    };
   }, [isSignedIn, user]);
 };
