@@ -6,7 +6,7 @@ import { setAuthToken, clearAuthToken } from "@/providers/labAuthToken";
 // Syncs the signed-in Clerk user to the backend and stores the returned backend JWT,
 // which labClient (api/apiClients.ts) then attaches to every subsequent request.
 export const useAuthSync = () => {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const syncedClerkId = useRef<string | null>(null);
 
@@ -23,11 +23,16 @@ export const useAuthSync = () => {
 
     const sync = async () => {
       try {
-        const token = await syncUser({
-          clerkId: user.id,
-          name: user.fullName || user.username || "Student",
-          email: user.primaryEmailAddress?.emailAddress,
-        });
+        const clerkToken = await getToken();
+        if (!clerkToken) throw new Error("No Clerk session token available");
+        const token = await syncUser(
+          {
+            clerkId: user.id,
+            name: user.fullName || user.username || "Student",
+            email: user.primaryEmailAddress?.emailAddress,
+          },
+          clerkToken
+        );
         await setAuthToken(token);
         syncedClerkId.current = user.id;
       } catch (error) {
@@ -36,5 +41,5 @@ export const useAuthSync = () => {
     };
 
     sync();
-  }, [isSignedIn, user]);
+  }, [isSignedIn, user, getToken]);
 };
