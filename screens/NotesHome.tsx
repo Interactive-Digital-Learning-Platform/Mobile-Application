@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -46,6 +46,9 @@ import Svg, {
 } from "react-native-svg";
 import { notesApi } from "@/api/notesAPI";
 import { notesClient } from "@/api/notesClients";
+import { notesErrorMessage } from "@/utils/noteErrors";
+import { parseNotesResponse } from "@/utils/noteResponses";
+import { useIsFocused } from "@react-navigation/native";
 import Toast from "react-native-toast-message";
 import { NoteProcessingProgress, processingSummary } from "@/utils/noteProcessing";
 
@@ -649,11 +652,16 @@ export default function NotesHome() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [learningProfile, setLearningProfile] = useState<LearningProfile | null>(null);
   const [persistentGaps, setPersistentGaps] = useState<PersistentGap[]>([]);
+  const [fetchError, setFetchError] = useState("");
+  const inFlight = useRef(false);
+  const focused = useIsFocused();
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchNotes = useCallback(
     async (isRefresh = false) => {
-      if (!userId) return;
+      if (!userId) { setLoading(false); return; }
+      if (inFlight.current) return;
+      inFlight.current = true;
       if (isRefresh) setRefreshing(true);
 
       try {
@@ -671,22 +679,30 @@ export default function NotesHome() {
 
         if (notesResult.status === "fulfilled" && notesResult.value.success) {
           setNotes(notesResult.value.data.notes);
+          setFetchError("");
         } else if (notesResult.status === "rejected") {
           throw notesResult.reason;
         }
 
-        if (profileResult.status === "fulfilled" && profileResult.value.data.success) {
-          setLearningProfile(profileResult.value.data.data);
+        if (profileResult.status === "fulfilled" && profileResult.value.data?.success) {
+          try { setLearningProfile(parseNotesResponse(profileResult.value.data, "profile").data); }
+          catch { setLearningProfile(null); } // Fall back to the valid loaded notes.
+        } else {
+          setLearningProfile(null);
         }
 
-        if (gapsResult.status === "fulfilled" && gapsResult.value.data.success) {
-          setPersistentGaps(gapsResult.value.data.data.gaps ?? []);
+        if (gapsResult.status === "fulfilled" && gapsResult.value.data?.success) {
+          const gaps = gapsResult.value.data.data?.gaps;
+          setPersistentGaps(Array.isArray(gaps) ? gaps.filter(gap => gap && typeof gap.conceptName === "string" && typeof gap.subjectName === "string") : []);
+        } else {
+          setPersistentGaps([]);
         }
       } catch (error) {
-        console.error("Failed to fetch notes:", error);
+        setFetchError(notesErrorMessage(error));
       } finally {
         setLoading(false);
         setRefreshing(false);
+        inFlight.current = false;
       }
     },
     [userId]
@@ -708,10 +724,10 @@ export default function NotesHome() {
     const hasProcessing = notes.some(
       (n) => n.status === "uploaded" || n.status === "processing"
     );
-    if (!hasProcessing) return;
+    if (!hasProcessing || !focused || fetchError) return;
     const interval = setInterval(() => fetchNotes(), 5000);
     return () => clearInterval(interval);
-  }, [notes, fetchNotes]);
+  }, [notes, fetchNotes, focused, fetchError]);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = (note: Note) => {
@@ -729,8 +745,8 @@ export default function NotesHome() {
               await notesApi.deleteNote(note._id);
               setNotes((prev) => prev.filter((n) => n._id !== note._id));
               Toast.show({ type: "success", text1: "Note deleted successfully" });
-            } catch {
-              Toast.show({ type: "error", text1: "Failed to delete note" });
+            } catch (error) {
+              Toast.show({ type: "error", text1: "Couldn't delete this note", text2: notesErrorMessage(error) });
             } finally {
               setDeletingId(null);
             }
@@ -936,14 +952,15 @@ export default function NotesHome() {
         <FileText size={38} color="#FC6E20" strokeWidth={1.8} />
       </View>
       <Text style={styles.emptyTitle}>
-        {activeFilter === "all" ? "No handwritten notes yet" : `No ${activeFilter} notes`}
+        {fetchError ? "Your notes couldn't load" : activeFilter === "all" ? "No handwritten notes yet" : `No ${activeFilter} notes`}
       </Text>
       <Text style={styles.emptySubtitle}>
-        {activeFilter === "all"
+        {fetchError ? fetchError : activeFilter === "all"
           ? "Upload photos of your handwritten notes to get AI gap analysis, interactive flashcards, podcasts, and study materials."
           : "Try switching filters or upload a new note."}
       </Text>
-      {activeFilter === "all" && (
+      {!!fetchError && <TouchableOpacity accessibilityRole="button" style={styles.emptyUploadBtn} onPress={() => { void fetchNotes(true); }}><Text style={styles.emptyUploadBtnText}>Try again</Text></TouchableOpacity>}
+      {!fetchError && activeFilter === "all" && (
         <TouchableOpacity
           style={styles.emptyUploadBtn}
           onPress={() => router.push("/(main)/notes/upload")}
@@ -1015,6 +1032,10 @@ export default function NotesHome() {
 
       {/* ── Lower Content Area ── */}
       <View style={styles.lowerContainer}>
+        {!!fetchError && notes.length > 0 && <View style={{ padding: 14, backgroundColor: "#FFF7ED", borderRadius: 12, marginBottom: 12 }}>
+          <Text accessibilityRole="alert" style={{ color: "#9A3412", lineHeight: 21 }}>{fetchError} Your previously loaded notes are still shown.</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { void fetchNotes(true); }} disabled={refreshing} style={{ paddingVertical: 10 }}><Text style={{ color: "#C2410C", fontWeight: "700" }}>{refreshing ? "Trying again…" : "Try again"}</Text></TouchableOpacity>
+        </View>}
         {__DEV__ && <>
         <TouchableOpacity onPress={() => router.push("/(main)/notes/model-demo" as any)} accessibilityRole="button" style={styles.modelDemoLink}>
           <Sparkles size={16} color="#4F46E5" />

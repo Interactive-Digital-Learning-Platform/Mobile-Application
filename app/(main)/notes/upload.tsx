@@ -28,6 +28,7 @@ import { notesApi, RESEARCH_CONSENT_VERSION } from "@/api/notesAPI";
 import { colors } from "@/constants/colors";
 import InputField from "@/components/InputField";
 import Toast from "react-native-toast-message";
+import { notesErrorMessage } from "@/utils/noteErrors";
 
 export default function UploadNote() {
   const router = useRouter();
@@ -40,9 +41,13 @@ export default function UploadNote() {
   const [topic, setTopic] = useState("");
   const [researchConsent, setResearchConsent] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const choosingPhoto = React.useRef(false);
 
   const pickImages = async () => {
-    if(isUploading||images.length>=20)return;
+    if(isUploading||images.length>=20||choosingPhoto.current)return;
+    choosingPhoto.current = true;
+    try {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Toast.show({
@@ -64,10 +69,15 @@ export default function UploadNote() {
       const newUris = result.assets.map((asset) => asset.uri);
       setImages((prev) => [...prev, ...newUris].slice(0,20));
     }
+    } catch {
+      Toast.show({ type: "error", text1: "Couldn't open your photos", text2: "Please try again, or use the camera instead." });
+    } finally { choosingPhoto.current = false; }
   };
 
   const takePhoto = async () => {
-    if(isUploading||images.length>=20)return;
+    if(isUploading||images.length>=20||choosingPhoto.current)return;
+    choosingPhoto.current = true;
+    try {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
       Toast.show({
@@ -85,6 +95,9 @@ export default function UploadNote() {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setImages((prev) => [...prev, result.assets[0].uri].slice(0,20));
     }
+    } catch {
+      Toast.show({ type: "error", text1: "Couldn't open the camera", text2: "Please try again, or choose photos from your gallery." });
+    } finally { choosingPhoto.current = false; }
   };
 
   const removeImage = (index: number) => {
@@ -92,6 +105,7 @@ export default function UploadNote() {
   };
 
   const handleUpload = async () => {
+    if (isUploading) return;
     if (images.length === 0) {
       Toast.show({
         type: "error",
@@ -108,9 +122,10 @@ export default function UploadNote() {
       });
       return;
     }
-    if (!userId) return;
+    if (!userId) { setUploadError("Please sign in again to upload your notes."); return; }
 
     setIsUploading(true);
+    setUploadError("");
     try {
       const response = await notesApi.uploadNote(userId, title.trim(), images, {
         context: {
@@ -129,15 +144,17 @@ export default function UploadNote() {
         });
         router.replace("/(tabs)/notes");
       } else {
-        throw new Error(response.error || "Upload failed");
+        setUploadError("We couldn't upload your note. Please try again in a moment.");
       }
-    } catch (error: any) {
-      console.error(error);
+    } catch (error: unknown) {
+      const message = notesErrorMessage(error);
+      setUploadError(message);
       Toast.show({
         type: "error",
         text1: "Upload Failed",
-        text2: (typeof error?.response?.data?.error==='string'?error.response.data.error:error.message) || "Could not upload note. Please check connection and try again.",
+        text2: message,
       });
+    } finally {
       setIsUploading(false);
     }
   };
@@ -168,6 +185,11 @@ export default function UploadNote() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {!!uploadError && <View style={{ padding: 16, backgroundColor: "#FFF7ED", borderRadius: 12, marginBottom: 16 }}>
+          <Text accessibilityRole="alert" style={{ color: "#9A3412", lineHeight: 21 }}>{uploadError}</Text>
+          <Text style={{ color: "#475569", marginTop: 8, lineHeight: 20 }}>Your selected photos are still here. If an upload was interrupted, check Notes before uploading the same pages again.</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/(tabs)/notes")} style={{ paddingVertical: 12 }}><Text style={{ color: colors.primary, fontWeight: "700" }}>Check my notes</Text></TouchableOpacity>
+        </View>}
         {/* ── Section 1: Note Details ── */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionHeaderLabel}>NOTE DETAILS</Text>
