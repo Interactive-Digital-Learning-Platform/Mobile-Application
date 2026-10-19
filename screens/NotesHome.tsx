@@ -10,6 +10,7 @@ import {
   StatusBar,
   Platform,
   StyleSheet,
+  AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -653,29 +654,38 @@ export default function NotesHome() {
   const [learningProfile, setLearningProfile] = useState<LearningProfile | null>(null);
   const [persistentGaps, setPersistentGaps] = useState<PersistentGap[]>([]);
   const [fetchError, setFetchError] = useState("");
-  const inFlight = useRef(false);
+  const inFlight = useRef<AbortController | null>(null);
   const focused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+
+  useEffect(() => {
+    const listener = AppState.addEventListener("change", state => setAppActive(state === "active"));
+    return () => listener.remove();
+  }, []);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchNotes = useCallback(
     async (isRefresh = false) => {
       if (!userId) { setLoading(false); return; }
       if (inFlight.current) return;
-      inFlight.current = true;
+      const controller = new AbortController();
+      inFlight.current = controller;
       if (isRefresh) setRefreshing(true);
 
       try {
         const encodedUserId = encodeURIComponent(userId);
         const [notesResult, profileResult, gapsResult] = await Promise.allSettled([
-          notesApi.getNotes(userId),
+          notesApi.getNotes(userId, controller.signal),
           notesClient.get<{ success: boolean; data: LearningProfile }>(
-            `/profile/${encodedUserId}`
+            `/profile/${encodedUserId}`, { signal: controller.signal }
           ),
           notesClient.get<{
             success: boolean;
             data: { gaps: PersistentGap[] };
-          }>(`/profile/${encodedUserId}/gaps`),
+          }>(`/profile/${encodedUserId}/gaps`, { signal: controller.signal }),
         ]);
+
+        if (controller.signal.aborted) return;
 
         if (notesResult.status === "fulfilled" && notesResult.value.success) {
           setNotes(notesResult.value.data.notes);
@@ -698,25 +708,30 @@ export default function NotesHome() {
           setPersistentGaps([]);
         }
       } catch (error) {
-        setFetchError(notesErrorMessage(error));
+        if (!controller.signal.aborted) setFetchError(notesErrorMessage(error));
       } finally {
-        setLoading(false);
-        setRefreshing(false);
-        inFlight.current = false;
+        if (inFlight.current === controller) {
+          setLoading(false);
+          setRefreshing(false);
+          inFlight.current = null;
+        }
       }
     },
     [userId]
   );
 
-  useEffect(() => {
-    fetchNotes();
-  }, [fetchNotes]);
-
-  // Refetch when screen comes to focus
+  // Expected request failures stay inside Notes. Leaving, switching accounts or
+  // backgrounding cancels the request; late results must not replace this feed.
   useFocusEffect(
     useCallback(() => {
-      fetchNotes();
-    }, [fetchNotes])
+      if (!appActive) return;
+      void fetchNotes();
+      return () => {
+        const controller = inFlight.current;
+        inFlight.current = null;
+        controller?.abort();
+      };
+    }, [fetchNotes, appActive])
   );
 
   // ── Auto-refresh while any note is processing ──────────────────────────────
@@ -724,10 +739,10 @@ export default function NotesHome() {
     const hasProcessing = notes.some(
       (n) => n.status === "uploaded" || n.status === "processing"
     );
-    if (!hasProcessing || !focused || fetchError) return;
+    if (!hasProcessing || !focused || !appActive || fetchError) return;
     const interval = setInterval(() => fetchNotes(), 5000);
     return () => clearInterval(interval);
-  }, [notes, fetchNotes, focused, fetchError]);
+  }, [notes, fetchNotes, focused, appActive, fetchError]);
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const handleDelete = (note: Note) => {
@@ -954,12 +969,12 @@ export default function NotesHome() {
       <Text style={styles.emptyTitle}>
         {fetchError ? "Your notes couldn't load" : activeFilter === "all" ? "No handwritten notes yet" : `No ${activeFilter} notes`}
       </Text>
-      <Text style={styles.emptySubtitle}>
+      <Text accessibilityRole={fetchError ? "alert" : undefined} style={styles.emptySubtitle}>
         {fetchError ? fetchError : activeFilter === "all"
           ? "Upload photos of your handwritten notes to get AI gap analysis, interactive flashcards, podcasts, and study materials."
           : "Try switching filters or upload a new note."}
       </Text>
-      {!!fetchError && <TouchableOpacity accessibilityRole="button" style={styles.emptyUploadBtn} onPress={() => { void fetchNotes(true); }}><Text style={styles.emptyUploadBtnText}>Try again</Text></TouchableOpacity>}
+      {!!fetchError && <TouchableOpacity accessibilityRole="button" disabled={refreshing} style={[styles.emptyUploadBtn, refreshing && { opacity: 0.6 }]} onPress={() => { void fetchNotes(true); }}><Text style={styles.emptyUploadBtnText}>{refreshing ? "Trying again…" : "Try again"}</Text></TouchableOpacity>}
       {!fetchError && activeFilter === "all" && (
         <TouchableOpacity
           style={styles.emptyUploadBtn}
@@ -1006,7 +1021,7 @@ export default function NotesHome() {
             <View style={styles.statCard}>
               {/* Stat 1: Analyzed */}
               <View style={[styles.statCell, styles.statCellBorderRight]}>
-                <Text style={styles.statVal}>{trackedNoteCount}</Text>
+                <Text style={styles.statVal}>{fetchError && !notes.length ? "—" : trackedNoteCount}</Text>
                 <Text style={styles.statLbl}>Analyzed</Text>
               </View>
 
@@ -1036,23 +1051,6 @@ export default function NotesHome() {
           <Text accessibilityRole="alert" style={{ color: "#9A3412", lineHeight: 21 }}>{fetchError} Your previously loaded notes are still shown.</Text>
           <TouchableOpacity accessibilityRole="button" onPress={() => { void fetchNotes(true); }} disabled={refreshing} style={{ paddingVertical: 10 }}><Text style={{ color: "#C2410C", fontWeight: "700" }}>{refreshing ? "Trying again…" : "Try again"}</Text></TouchableOpacity>
         </View>}
-        {__DEV__ && <>
-        <TouchableOpacity onPress={() => router.push("/(main)/notes/model-demo" as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-          <Sparkles size={16} color="#4F46E5" />
-          <Text style={styles.modelDemoText}>Try Science model examples</Text>
-          <ChevronRight size={16} color="#4F46E5" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/(main)/notes/history-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-          <Landmark size={16} color="#4F46E5" />
-          <Text style={styles.modelDemoText}>Try History model examples</Text>
-          <ChevronRight size={16} color="#4F46E5" />
-        </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.push('/(main)/notes/ict-model-demo' as any)} accessibilityRole="button" style={styles.modelDemoLink}>
-            <Code2 size={16} color="#4F46E5" />
-            <Text style={styles.modelDemoText}>Try ICT model examples</Text>
-            <ChevronRight size={16} color="#4F46E5" />
-          </TouchableOpacity>
-        </>}
           {/* ── Pill Filter Switcher ── */}
         <View style={styles.filtersRow}>
           {FILTER_TABS.map((tab) => {
@@ -1874,8 +1872,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
   },
-  modelDemoLink: {flexDirection:"row",alignItems:"center",gap:7,paddingVertical:11,marginBottom:6},
-  modelDemoText: {fontSize:12,fontWeight:"600",color:"#4F46E5"},
   fabButton: {
     position: "absolute",
     bottom: 24,

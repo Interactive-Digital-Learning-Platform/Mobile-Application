@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const context = {exports: {}};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname, '../utils/noteStudyGuide.ts'), 'utf8'), {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText, context);
-const {parseStudyGuide, studyHeadingKey} = context.exports;
+const {parseStudyGuide, studyHeadingKey, studyGuideOverview, studySectionNeedsSupport, filterStudySections, findStudyGuideTarget} = context.exports;
 
 test('coverage markers highlight partial and missing upload concepts without exposing technical comments', () => {
   for (const status of ['present', 'partial', 'missing', 'unchecked']) {
@@ -79,4 +79,40 @@ test('duplicate parent/subheadings are merged so a visual is shown once beside t
   assert.equal(sections[1].heading, 'Types of Friction');
   assert.match(sections[1].body, /Static, limiting and dynamic/);
   assert.equal((sections[1].body.match(/Types of Friction/g) || []).length, 1);
+});
+
+test('overview counts saved coverage only, never treating unchecked or old sections as missing', () => {
+  const sections = parseStudyGuide('# **Forces**\nIntro.\n## Friction\n<!-- note-coverage:partial -->\nAn explanation.\n## Motion\n<!-- note-coverage:present -->\nFrom Your Handwritten Notes.\n## Energy\n<!-- note-coverage:missing -->\nMore detail.\n## Work\n<!-- note-coverage:unchecked -->\nAn example.\n## Older section\nLegacy content.\n## Answers\nA self-check solution.');
+  const overview = studyGuideOverview(sections);
+  assert.equal(overview.title, 'Forces');
+  assert.equal(JSON.stringify(overview.counts), JSON.stringify({present:1, partial:1, missing:1, unchecked:1}));
+  assert.equal(overview.supportCount, 2);
+  assert.ok(overview.readingMinutes >= 1);
+  assert.equal(studySectionNeedsSupport({...sections[2], isRemediatedGap:true}), false);
+});
+
+test('search and attention filters preserve full section content, ids, formulas and source anchors', () => {
+  const sections = parseStudyGuide('# Forces\n## Friction\n<!-- anchor:gap-1 -->\n<!-- note-coverage:partial -->\n### Formula\n$F = μN$\nSource: textbook page 5.\n## Motion\n<!-- note-coverage:missing -->\nMovement.\n## Answers\nA secret solution.');
+  const matches = filterStudySections(sections, true, 'FRICTION');
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0], sections[1]);
+  assert.match(matches[0].body, /`F = μN`/);
+  assert.match(matches[0].rawBody, /anchor:gap-1/);
+  assert.match(matches[0].body, /textbook page 5/);
+  assert.equal(filterStudySections(sections, false, 'secret solution').length, 0);
+  assert.equal(filterStudySections(sections, false, 'Answers').length, 1);
+  assert.equal(filterStudySections(sections, true, '').length, 2);
+  assert.equal(filterStudySections(sections, false, '').length, sections.length);
+});
+
+test('focus links match exact anchors or unique headings and never substitute unrelated gaps', () => {
+  const sections = parseStudyGuide('# Forces\n## 1. Dynamic friction\n<!-- anchor:gap-10 -->\nA force.\n## 2. Static friction\n<!-- anchor:gap-1 -->\nAnother force.\n## Answers\n<!-- anchor:gap-answers -->\nAn answer.');
+  assert.equal(findStudyGuideTarget(sections, 'gap-1'), 2);
+  assert.equal(findStudyGuideTarget(sections, 'gap-10'), 1);
+  assert.equal(findStudyGuideTarget(sections, undefined, '**Static friction**'), 2);
+  assert.equal(findStudyGuideTarget(sections, undefined, 'dynamic'), 1);
+  assert.equal(findStudyGuideTarget(sections, undefined, 'friction'), null);
+  assert.equal(findStudyGuideTarget(sections, 'gap-not-here'), null);
+  assert.equal(findStudyGuideTarget(sections, 'gap-answers'), null);
+  assert.equal(findStudyGuideTarget(sections, 'old-id', 'Static friction'), 2);
 });
