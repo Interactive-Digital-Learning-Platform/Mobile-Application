@@ -38,6 +38,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import { notesApi } from "@/api/notesAPI";
+import { notesErrorMessage } from "@/utils/noteErrors";
 import { useNotesMaterials } from "@/hooks/use-notes-materials";
 import { MaterialStatus, materialLabel } from "@/utils/noteMaterials";
 import NoteCoverageBreakdown from "@/components/notes/NoteCoverageBreakdown";
@@ -524,7 +525,7 @@ export default function NoteDetail() {
 
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
-  const [noteFetchError, setNoteFetchError] = useState(false);
+  const [noteFetchError, setNoteFetchError] = useState("");
   const noteFetchInFlight = React.useRef<string|null>(null);
   const currentNoteId=React.useRef(id);currentNoteId.current=id;
   const [processingPollPaused,setProcessingPollPaused]=useState(false);
@@ -619,17 +620,17 @@ export default function NoteDetail() {
 
   // ── Fetch note ──────────────────────────────────────────────────────────────
   const fetchNote = useCallback(async () => {
+    if (typeof id !== "string" || !id) { setNoteFetchError("This note link isn't available. Please return to Notes."); setLoading(false); return; }
     if (noteFetchInFlight.current===id) return;
     noteFetchInFlight.current = id;
     try {
       const response = await notesApi.getNote(id);
       if (response.success&&currentNoteId.current===id) {
         setNote(response.data);
-        setNoteFetchError(false);
+        setNoteFetchError("");
       }
     } catch (error) {
-      console.error("Failed to fetch note:", error);
-      if(currentNoteId.current===id)setNoteFetchError(true);
+      if(currentNoteId.current===id){setNoteFetchError(notesErrorMessage(error));setProcessingPollPaused(true);}
     } finally {
       if(currentNoteId.current===id)setLoading(false);
       if(noteFetchInFlight.current===id)noteFetchInFlight.current = null;
@@ -650,10 +651,9 @@ export default function NoteDetail() {
         refreshMaterials();
       }
     } catch (error) {
-      console.error("Failed to save concept verification:", error);
       setVerificationError({
         conceptId,
-        message: "Your response could not be saved. Check the connection and try again.",
+        message: notesErrorMessage(error, "Your response could not be saved. Please try again in a moment."),
       });
     } finally {
       setVerifyingConceptId(null);
@@ -686,8 +686,7 @@ export default function NoteDetail() {
         fetchNote();
       }
     } catch (error) {
-      console.error("Failed to correct note context:", error);
-      Alert.alert('Could not update lesson details','Check your connection and try again. If analysis is already running, wait for it to finish.');
+      Alert.alert('Could not update lesson details', notesErrorMessage(error));
     } finally {
       setContextSaving(false);
     }
@@ -712,7 +711,7 @@ export default function NoteDetail() {
                 "withdrawn",
               );
               if (!response.success || !response.data?.researchConsent) {
-                throw new Error(response.error || "Consent withdrawal failed");
+                throw new Error("Consent withdrawal failed");
               }
               setNote((current) =>
                 current
@@ -724,10 +723,9 @@ export default function NoteDetail() {
                 "Your note remains available in the app, but it will no longer be collected for future model training.",
               );
             } catch (error) {
-              console.error("Failed to withdraw research consent:", error);
               Alert.alert(
                 "Could not withdraw permission",
-                "Check your connection and try again.",
+                notesErrorMessage(error),
               );
             } finally {
               setConsentUpdating(false);
@@ -745,12 +743,12 @@ export default function NoteDetail() {
   }, [fetchNote]);
 
   useEffect(() => {
-    if (!isProcessing) return;
+    if (!isProcessing || noteFetchError) return;
     setProcessingPollPaused(false);
     const interval = setInterval(fetchNote, 3000);
     const limit=setTimeout(()=>{clearInterval(interval);setProcessingPollPaused(true);},120000);
     return () => {clearInterval(interval);clearTimeout(limit);};
-  }, [isProcessing, fetchNote,processingPollSession]);
+  }, [isProcessing, fetchNote,processingPollSession,noteFetchError]);
 
   const getCompletenessColor = (score: number) => {
     if (score >= 75) return "#10b981";
@@ -784,7 +782,7 @@ export default function NoteDetail() {
     return (
       <SafeAreaView style={styles.centerContainer}>
         <AlertCircle size={48} color="#ef4444" />
-        <Text style={styles.errorText}>{noteFetchError ? "Could not load this note. Check your connection and try again." : "Note not found."}</Text>
+        <Text accessibilityRole="alert" style={styles.errorText}>{noteFetchError || "Note not found."}</Text>
         {noteFetchError && <TouchableOpacity style={styles.backBtn} onPress={fetchNote}><Text style={styles.backBtnText}>Try again</Text></TouchableOpacity>}
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>Go Back</Text>
@@ -798,7 +796,7 @@ export default function NoteDetail() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar backgroundColor="#F8F9FB" barStyle="dark-content" />
-        <ProcessingView createdAt={note.createdAt} progress={note.processingProgress} connectionError={noteFetchError} pollPaused={processingPollPaused} onCheck={()=>{void fetchNote();setProcessingPollSession(n=>n+1);}} onBack={() => router.replace("/(tabs)/notes")} />
+        <ProcessingView createdAt={note.createdAt} progress={note.processingProgress} connectionError={!!noteFetchError} pollPaused={processingPollPaused} onCheck={()=>{void fetchNote();setProcessingPollSession(n=>n+1);}} onBack={() => router.replace("/(tabs)/notes")} />
       </SafeAreaView>
     );
   }
@@ -830,6 +828,10 @@ export default function NoteDetail() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {!!noteFetchError && <View style={{ padding: 16, backgroundColor: "#FFF7ED", borderRadius: 12, marginBottom: 12 }}>
+          <Text accessibilityRole="alert" style={{ color: "#9A3412", lineHeight: 21 }}>{noteFetchError} Your previously loaded note is still shown.</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { void fetchNote(); }} style={{ paddingVertical: 12 }}><Text style={{ color: colors.primary, fontWeight: "700" }}>Try again</Text></TouchableOpacity>
+        </View>}
         {/* ── Failed State ── */}
         {isFailed && (
           <View style={styles.failedCard}>
@@ -838,14 +840,14 @@ export default function NoteDetail() {
             </View>
             <Text style={styles.failedTitle}>Analysis Failed</Text>
             <Text style={styles.failedText}>
-              {note.errorMessage || "Could not process this image. Please ensure the image is clear and try uploading again."}
+              {"We couldn't finish analysing these photos. Please try again in a moment. Clear, well-lit photos work best."}
             </Text>
             <TouchableOpacity style={styles.failedRetryBtn} onPress={() => router.replace("/(tabs)/notes")}>
               <Text style={styles.failedRetryText}>Return to Notes</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.failedRetryBtn,{marginTop:10}]} disabled={retryingAnalysis} onPress={async()=>{
               setRetryingAnalysis(true);try{await notesApi.retryAnalysis(id);setNote(current=>current?{...current,status:'processing',processingProgress:undefined}:current);setProcessingPollSession(n=>n+1);}
-              catch{Alert.alert('Could not restart analysis','Check your connection and try again.');}finally{setRetryingAnalysis(false);}
+              catch(error){Alert.alert('Could not restart analysis',notesErrorMessage(error));}finally{setRetryingAnalysis(false);}
             }}><Text style={styles.failedRetryText}>{retryingAnalysis?'Starting…':'Retry analysis with these photos'}</Text></TouchableOpacity>
           </View>
         )}
@@ -2218,8 +2220,8 @@ export default function NoteDetail() {
                 <MaterialCard
                   icon={<BookOpen size={20} color="#3B82F6" />}
                   title="Structured Notes"
-                  badgeText="Complete Note"
-                  subtitle="Complete lesson note with your handwriting + official textbook knowledge & highlighted gap remediations"
+                  badgeText="Study Guide"
+                  subtitle="Clear explanations, source-based diagrams and self-check questions"
                   color="#3B82F6"
                   isReady={materialsOverview?.generatedTypes.includes("structured_notes") ?? false}
                   status={materialStatus("structured_notes")}
@@ -2231,7 +2233,7 @@ export default function NoteDetail() {
                   icon={<Layers size={20} color="#8B5CF6" />}
                   title="Flashcards"
                   badgeText="Active Recall"
-                  subtitle="Practice cards prioritizing the concepts missing from your handwritten notes"
+                  subtitle="Recall and reasoning practice with hints and a practice-again round"
                   color="#8B5CF6"
                   isReady={materialsOverview?.generatedTypes.includes("flashcards") ?? false}
                   status={materialStatus("flashcards")}

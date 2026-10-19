@@ -36,7 +36,14 @@ export function useNotesAsset(path?: string) {
         const extension = relative.split(".").pop() || "bin";
         file = `${FileSystem.cacheDirectory}private-note-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
         download = FileSystem.createDownloadResumable(getNotesResourceUrl(relative), file, { headers: { Authorization: `Bearer ${token}` } });
-        const response = await download.downloadAsync();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const response = await Promise.race([
+          download.downloadAsync(),
+          new Promise<never>((_, reject) => { timer = setTimeout(() => {
+            void download?.cancelAsync().catch(() => {});
+            reject(new Error("Notes asset timed out"));
+          }, 15000); }),
+        ]).finally(() => { if (timer !== undefined) clearTimeout(timer); });
         if (disposed) { await removeFile(); return; }
         if (!response || response.status !== 200) { await removeFile(); throw new Error("Asset unavailable"); }
         setAsset({ uri: response.uri, owner: userId, path });
