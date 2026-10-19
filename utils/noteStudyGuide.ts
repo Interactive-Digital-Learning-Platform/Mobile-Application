@@ -14,6 +14,42 @@ export const studyHeadingKey = (value: string) => value.toLowerCase().replace(/^
 // Smart typography turns science symbols such as (R) and (C) into trademarks.
 export const NOTE_MARKDOWN_OPTIONS = { typographer: false, html: false, linkify: false };
 
+export function studySectionNeedsSupport(section: StudySection): boolean {
+  if (section.isAnswer) return false;
+  return section.noteCoverage ? section.noteCoverage === "partial" || section.noteCoverage === "missing" : section.isRemediatedGap;
+}
+
+export function studyGuideOverview(sections: StudySection[]) {
+  const counts = { present: 0, partial: 0, missing: 0, unchecked: 0 };
+  for (const section of sections) if (!section.isAnswer && section.noteCoverage) counts[section.noteCoverage]++;
+  const first = sections[0];
+  const title = first?.body.match(/^#\s+(.+)/)?.[1].replace(/[*_`]/g, "").trim() || "Your lesson guide";
+  const words = sections.filter(section => !section.isAnswer).map(section => section.body.replace(/[#*_`|]/g, "")).join(" ").split(/\s+/).filter(Boolean).length;
+  return { title, counts, supportCount: sections.filter(studySectionNeedsSupport).length, readingMinutes: Math.max(1, Math.ceil(words / 200)) };
+}
+
+export function filterStudySections(sections: StudySection[], supportOnly: boolean, query: string): StudySection[] {
+  const needle = query.trim().toLocaleLowerCase();
+  return sections.filter(section => (!supportOnly || studySectionNeedsSupport(section)) &&
+    (!needle || (section.isAnswer ? section.heading : section.body).toLocaleLowerCase().includes(needle)));
+}
+
+/** A focus link must never silently send a student to an unrelated gap. */
+export function findStudyGuideTarget(sections: StudySection[], gapId?: string, concept?: string): number | null {
+  if (gapId?.trim()) {
+    const expected = gapId.trim().toLocaleLowerCase();
+    const section = sections.find(item => !item.isAnswer && [...item.rawBody.matchAll(/<!--\s*anchor:([^>]+?)\s*-->/g)]
+      .some(match => match[1].trim().toLocaleLowerCase() === expected));
+    if (section) return section.id;
+  }
+  const needle = concept ? studyHeadingKey(concept).replace(/^\d+[.)]?\s*/, "") : "";
+  if (!needle) return null;
+  const exact = sections.find(section => !section.isAnswer && studyHeadingKey(section.heading).replace(/^\d+[.)]?\s*/, "") === needle);
+  if (exact) return exact.id;
+  const headingMatches = sections.filter(section => !section.isAnswer && studyHeadingKey(section.heading).includes(needle));
+  return headingMatches.length === 1 ? headingMatches[0].id : null;
+}
+
 function readableEquations(value: string): string {
   let fence: string | undefined;
   return value.split("\n").map(line => {

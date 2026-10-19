@@ -21,9 +21,17 @@ export const RESEARCH_CONSENT_VERSION =
 
 export const notesApi = {
   // Get all notes for a user
-  getNotes: async (userId: string) => {
-    const response = await notesClient.get(`/notes?userId=${encodeURIComponent(userId)}`);
-    return parseNotesResponse(response.data, "notes");
+  getNotes: async (userId: string, signal?: AbortSignal) => {
+    try {
+      const response = await notesClient.get(`/notes?userId=${encodeURIComponent(userId)}`, { signal });
+      return parseNotesResponse(response.data, "notes");
+    } catch (failure) {
+      const error = normalizeNotesError(failure);
+      // A missing collection route means the service/gateway is unavailable;
+      // it must not tell a student that their saved notes were deleted.
+      if (error.response?.status === 404) throw new NotesServiceError("unavailable");
+      throw error;
+    }
   },
 
   // Get a single note by ID

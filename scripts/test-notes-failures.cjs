@@ -38,6 +38,13 @@ test('offline and timeout failures become useful messages; aborted requests rema
   assert.equal(cancelled.config, undefined);
 });
 
+test('a missing Notes collection route is a service outage; a missing individual note is a resource error', async () => {
+  const { client, notesApi } = fixture();
+  client.defaults.adapter = () => Promise.reject({ response: { status: 404, data: '<html>Cannot GET /notes</html>' } });
+  await assert.rejects(notesApi.getNotes('u'), /available right now/i);
+  await assert.rejects(notesApi.getNote('n'), /no longer available/i);
+});
+
 test('HTTP 200 failure envelopes cannot pretend an upload, delete or retry succeeded', async () => {
   const { client, notesApi } = fixture();
   client.defaults.adapter = ok({ success: false, error: 'database credentials and stack trace' });
