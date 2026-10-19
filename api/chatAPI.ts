@@ -4,15 +4,21 @@ import {
   attachmentResponseSchema,
   conversationResponseSchema,
   messageHistoryResponseSchema,
+  messageResponseSchema,
+  sharedChatResponseSchema,
+  shareLinkResponseSchema,
   SSEEvent,
   sseEventSchema,
 } from "@/schemas/chatSchemas";
 import {
   ChatConversation,
+  DeleteConversationRequest,
+  ShareConversationRequest,
   PickedFile,
   StreamMessagePropType,
   UserChatsRequest,
 } from "@/types/chatModuleTypes";
+import { isAxiosError } from "axios";
 import { Platform } from "react-native";
 import EventSource from "react-native-sse";
 
@@ -44,12 +50,59 @@ export async function fetchUserChats({
   return response.data;
 }
 
+// Resolves once the conversation no longer exists on the server. A 404 means it
+// was already deleted (e.g. from another device), which is the outcome we want.
+export async function deleteConversation({
+  conversationID,
+  userID,
+}: DeleteConversationRequest): Promise<void> {
+  try {
+    await assistantClient.delete(`/conversations/${conversationID}`, {
+      params: { user_id: userID },
+    });
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return;
+    throw error;
+  }
+}
+
+// Creates (or refreshes) the conversation's share link and returns its token.
+// Sharing again updates the snapshot but keeps the same token.
+export async function createShareLink({
+  conversationID,
+  userID,
+}: ShareConversationRequest): Promise<string> {
+  const response = await assistantClient.post(
+    `/conversations/${conversationID}/share`,
+    { user_id: userID },
+  );
+
+  return shareLinkResponseSchema.parse(response.data).token;
+}
+
+// Public read of a shared snapshot; no user needed.
+export const fetchSharedChat = async (token: string) => {
+  const response = await assistantClient.get(
+    `/shared/${encodeURIComponent(token)}`,
+  );
+
+  return sharedChatResponseSchema.parse(response.data);
+};
+
 export const fetchMessageHistory = async (conversationID: string) => {
   const response = await assistantClient.get(
     `/conversations/${conversationID}/messages`,
   );
 
   return messageHistoryResponseSchema.parse(response.data);
+};
+
+export const fetchMessageById = async (messageID: string) => {
+  const response = await assistantClient.get(
+    `/conversations/messages/${messageID}`,
+  );
+
+  return messageResponseSchema.parse(response.data);
 };
 
 type UploadAttachmentArgs = {
@@ -195,6 +248,9 @@ export const streamMessage = async ({
         } else if (parsed.type === "done") {
           callbacks.onDone(parsed.message_id, {
             translationFailed: parsed.translation_failed,
+            sources: parsed.sources,
+            documents: parsed.documents,
+            conversationTitle: parsed.conversation_title,
           });
           es.close();
           complete(() => resolve());

@@ -1,0 +1,361 @@
+{
+  "synthetic": true,
+  "source": "http://127.0.0.1:8080/api/notes/api",
+  "samples": [
+    {
+      "id": "british-complete",
+      "title": "Complete example",
+      "text": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes. Trincomalee harbour was strategically important for naval security around India.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11,
+      "result": {
+        "experimental": true,
+        "reviewRequired": true,
+        "language": "English",
+        "mode": "manual_review",
+        "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8",
+        "concept": {
+          "id": "hist-g11-l02-c01",
+          "name": "British strategic interests in Sri Lanka",
+          "grade": 11,
+          "lessonId": "hist-g11-l02",
+          "points": [
+            {
+              "id": "facet-1",
+              "text": "Britain valued Sri Lanka for its position on Indian Ocean sea routes."
+            },
+            {
+              "id": "facet-2",
+              "text": "Trincomalee harbour was important for naval security around India."
+            }
+          ]
+        },
+        "analyzedText": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes. Trincomalee harbour was strategically important for naval security around India.",
+        "textSha256": "560ea437924e010dd6de5f989c75138eda2825fd73ed8cfc2e04718216b4db8c",
+        "offsetUnit": "unicode_code_points",
+        "checkedAt": "2026-10-15T07:32:10.138Z",
+        "prediction": {
+          "status": null,
+          "suggestedStatus": "present",
+          "rawModelStatus": "present",
+          "completeSuggestionWithheld": false,
+          "reviewRequired": true,
+          "scoresCalibrated": false,
+          "scores": {
+            "present": 0.9733581174285699,
+            "partial": 0.024077675743200765,
+            "missing": 0.002564206828229399
+          },
+          "modelVersion": "history-coverage-v5.1-review-policy-2026-10-15",
+          "evidence": {
+            "points": [
+              {
+                "pointId": "facet-1",
+                "requirement": "Britain valued Sri Lanka for its position on Indian Ocean sea routes.",
+                "lexicalCoverage": 1,
+                "wordSimilarity": 0.8542,
+                "candidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "start": 0,
+                "end": 76,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.9751272201538086,
+                "semanticCandidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "semanticStart": 0,
+                "semanticEnd": 76
+              },
+              {
+                "pointId": "facet-2",
+                "requirement": "Trincomalee harbour was important for naval security around India.",
+                "lexicalCoverage": 1,
+                "wordSimilarity": 0.8427,
+                "candidateEvidence": "Trincomalee harbour was strategically important for naval security around India.",
+                "start": 77,
+                "end": 157,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.9830870032310486,
+                "semanticCandidateEvidence": "Trincomalee harbour was strategically important for naval security around India.",
+                "semanticStart": 77,
+                "semanticEnd": 157
+              }
+            ],
+            "concerns": []
+          },
+          "suggestionWithheld": false,
+          "reviewPolicyVersion": "semantic-evidence-review-v1",
+          "previewOnly": true,
+          "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8"
+        }
+      }
+    },
+    {
+      "id": "british-partial",
+      "title": "Partial example",
+      "text": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11,
+      "result": {
+        "experimental": true,
+        "reviewRequired": true,
+        "language": "English",
+        "mode": "manual_review",
+        "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8",
+        "concept": {
+          "id": "hist-g11-l02-c01",
+          "name": "British strategic interests in Sri Lanka",
+          "grade": 11,
+          "lessonId": "hist-g11-l02",
+          "points": [
+            {
+              "id": "facet-1",
+              "text": "Britain valued Sri Lanka for its position on Indian Ocean sea routes."
+            },
+            {
+              "id": "facet-2",
+              "text": "Trincomalee harbour was important for naval security around India."
+            }
+          ]
+        },
+        "analyzedText": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+        "textSha256": "1c2dcbf1e84148c5509f647dfddcc747a9531d2f17a28fd772fb1d0e6efa1c2f",
+        "offsetUnit": "unicode_code_points",
+        "checkedAt": "2026-10-15T07:32:11.195Z",
+        "prediction": {
+          "status": null,
+          "suggestedStatus": "partial",
+          "rawModelStatus": "partial",
+          "completeSuggestionWithheld": false,
+          "reviewRequired": true,
+          "scoresCalibrated": false,
+          "scores": {
+            "present": 0.00048462074049151696,
+            "partial": 0.9993989108167369,
+            "missing": 0.00011646844277158689
+          },
+          "modelVersion": "history-coverage-v5.1-review-policy-2026-10-15",
+          "evidence": {
+            "points": [
+              {
+                "pointId": "facet-1",
+                "requirement": "Britain valued Sri Lanka for its position on Indian Ocean sea routes.",
+                "lexicalCoverage": 1,
+                "wordSimilarity": 0.8542,
+                "candidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "start": 0,
+                "end": 76,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.9751269817352295,
+                "semanticCandidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "semanticStart": 0,
+                "semanticEnd": 76
+              },
+              {
+                "pointId": "facet-2",
+                "requirement": "Trincomalee harbour was important for naval security around India.",
+                "lexicalCoverage": 0,
+                "wordSimilarity": 0,
+                "candidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "start": 0,
+                "end": 76,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.41178250312805176,
+                "semanticCandidateEvidence": "Britain valued Sri Lanka because of its position on Indian Ocean sea routes.",
+                "semanticStart": 0,
+                "semanticEnd": 76
+              }
+            ],
+            "concerns": []
+          },
+          "suggestionWithheld": false,
+          "reviewPolicyVersion": "semantic-evidence-review-v1",
+          "previewOnly": true,
+          "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8"
+        }
+      }
+    },
+    {
+      "id": "british-missing",
+      "title": "Missing example",
+      "text": "Literary sources include books and written documents. Archaeological sources include coins and buildings.",
+      "conceptId": "hist-g11-l02-c01",
+      "grade": 11,
+      "result": {
+        "experimental": true,
+        "reviewRequired": true,
+        "language": "English",
+        "mode": "manual_review",
+        "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8",
+        "concept": {
+          "id": "hist-g11-l02-c01",
+          "name": "British strategic interests in Sri Lanka",
+          "grade": 11,
+          "lessonId": "hist-g11-l02",
+          "points": [
+            {
+              "id": "facet-1",
+              "text": "Britain valued Sri Lanka for its position on Indian Ocean sea routes."
+            },
+            {
+              "id": "facet-2",
+              "text": "Trincomalee harbour was important for naval security around India."
+            }
+          ]
+        },
+        "analyzedText": "Literary sources include books and written documents. Archaeological sources include coins and buildings.",
+        "textSha256": "f75c313e4fe1cfc831cc83d78f5de53a8dcb2e9d14970f21f138f2caced1e6a5",
+        "offsetUnit": "unicode_code_points",
+        "checkedAt": "2026-10-15T07:32:12.002Z",
+        "prediction": {
+          "status": null,
+          "suggestedStatus": "missing",
+          "rawModelStatus": "missing",
+          "completeSuggestionWithheld": false,
+          "reviewRequired": true,
+          "scoresCalibrated": false,
+          "scores": {
+            "present": 0.00008175624801081542,
+            "partial": 0.00013195040779787347,
+            "missing": 0.9997862933441912
+          },
+          "modelVersion": "history-coverage-v5.1-review-policy-2026-10-15",
+          "evidence": {
+            "points": [
+              {
+                "pointId": "facet-1",
+                "requirement": "Britain valued Sri Lanka for its position on Indian Ocean sea routes.",
+                "lexicalCoverage": 0,
+                "wordSimilarity": 0,
+                "candidateEvidence": "Literary sources include books and written documents.",
+                "start": 0,
+                "end": 53,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.10570153594017029,
+                "semanticCandidateEvidence": "Literary sources include books and written documents.",
+                "semanticStart": 0,
+                "semanticEnd": 53
+              },
+              {
+                "pointId": "facet-2",
+                "requirement": "Trincomalee harbour was important for naval security around India.",
+                "lexicalCoverage": 0,
+                "wordSimilarity": 0,
+                "candidateEvidence": "Literary sources include books and written documents. Archaeological sources include coins and buildings.",
+                "start": 0,
+                "end": 105,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.148000106215477,
+                "semanticCandidateEvidence": "Archaeological sources include coins and buildings.",
+                "semanticStart": 54,
+                "semanticEnd": 105
+              }
+            ],
+            "concerns": []
+          },
+          "suggestionWithheld": false,
+          "reviewPolicyVersion": "semantic-evidence-review-v1",
+          "previewOnly": true,
+          "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8"
+        }
+      }
+    },
+    {
+      "id": "kandy-complete-ocr-noise",
+      "title": "OCR error / review",
+      "text": "The Kandyan kingdom came under Britlsh rule in 18l5. This ended the independent Kandyan monarchy and expanded Britlsh control over the whole island.",
+      "conceptId": "hist-g11-l02-c04",
+      "grade": 11,
+      "result": {
+        "experimental": true,
+        "reviewRequired": true,
+        "language": "English",
+        "mode": "manual_review",
+        "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8",
+        "concept": {
+          "id": "hist-g11-l02-c04",
+          "name": "Kandyan Convention and annexation",
+          "grade": 11,
+          "lessonId": "hist-g11-l02",
+          "points": [
+            {
+              "id": "facet-1",
+              "text": "The Kandyan kingdom came under British rule in 1815."
+            },
+            {
+              "id": "facet-2",
+              "text": "This ended the independent Kandyan monarchy and expanded British control over the whole island."
+            }
+          ]
+        },
+        "analyzedText": "The Kandyan kingdom came under Britlsh rule in 18l5. This ended the independent Kandyan monarchy and expanded Britlsh control over the whole island.",
+        "textSha256": "9687624f06053c0b1f2b5fe661c4a4724e2d9a42f3736d4dab6d08e03e4b9099",
+        "offsetUnit": "unicode_code_points",
+        "checkedAt": "2026-10-15T07:32:13.411Z",
+        "prediction": {
+          "status": null,
+          "suggestedStatus": null,
+          "rawModelStatus": "present",
+          "completeSuggestionWithheld": true,
+          "reviewRequired": true,
+          "scoresCalibrated": false,
+          "scores": {
+            "present": 0.614361780780916,
+            "partial": 0.3271418868552252,
+            "missing": 0.058496332363858865
+          },
+          "modelVersion": "history-coverage-v5.1-review-policy-2026-10-15",
+          "evidence": {
+            "points": [
+              {
+                "pointId": "facet-1",
+                "requirement": "The Kandyan kingdom came under British rule in 1815.",
+                "lexicalCoverage": 0.6667,
+                "wordSimilarity": 0.8182,
+                "candidateEvidence": "The Kandyan kingdom came under Britlsh rule in 18l5.",
+                "start": 0,
+                "end": 52,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.7787150144577026,
+                "semanticCandidateEvidence": "The Kandyan kingdom came under Britlsh rule in 18l5.",
+                "semanticStart": 0,
+                "semanticEnd": 52
+              },
+              {
+                "pointId": "facet-2",
+                "requirement": "This ended the independent Kandyan monarchy and expanded British control over the whole island.",
+                "lexicalCoverage": 0.875,
+                "wordSimilarity": 0.9391,
+                "candidateEvidence": "This ended the independent Kandyan monarchy and expanded Britlsh control over the whole island.",
+                "start": 53,
+                "end": 148,
+                "semanticCorrectnessVerified": false,
+                "semanticSimilarity": 0.9646783471107483,
+                "semanticCandidateEvidence": "This ended the independent Kandyan monarchy and expanded Britlsh control over the whole island.",
+                "semanticStart": 53,
+                "semanticEnd": 148
+              }
+            ],
+            "concerns": [
+              {
+                "start": 0,
+                "end": 52,
+                "quote": "The Kandyan kingdom came under Britlsh rule in 18l5.",
+                "pointId": "facet-1",
+                "kind": "required_year_missing_from_semantic_evidence",
+                "requiredYears": [
+                  "1815"
+                ],
+                "missingYears": [
+                  "1815"
+                ],
+                "reason": "The semantic passage does not state a required year. Check the note and criterion before accepting Complete."
+              }
+            ]
+          },
+          "suggestionWithheld": true,
+          "reviewPolicyVersion": "semantic-evidence-review-v1",
+          "previewOnly": true,
+          "modelSha256": "12ba94e87415adb0ceb851919a6e87bc5d36e8535f0539352b450bd104e368e8"
+        }
+      }
+    }
+  ]
+}

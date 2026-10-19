@@ -77,6 +77,9 @@ export interface QueueStatusResponse {
   match_id?: number | null;
   difficulty?: string | null;
   opponent?: OpponentPublicInfo | null;
+  // "matched" only: this player has finished every question and is waiting
+  // for the opponent (or the match clock).
+  awaiting_opponent?: boolean;
 }
 
 export interface BattleQuestionPublic {
@@ -112,32 +115,38 @@ export interface BattleParticipantResult {
 // REST-only shape — GET /battle/match/{id}/state's "completed" status uses
 // this {me, opponent} split. The WS `match_finished` event does NOT use
 // this shape (see BattleWsMatchFinishedEvent in battleWsTypes below).
+// Why a completed match ended -- decided by the server, which knows for sure.
+export type BattleEndReason = "forfeit" | "all_finished" | "time_up";
+
 export interface BattleMatchResult {
   winner_user_id: number | null;
+  end_reason?: BattleEndReason | null;
   me: BattleParticipantResult;
   opponent: BattleParticipantResult | null;
 }
 
 export interface BattleAnswerProgress {
-  // One question slot's outcome for a participant's progress bar. Every
-  // GRADED slot gets an entry now (deferred-grading design), including ones
-  // this participant never actually submitted anything for -- `answered`
-  // distinguishes "answered wrong" from "never answered at all" (both grade
-  // is_correct=false) for the progress bar's yellow-vs-red coloring.
-  // Absence of an entry entirely just means this slot isn't graded yet.
+  // One question a participant has moved past, for the progress bars --
+  // `answered` is false for a skip. Correctness is never sent while the
+  // match is live (no right/wrong feedback until the end), so is_correct is
+  // always null here.
   question_order: number;
-  is_correct: boolean;
+  is_correct: boolean | null;
   answered: boolean;
 }
 
-// One participant's graded outcome for one question, revealed to BOTH
-// players simultaneously at the reveal boundary (see the `question_result`
-// WS event). Deliberately no `selected_option` — never leaked to the
-// opponent, only correctness is shared.
-export interface ParticipantQuestionResult {
-  user_id: number;
-  answered: boolean;
-  is_correct: boolean;
+export type BattleQuestionReviewStatus = "correct" | "incorrect" | "skipped" | "unanswered";
+
+// One row of the end-of-match review -- the viewer's OWN answers only
+// ("unanswered" = never reached before the match clock ran out).
+export interface BattleQuestionReview {
+  question_order: number;
+  question: string;
+  options: string[] | null;
+  correct_answer: string | null;
+  selected_option: string | null;
+  status: BattleQuestionReviewStatus;
+  response_time_ms: number | null;
   base_score: number;
   speed_bonus: number;
   streak_bonus: number;
@@ -152,28 +161,31 @@ export interface BattleMatchStateResponse {
   subject?: string | null;
   difficulty?: string | null;
   question_count?: number | null;
-  // Seconds remaining in the CURRENT question's fixed window (lockstep play).
+  // Seconds left on the whole-match clock.
   time_remaining_seconds?: number | null;
   countdown_seconds_remaining?: number | null;
-  // The single live question both players are currently on.
+  // This player's OWN current question (self-paced play -- the opponent may
+  // be on a different one). question_index === question_count with
+  // question=null and finished=true once they've moved past every question.
   question_index?: number | null;
   question?: BattleQuestionPublic | null;
-  has_answered_current_question?: boolean | null;
-  // Every question slot answered so far by each side, for progress-bar
+  finished?: boolean | null;
+  // When the match clock runs out, and the server's clock when this was
+  // built -- count down to ends_at using the offset from server_time.
+  ends_at?: string | null;
+  server_time?: string | null;
+  // Every question each side has moved past so far, for progress-bar
   // hydration on initial load/reconnect.
   my_answers?: BattleAnswerProgress[] | null;
   opponent_answers?: BattleAnswerProgress[] | null;
-  // Populated only once the CURRENT question has locked/been graded — null
-  // means it's still answerable. Lets a reconnecting client immediately
-  // show the locked/revealed state instead of a live answering UI.
-  current_question_results?: ParticipantQuestionResult[] | null;
-  current_question_correct_answer?: string | null;
   my_progress?: BattleParticipantProgress | null;
   opponent_progress?: BattleParticipantProgress | null;
   started_at?: string | null;
   finished_at?: string | null;
   reason?: string | null;
   result?: BattleMatchResult | null;
+  // "completed" only: this player's own per-question review.
+  review?: BattleQuestionReview[] | null;
 }
 
 export interface BattleHistoryEntry {
@@ -202,11 +214,75 @@ export interface SubmitBattleAnswerRequest {
   selected_option: string;
 }
 
-export interface SubmitBattleAnswerResponse {
-  // Deliberately minimal — grading is deferred to the reveal boundary (see
-  // ParticipantQuestionResult / the `question_result` WS event), so
-  // submitting no longer reveals correctness. Just an ack that the
-  // (re)submission was accepted.
-  question_id: number;
-  selected_option: string;
+// The player's next question, returned only once their answer/skip is
+// saved (the same again for a repeated Next/Skip). finished=true with
+// question=null once they've moved past the last one. Never says whether
+// the answer was right.
+export interface BattleNextQuestionResponse {
+  question_index: number;
+  question: BattleQuestionPublic | null;
+  finished: boolean;
+  ends_at: string;
+  server_time: string;
+}
+
+// ── GET /battle/analytics ────────────────────────────────────────────────────
+
+export interface BattleRatingPoint {
+  match_id: number;
+  finished_at: string | null;
+  rating: number;
+  rating_change: number | null;
+  result: BattleParticipantResultLabel | null;
+}
+
+export interface BattleRatingHistory {
+  subject: string;
+  points: BattleRatingPoint[]; // oldest -> newest
+}
+
+export type BattleSpeedTierKey = "fast" | "quick" | "steady" | "slow";
+
+export interface BattleSpeedTier {
+  tier: BattleSpeedTierKey;
+  max_seconds: number | null; // inclusive upper bound; null for the last, open-ended tier
+  answered: number;
+  correct: number;
+}
+
+export interface BattleTopicStat {
+  subject: string;
+  lesson: string;
+  answered: number;
+  correct: number;
+  accuracy: number;
+}
+
+export interface BattleAnalyticsResponse {
+  matches_played: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  forfeits: number;
+  win_rate: number;
+  average_score: number;
+  answered: number;
+  correct: number;
+  accuracy: number;
+  recent_form: BattleParticipantResultLabel[]; // oldest -> newest
+  rating_history: BattleRatingHistory[]; // most-played subject first
+  speed_profile: BattleSpeedTier[]; // fastest tier first, always all four
+  points: { base: number; speed_bonus: number; streak_bonus: number };
+  topics: BattleTopicStat[]; // strongest first, lessons with enough answers only
+  vs_stronger: { played: number; wins: number };
+  // Every question dealt in completed matches, by what happened to it.
+  question_usage?: { questions: number; answered: number; skipped: number; not_reached: number };
+  // How matches ended (matches from before self-paced play aren't counted).
+  match_endings?: {
+    all_finished: number;
+    time_up: number;
+    forfeit: number;
+    finished_all_questions: number;
+    average_finish_seconds: number | null;
+  };
 }

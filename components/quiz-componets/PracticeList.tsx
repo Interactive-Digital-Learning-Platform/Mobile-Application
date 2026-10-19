@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, FlatList } from "react-native";
-import { useState, useCallback } from "react";
-import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, type LucideIcon } from "lucide-react-native";
+import { useState, useCallback, useEffect } from "react";
+import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, CloudOff, type LucideIcon } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import CreateQuizModal, { QuizConfig } from "@/components/quiz-componets/CreateQuizModal";
 import { DIFF_DOT, ICON_COLORS, SUBJECTS as ALL_SUBJECTS } from "@/constants/quizStyles";
@@ -8,6 +8,7 @@ import { capitalize } from "@/constants/quizHelpers";
 import QuizPracticeCard, { type Difficulty, type PracticeItem } from "@/components/quiz-componets/QuizPracticeCard";
 import Skeleton from "@/components/Skeleton";
 import { useQuizSessionsQuery } from "@/hooks/use-quiz";
+import { useIsOnline, showOfflineToast, OFFLINE_COPY } from "@/hooks/use-online-status";
 
 const DIFFICULTIES: ("All" | Difficulty)[] = ["All", "Easy", "Medium", "Hard"];
 const SUBJECTS = ["All", ...ALL_SUBJECTS];
@@ -46,26 +47,26 @@ type ActiveDropdown = "difficulty" | "subject" | null;
 
 function PracticeCardSkeleton() {
   return (
-    <View className="bg-white mx-4 mb-3 rounded-2xl p-4 border border-slate-100">
+    <View className="bg-white mx-4 mb-3 rounded-2xl p-4 shadow-sm shadow-primary/20">
       <View className="flex-row items-start gap-3">
-        <Skeleton width={44} height={44} borderRadius={12} />
+        <Skeleton color={ICON_COLORS.primary100} width={44} height={44} borderRadius={12} />
         <View className="flex-1 gap-2">
-          <Skeleton width="55%" height={13} />
+          <Skeleton color={ICON_COLORS.primary100} width="55%" height={13} />
           <View className="flex-row gap-2">
-            <Skeleton width={50} height={16} borderRadius={999} />
-            <Skeleton width={70} height={11} />
+            <Skeleton color={ICON_COLORS.primary100} width={50} height={16} borderRadius={999} />
+            <Skeleton color={ICON_COLORS.primary100} width={70} height={11} />
           </View>
         </View>
-        <Skeleton width={40} height={10} />
+        <Skeleton color={ICON_COLORS.primary100} width={40} height={10} />
       </View>
       <View className="mt-3 gap-1">
         <View className="flex-row justify-between">
-          <Skeleton width={90} height={10} />
-          <Skeleton width={28} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={90} height={10} />
+          <Skeleton color={ICON_COLORS.primary100} width={28} height={10} />
         </View>
-        <Skeleton width="100%" height={6} borderRadius={3} />
+        <Skeleton color={ICON_COLORS.primary100} width="100%" height={6} borderRadius={3} />
       </View>
-      <Skeleton width="100%" height={38} borderRadius={12} style={{ marginTop: 12 }} />
+      <Skeleton color={ICON_COLORS.primary100} width="100%" height={38} borderRadius={12} style={{ marginTop: 12 }} />
     </View>
   );
 }
@@ -88,17 +89,17 @@ function FilterChip({
   return (
     <TouchableOpacity
       className={`flex-row items-center gap-1.5 px-3 py-2 rounded-xl border ${
-        isOpen ? "border-primary bg-primary-50" : "border-slate-200 bg-white"
+        isOpen ? "border-primary bg-primary-50" : "border-primary-200 bg-white"
       }`}
       activeOpacity={0.8}
       onPress={onPress}
     >
-      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-slate-600"}`}>
+      <Text className={`text-xs font-semibold ${isOpen ? "text-primary" : "text-primary-700"}`}>
         {label}: {value}
       </Text>
       <ChevronDown
         size={12}
-        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.slate400}
+        color={isOpen ? ICON_COLORS.primary500 : ICON_COLORS.primary500}
         strokeWidth={2.5}
         style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
       />
@@ -112,14 +113,14 @@ function DropdownMenu<T extends string>({
   options: T[]; selected: T; onSelect: (val: T) => void;
 }) {
   return (
-    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-slate-100 shadow-md shadow-black/10 overflow-hidden">
+    <View className="mx-4 mt-1 mb-2 bg-white rounded-2xl border border-primary-100 shadow-md shadow-primary/20 overflow-hidden">
       {options.map((opt, i) => {
         const isSelected = opt === selected;
         return (
           <TouchableOpacity
             key={opt}
             className={`flex-row items-center justify-between px-4 py-3 ${
-              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-slate-50/60"
+              isSelected ? "bg-primary-50" : i % 2 === 0 ? "bg-white" : "bg-primary-50/60"
             }`}
             activeOpacity={0.75}
             onPress={() => onSelect(opt)}
@@ -128,7 +129,7 @@ function DropdownMenu<T extends string>({
               {DIFF_DOT[opt] && (
                 <View className={`w-2 h-2 rounded-full ${DIFF_DOT[opt] ?? "bg-slate-300"}`} />
               )}
-              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-slate-700"}`}>
+              <Text className={`text-sm font-medium ${isSelected ? "text-primary" : "text-primary-800"}`}>
                 {opt}
               </Text>
             </View>
@@ -156,7 +157,22 @@ export default function PracticeList() {
     useCallback(() => { refetch(); }, [refetch])
   );
 
+  // Generating a quiz is a server call, so it's blocked offline -- and a Create popup that's already open closes if
+  // the connection drops underneath it.
+  const isOnline = useIsOnline();
+  useEffect(() => {
+    if (!isOnline && modalVisible) {
+      setModalVisible(false);
+      showOfflineToast(OFFLINE_COPY.createQuiz);
+    }
+  }, [isOnline, modalVisible]);
+
   const handleGenerate = (config: QuizConfig) => {
+    if (!isOnline) {
+      setModalVisible(false);
+      showOfflineToast(OFFLINE_COPY.createQuiz);
+      return;
+    }
     if (config.shuffle) {
       // Shuffle draws fresh variety across every subject, so there's no
       // single subject to filter prior question ids against.
@@ -164,19 +180,29 @@ export default function PracticeList() {
         pathname: "/(main)/quiz/quiz-session",
         params: {
           shuffle:       "true",
-          subjects:      JSON.stringify(ALL_SUBJECTS),
+          subjects:      JSON.stringify(config.shuffleSubjects ?? ALL_SUBJECTS),
           questionCount: String(config.questions),
           timer:         String(config.timer),
-          grade:         "10",
+          grade:         String(config.grade),
         },
       } as any);
       return;
     }
 
-    // Excludes questions already seen in this subject so the backend serves
-    // fresh ones; lesson and difficulty are picked automatically server-side.
+    // Excludes questions already seen in this subject+grade so the backend
+    // serves fresh ones; lesson and difficulty are picked automatically
+    // server-side. Matching on grade too (not just subject) matters now that
+    // the same subject has separate Grade 10/11 curricula — otherwise a
+    // Grade 11 quiz would treat Grade 10 question ids as "already seen" and
+    // needlessly shrink its own pool. Sessions predating the grade column
+    // (grade: null) can't be attributed to either grade, so they're left out
+    // of the exclusion set rather than guessed at.
     const seenIds = (sessions ?? [])
-      .filter((s) => s.subject.toLowerCase() === config.subject.toLowerCase())
+      .filter(
+        (s) =>
+          s.subject.toLowerCase() === config.subject.toLowerCase() &&
+          s.grade === config.grade
+      )
       .flatMap((s) => s.question_ids ?? []);
 
     const uniqueExcluded = [...new Set(seenIds)];
@@ -187,7 +213,8 @@ export default function PracticeList() {
         subject:       config.subject,
         questionCount: String(config.questions),
         timer:         String(config.timer),
-        grade:         "10",
+        grade:         String(config.grade),
+        ...(config.lesson ? { lesson: config.lesson } : {}),
         ...(uniqueExcluded.length > 0
           ? { excludedQuestionIds: JSON.stringify(uniqueExcluded) }
           : {}),
@@ -260,27 +287,29 @@ export default function PracticeList() {
             className="mx-4 mb-2"
             onPress={() => { setDifficulty("All"); setSubject("All"); }}
           >
-            <Text className="text-xs text-slate-400 font-medium">Clear filters</Text>
+            <Text className="text-xs text-primary-700 font-medium">Clear filters</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {isLoading ? (
         <PracticeListSkeleton />
-      ) : isError && items.length === 0 ? (
+      ) : (isError || (!isOnline && !sessions)) && items.length === 0 ? (
         // Only takes over the empty state — a failed background refresh with
         // an already-loaded list on screen leaves that list showing as-is.
+        // Offline with nothing saved yet, the fetch is paused rather than
+        // failed, so it's routed here explicitly instead of "Start your first quiz".
         (() => {
-          const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[classifyLoadError(error)];
+          const { icon: ErrorIcon, title, message } = LOAD_ERROR_COPY[isOnline ? classifyLoadError(error) : "network"];
           return (
             <View className="flex-1 justify-center items-center px-8 pb-16">
               <View className="w-16 h-16 rounded-full bg-rose-100 justify-center items-center mb-4">
                 <ErrorIcon size={28} color={ICON_COLORS.rose500} strokeWidth={1.8} />
               </View>
-              <Text className="text-slate-800 font-black text-base text-center mb-1">
+              <Text className="text-primary-800 font-black text-base text-center mb-1">
                 {title}
               </Text>
-              <Text className="text-slate-400 text-sm text-center leading-5 mb-5">
+              <Text className="text-primary-700 text-sm text-center leading-5 mb-5">
                 {message}
               </Text>
               <TouchableOpacity
@@ -299,10 +328,10 @@ export default function PracticeList() {
           <View className="w-16 h-16 rounded-full bg-primary-100 justify-center items-center mb-4">
             <Brain size={28} color={ICON_COLORS.primary500} strokeWidth={1.8} />
           </View>
-          <Text className="text-slate-800 font-black text-base text-center mb-1">
+          <Text className="text-primary-800 font-black text-base text-center mb-1">
             {items.length === 0 ? "Start your first quiz" : "No quizzes match filters"}
           </Text>
-          <Text className="text-slate-400 text-sm text-center leading-5">
+          <Text className="text-primary-700 text-sm text-center leading-5">
             {items.length === 0
               ? "Tap the + button below to generate a personalised AI quiz on any subject."
               : "Try changing the difficulty or subject filter."}
@@ -318,12 +347,19 @@ export default function PracticeList() {
         />
       )}
 
+      {/* Offline it looks disabled but stays tappable, so tapping explains why instead of doing nothing. */}
       <TouchableOpacity
-        className="absolute bottom-6 right-6 bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg shadow-primary/40"
+        className={`absolute bottom-6 self-center w-14 h-14 rounded-full justify-center items-center shadow-lg ${
+          isOnline ? "bg-primary shadow-primary/40" : "bg-slate-300 shadow-black/10"
+        }`}
         activeOpacity={0.85}
-        onPress={() => setModalVisible(true)}
+        onPress={() => (isOnline ? setModalVisible(true) : showOfflineToast(OFFLINE_COPY.createQuiz))}
+        accessibilityRole="button"
+        accessibilityLabel={isOnline ? "Create a quiz" : "Create a quiz, unavailable offline"}
       >
-        <Plus size={26} color={ICON_COLORS.white} strokeWidth={2.5} />
+        {isOnline
+          ? <Plus size={26} color={ICON_COLORS.white} strokeWidth={2.5} />
+          : <CloudOff size={24} color={ICON_COLORS.white} strokeWidth={2.25} />}
       </TouchableOpacity>
 
       <CreateQuizModal

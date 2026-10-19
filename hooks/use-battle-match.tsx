@@ -1,11 +1,18 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import Toast from "react-native-toast-message";
 import { fetchMatchState } from "@/api/battleAPI";
 import { getClerkToken } from "@/api/apiClients";
 import { BattleSocketHandle, connectBattleSocket } from "@/api/battleSocket";
 import { useUserMeQuery } from "@/hooks/use-quiz";
-import { BattleAnswerProgress, BattleMatchResult, BattleMatchStateResponse } from "@/types/battleModuleTypes";
+import { battleKeys } from "@/hooks/use-battle";
+import {
+  BattleAnswerProgress,
+  BattleMatchResult,
+  BattleMatchStateResponse,
+  BattleQuestionReview,
+} from "@/types/battleModuleTypes";
 import { BattleWsInboundEvent } from "@/types/battleWsTypes";
 
 export type BattleConnectionStatus = "connecting" | "open" | "reconnecting" | "failed" | "closed";
@@ -16,25 +23,35 @@ export interface DisconnectInfo {
   gracePeriodSeconds: number;
 }
 
-export interface AnswerFeedback {
-  // False means this question locked with no submission in effect at all
-  // (never answered, or the pending pick expired/was lost) -- distinct from
-  // "answered but wrong" so the UI can say "Time's up" instead of the
-  // misleading "Incorrect" for a question the player never actually tapped
-  // an option on.
-  answered: boolean;
-  isCorrect: boolean;
-  baseScore: number;
-  speedBonus: number;
-  streakBonus: number;
-  totalQuestionScore: number;
-  // The actual right option, revealed alongside correctness now that the
-  // question is locked -- null only if the source question had no
-  // correct_answer recorded at all (shouldn't happen in practice).
-  correctAnswer: string | null;
+// A Next/Skip that's been sent but whose next question hasn't arrived yet.
+interface PendingMove {
+  questionId: number;
+  selectedOption: string | null; // null = Skip
+  sentAt: number;
 }
 
 const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
+// Re-send a Next/Skip whose reply hasn't come back after this long -- the
+// server treats a repeat as harmless and just answers with the current question.
+// Longer than the server's own save limit (BATTLE_ANSWER_SAVE_TIMEOUT_SECONDS,
+// 20s), which always replies -- saved or "Couldn't save" -- before then; this
+// only catches a reply lost on the way back. Shorter, and resends would queue
+// up behind a slow save on the server, each one more slow DB work.
+const PENDING_MOVE_RESEND_MS = 25000;
+
+// Server clock minus this device's clock, from a server_time stamp -- the
+// match countdown runs on the server's clock, not the phone's. Each sample
+// reads low by however long that message took to arrive.
+function clockOffsetFrom(serverTime: string | null | undefined): number | null {
+  if (!serverTime) return null;
+  const parsed = Date.parse(serverTime);
+  return Number.isNaN(parsed) ? null : parsed - Date.now();
+}
+
+function addProgress(prev: BattleAnswerProgress[], order: number, answered: boolean): BattleAnswerProgress[] {
+  if (prev.some((p) => p.question_order === order)) return prev;
+  return [...prev, { question_order: order, is_correct: null, answered }];
+}
 
 // Central stateful hook for one live match, modeled on hooks/use-chat.ts's
 // shape (local state/refs, not React Query — a bidirectional live socket
@@ -43,6 +60,7 @@ const RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
 // implements server-side grace-period/reconnect handling and a dropped
 // socket on a flaky mobile connection is the realistic common case.
 export function useBattleMatch(matchId: number | null) {
+  const queryClient = useQueryClient();
   const { data: me } = useUserMeQuery();
   const myUserId = me?.id ?? null;
 
@@ -51,25 +69,30 @@ export function useBattleMatch(matchId: number | null) {
   const [readyUserIds, setReadyUserIds] = useState<Set<number>>(new Set());
   const [disconnectInfo, setDisconnectInfo] = useState<DisconnectInfo | null>(null);
   const [finalResult, setFinalResult] = useState<BattleMatchResult | null>(null);
-  const [lastAnswerFeedback, setLastAnswerFeedback] = useState<AnswerFeedback | null>(null);
+  // The player's own per-question review, once the match is over.
+  const [review, setReview] = useState<BattleQuestionReview[] | null>(null);
+  // The server refused this player's last Next/Skip because the match clock
+  // had already hit 0:00 -- the results say so.
+  const [lastMoveRefusedByTime, setLastMoveRefusedByTime] = useState(false);
   const [initialLoadError, setInitialLoadError] = useState(false);
-  const [ownScore, setOwnScore] = useState(0);
-  // Per-question outcome for each side's progress bar (lockstep play: both
-  // players share the same question_index, so these two arrays line up
-  // segment-for-segment). Seeded from matchState.my_answers/opponent_answers
-  // on load/reconnect, appended to live as one `question_result` event
-  // arrives for both sides together (grading is deferred to the reveal
-  // boundary now, not instant-per-submission).
+  // Questions each side has moved past (answered or skipped), for the
+  // progress bars -- self-paced, so the two run independently. Seeded from
+  // matchState.my_answers/opponent_answers on load/reconnect, then appended
+  // to live from `player_progress` events. Never carries correctness.
   const [myProgress, setMyProgress] = useState<BattleAnswerProgress[]>([]);
   const [opponentProgress, setOpponentProgress] = useState<BattleAnswerProgress[]>([]);
-  // Which question_index has already locked/been graded -- null means the
-  // current question is still answerable (editable). Server-event-driven
-  // (set only by `question_result`), not predicted client-side from the
-  // countdown, so it's always exactly right regardless of clock drift.
-  const [revealedQuestionIndex, setRevealedQuestionIndex] = useState<number | null>(null);
+  // Server clock minus device clock (ms). Every sample undershoots by its own
+  // network delay, so the best estimate is the LARGEST one seen this match --
+  // re-syncing from each (slow) Next reply instead used to nudge the countdown
+  // back a little after every answer, as if it had paused while saving.
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
+  const bestOffsetRef = useRef<number | null>(null);
+  // True from the moment Next/Skip is sent until the next question arrives --
+  // the screen locks options and both buttons for that whole window.
+  const [isMoving, setIsMoving] = useState(false);
 
   const socketRef = useRef<BattleSocketHandle | null>(null);
-  const revealedQuestionIndexRef = useRef<number | null>(null);
+  const pendingMoveRef = useRef<PendingMove | null>(null);
   const currentQuestionIndexRef = useRef<number | null>(null);
   const subjectRef = useRef<string | null | undefined>(null);
   const unmountedRef = useRef(false);
@@ -85,12 +108,15 @@ export function useBattleMatch(matchId: number | null) {
   }, [matchState?.question_index]);
 
   useEffect(() => {
-    revealedQuestionIndexRef.current = revealedQuestionIndex;
-  }, [revealedQuestionIndex]);
-
-  useEffect(() => {
     subjectRef.current = matchState?.subject;
   }, [matchState?.subject]);
+
+  // Who "me" is for player_progress -- the profile query, or the match state's
+  // own my_progress if that query hasn't loaded yet.
+  const myIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    myIdRef.current = myUserId ?? matchState?.my_progress?.user_id ?? null;
+  }, [myUserId, matchState?.my_progress?.user_id]);
 
   // Self-healing fallback for the subject/difficulty/question_count backfill
   // (see the "countdown_started" case below for why it's needed at all):
@@ -98,7 +124,7 @@ export function useBattleMatch(matchId: number | null) {
   // missed entirely (a genuine drop, or this connection attaching/replacing
   // another one right around that moment) with no replay -- if that
   // happens, subject stays null forever via every later status-only spread
-  // (match_started/question_started never set it themselves), permanently
+  // (match_started/next_question never set it themselves), permanently
   // stranding match-session.tsx on its "waiting for subject" gate even
   // though the match is genuinely active and progressing server-side.
   // Calling this from those same later events closes that gap.
@@ -110,6 +136,48 @@ export function useBattleMatch(matchId: number | null) {
       })
       .catch(() => {});
   }, [matchId]);
+
+  const syncClock = useCallback((serverTime: string | null | undefined) => {
+    const offset = clockOffsetFrom(serverTime);
+    if (offset === null) return;
+    if (bestOffsetRef.current === null || offset > bestOffsetRef.current) {
+      bestOffsetRef.current = offset;
+      setServerOffsetMs(offset);
+    }
+  }, []);
+
+  const clearPendingMove = useCallback(() => {
+    pendingMoveRef.current = null;
+    setIsMoving(false);
+  }, []);
+
+  const sendMove = useCallback((move: PendingMove): boolean => {
+    const socket = socketRef.current;
+    if (!socket) return false;
+    return move.selectedOption === null
+      ? socket.sendSkip(move.questionId)
+      : socket.sendAnswer(move.questionId, move.selectedOption);
+  }, []);
+
+  // Any full snapshot from the server (state_sync, or a REST refetch): the
+  // move in flight either already landed (the snapshot has moved on) or it
+  // never reached the server -- in which case it's sent again now.
+  const applySnapshot = useCallback(
+    (state: BattleMatchStateResponse) => {
+      setMatchState(state);
+      syncClock(state.server_time);
+      if (state.review) setReview(state.review);
+      const pending = pendingMoveRef.current;
+      if (!pending) return;
+      if (state.status === "active" && state.question?.question_id === pending.questionId) {
+        pendingMoveRef.current = { ...pending, sentAt: Date.now() };
+        sendMove(pendingMoveRef.current);
+      } else {
+        clearPendingMove();
+      }
+    },
+    [syncClock, sendMove, clearPendingMove]
+  );
 
   useEffect(() => {
     if (matchState?.my_answers) setMyProgress(matchState.my_answers);
@@ -137,32 +205,9 @@ export function useBattleMatch(matchId: number | null) {
           if (event.state.status === "completed" || event.state.status === "cancelled") {
             isTerminalRef.current = true;
           }
-          setMatchState(event.state);
+          applySnapshot(event.state);
           if (event.state.status === "completed" && event.state.result) {
             setFinalResult(event.state.result);
-          }
-          // Reconnect correctness: the current question may have already
-          // locked/been graded while this client was disconnected -- hydrate
-          // the same "revealed" state a live question_result would have set,
-          // so the UI shows the locked/graded question instead of a live
-          // answering one for something that's already over.
-          if (event.state.current_question_results && event.state.question_index != null) {
-            setRevealedQuestionIndex(event.state.question_index);
-            const mine = event.state.current_question_results.find((r) => r.user_id === myUserId);
-            if (mine) {
-              setLastAnswerFeedback({
-                answered: mine.answered,
-                isCorrect: mine.is_correct,
-                baseScore: mine.base_score,
-                speedBonus: mine.speed_bonus,
-                streakBonus: mine.streak_bonus,
-                totalQuestionScore: mine.total_question_score,
-                correctAnswer: event.state.current_question_correct_answer ?? null,
-              });
-            }
-          } else {
-            setRevealedQuestionIndex(null);
-            setLastAnswerFeedback(null);
           }
           break;
         }
@@ -183,7 +228,7 @@ export function useBattleMatch(matchId: number | null) {
           // ready-up can happen there) -- get_match_state() deliberately
           // returns almost nothing for that status (no subject/difficulty/
           // question_count, see battle_gameplay_service.py), and neither
-          // this event nor match_started/question_started carry those
+          // this event nor match_started/next_question carry those
           // fields either, so every status transition above was just
           // spreading that gap forward via `...prev` forever. Refetch once,
           // on this FIRST transition out of "waiting", to backfill them for
@@ -199,19 +244,17 @@ export function useBattleMatch(matchId: number | null) {
         }
         case "match_started": {
           // subject/difficulty/question_count come straight off this event
-          // now, not from the racy REST backfill below (see
-          // BattleWsMatchStartedEvent) -- that fetch could resolve while the
-          // match was still "countdown" server-side, which never had
-          // question_count to return, permanently starving BattleProgressBar
-          // of it (count={matchState.question_count ?? 0} rendering zero
-          // segments) for the rest of the match on fast connections.
+          // (see BattleWsMatchStartedEvent) -- a REST backfill could resolve
+          // while the match was still "countdown" server-side, which never
+          // had question_count to return.
+          syncClock(event.server_time);
           setMatchState((prev) =>
             prev
               ? {
                   ...prev,
                   status: "active",
                   started_at: event.started_at,
-                  question: null,
+                  ends_at: event.ends_at,
                   subject: event.subject,
                   difficulty: event.difficulty,
                   question_count: event.question_count,
@@ -221,94 +264,44 @@ export function useBattleMatch(matchId: number | null) {
           backfillSubjectIfMissing();
           break;
         }
-        case "question_started": {
+        case "next_question": {
+          syncClock(event.server_time);
+          // Ignore a stale one (e.g. the match-start question 0 arriving after
+          // this player already moved on) -- the question only ever moves forward.
+          const current = currentQuestionIndexRef.current;
+          if (current != null && event.question_index < current) break;
+          currentQuestionIndexRef.current = event.question_index;
           setMatchState((prev) =>
             prev
               ? {
                   ...prev,
-                  status: "active",
+                  status: prev.status === "completed" ? prev.status : "active",
                   question_index: event.question_index,
                   question: event.question,
-                  time_remaining_seconds: event.time_remaining_seconds,
-                  has_answered_current_question: false,
+                  finished: event.finished,
+                  ends_at: event.ends_at,
                 }
               : prev
           );
-          setLastAnswerFeedback(null);
-          setRevealedQuestionIndex(null);
+          if (pendingMoveRef.current && event.question?.question_id !== pendingMoveRef.current.questionId) {
+            clearPendingMove();
+          }
           backfillSubjectIfMissing();
           break;
         }
-        case "answer_acknowledged": {
-          // Grading is deferred to the reveal boundary now (see
-          // "question_result" below) -- this ack no longer carries
-          // correctness, it's just confirmation the (re)submission landed.
-          // Nothing to do here; the UI's optimistic `selectedOption` (set
-          // synchronously on tap, before this ack even arrives) already
-          // covers the "what did I pick" display.
-          break;
-        }
-        case "question_result": {
-          setRevealedQuestionIndex(event.question_order);
-          const mine = event.results.find((r) => r.user_id === myUserId);
-          const opponent = event.results.find((r) => r.user_id !== myUserId);
-          if (mine) {
-            setLastAnswerFeedback({
-              answered: mine.answered,
-              isCorrect: mine.is_correct,
-              baseScore: mine.base_score,
-              speedBonus: mine.speed_bonus,
-              streakBonus: mine.streak_bonus,
-              totalQuestionScore: mine.total_question_score,
-              correctAnswer: event.correct_answer,
-            });
-            setOwnScore((prev) => prev + mine.total_question_score);
-            setMatchState((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    has_answered_current_question: true,
-                    my_progress:
-                      prev.my_progress && mine.answered
-                        ? { ...prev.my_progress, answered_count: prev.my_progress.answered_count + 1 }
-                        : prev.my_progress,
-                  }
-                : prev
-            );
-            setMyProgress((prev) =>
-              prev.some((p) => p.question_order === event.question_order)
-                ? prev
-                : [
-                    ...prev,
-                    { question_order: event.question_order, is_correct: mine.is_correct, answered: mine.answered },
-                  ]
-            );
-          }
-          if (opponent) {
-            setMatchState((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    opponent_progress:
-                      prev.opponent_progress && opponent.answered
-                        ? { ...prev.opponent_progress, answered_count: prev.opponent_progress.answered_count + 1 }
-                        : prev.opponent_progress,
-                  }
-                : prev
-            );
-            setOpponentProgress((prev) =>
-              prev.some((p) => p.question_order === event.question_order)
-                ? prev
-                : [
-                    ...prev,
-                    {
-                      question_order: event.question_order,
-                      is_correct: opponent.is_correct,
-                      answered: opponent.answered,
-                    },
-                  ]
-            );
-          }
+        case "player_progress": {
+          const mine = event.user_id === myIdRef.current;
+          (mine ? setMyProgress : setOpponentProgress)((prev) =>
+            addProgress(prev, event.question_order, event.answered)
+          );
+          setMatchState((prev) => {
+            if (!prev) return prev;
+            const key = mine ? "my_progress" : "opponent_progress";
+            const progress = prev[key];
+            return progress && progress.answered_count < event.answered_count
+              ? { ...prev, [key]: { ...progress, answered_count: event.answered_count } }
+              : prev;
+          });
           break;
         }
         case "player_disconnected": {
@@ -341,7 +334,17 @@ export function useBattleMatch(matchId: number | null) {
           const mine = event.participants.find((p) => p.user_id === myUserId) ?? null;
           const opponent = event.participants.find((p) => p.user_id !== myUserId) ?? null;
           if (mine) {
-            setFinalResult({ winner_user_id: event.winner_user_id, me: mine, opponent });
+            setFinalResult({ winner_user_id: event.winner_user_id, end_reason: event.end_reason, me: mine, opponent });
+          }
+          clearPendingMove();
+          // The review is per-player (own answers only), so it isn't part of
+          // this shared broadcast -- fetch this player's own copy.
+          if (matchId !== null) {
+            fetchMatchState(matchId)
+              .then((state) => {
+                if (!unmountedRef.current && state.review) setReview(state.review);
+              })
+              .catch(() => {});
           }
           // No toast for an opponent forfeit -- battle-results.tsx now shows
           // "Opponent forfeited the match" directly as the result subtitle,
@@ -353,23 +356,10 @@ export function useBattleMatch(matchId: number | null) {
         case "match_cancelled": {
           isTerminalRef.current = true;
           setMatchState((prev) => (prev ? { ...prev, status: "cancelled", reason: event.reason } : prev));
-          // Only the AI-generation-failure case gets a toast here -- it's
-          // the one "match_cancelled" reason with no more specific UI of its
-          // own. The "opponent left before ready" case is deliberately NOT
-          // toasted from this shared hook: both sides' sockets get the same
-          // event, but queue.tsx already shows the right message to each --
-          // "Opponent left / Looking for a new match" only to the player who
-          // stays and auto-requeues, nothing to the one who chose to leave
-          // (they're already mid-navigation-away and know they cancelled).
-          // A generic toast here fired for BOTH regardless of who cancelled,
-          // which is what this comment replaces.
-          if (event.reason?.includes("could be generated or found")) {
-            Toast.show({
-              type: "error",
-              text1: "Question generation failed",
-              text2: "We couldn't prepare questions for this match. No rating changes applied.",
-            });
-          }
+          // No toast from this shared hook: queue.tsx tells the player who
+          // stays the actual reason (and re-queues them), match-session.tsx
+          // shows it on its own cancelled screen, and the player who chose to
+          // leave already knows why.
           break;
         }
         case "error": {
@@ -377,6 +367,32 @@ export function useBattleMatch(matchId: number | null) {
           // not something the user can act on -- log only, no toast.
           if (event.detail.startsWith("Malformed message")) {
             console.warn("[BattleWS] Server rejected a malformed message:", event.detail);
+          } else if (event.detail.startsWith("Couldn't save your answer")) {
+            // Nothing was saved -- send the pending Next/Skip again right away.
+            const pending = pendingMoveRef.current;
+            if (pending) {
+              pendingMoveRef.current = { ...pending, sentAt: Date.now() };
+              sendMove(pendingMoveRef.current);
+            }
+          } else if (event.detail.startsWith("Time's up")) {
+            // Reached the server (or finished saving) after the clock hit
+            // 0:00 -- not saved; match_finished follows with the result.
+            clearPendingMove();
+            setLastMoveRefusedByTime(true);
+          } else if (event.detail.startsWith("This battle has already ended")) {
+            // A Next/Skip that reached the server after the match clock ran
+            // out -- expected timing, not a server fault; match_finished follows.
+            clearPendingMove();
+          } else if (event.detail.startsWith("This is not your current question")) {
+            // Out of step with the server -- resync rather than toast.
+            clearPendingMove();
+            if (matchId !== null) {
+              fetchMatchState(matchId)
+                .then((state) => {
+                  if (!unmountedRef.current) applySnapshot(state);
+                })
+                .catch(() => {});
+            }
           } else {
             Toast.show({ type: "error", text1: "Server error", text2: event.detail });
           }
@@ -386,7 +402,7 @@ export function useBattleMatch(matchId: number | null) {
           break;
       }
     },
-    [myUserId, matchId, backfillSubjectIfMissing]
+    [myUserId, matchId, backfillSubjectIfMissing, applySnapshot, syncClock, clearPendingMove, sendMove]
   );
 
   const clearReconnectTimer = useCallback(() => {
@@ -431,12 +447,12 @@ export function useBattleMatch(matchId: number | null) {
       if (matchId === null) return;
       fetchMatchState(matchId)
         .then((state) => {
-          if (!unmountedRef.current) setMatchState(state);
+          if (!unmountedRef.current) applySnapshot(state);
         })
         .catch(() => {})
         .finally(() => connectRef.current());
     }, delay);
-  }, [matchId]);
+  }, [matchId, applySnapshot]);
 
   const connect = useCallback(async () => {
     if (matchId === null || unmountedRef.current) return;
@@ -500,7 +516,7 @@ export function useBattleMatch(matchId: number | null) {
     fetchMatchState(matchId)
       .then((state) => {
         if (!unmountedRef.current) {
-          setMatchState(state);
+          applySnapshot(state);
           setInitialLoadError(false);
         }
       })
@@ -508,7 +524,7 @@ export function useBattleMatch(matchId: number | null) {
         if (!unmountedRef.current) setInitialLoadError(true);
       })
       .finally(() => connectRef.current());
-  }, [matchId, clearReconnectTimer]);
+  }, [matchId, clearReconnectTimer, applySnapshot]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -519,13 +535,31 @@ export function useBattleMatch(matchId: number | null) {
     setReadyUserIds(new Set());
     setDisconnectInfo(null);
     setInitialLoadError(false);
-    setOwnScore(0);
+    setReview(null);
+    setLastMoveRefusedByTime(false);
     setMyProgress([]);
     setOpponentProgress([]);
-    setRevealedQuestionIndex(null);
-    setLastAnswerFeedback(null);
+    setServerOffsetMs(0);
+    bestOffsetRef.current = null;
+    pendingMoveRef.current = null;
+    currentQuestionIndexRef.current = null;
+    setIsMoving(false);
 
     if (matchId === null) return;
+
+    // Reopening a match the player finished first (from the home screen):
+    // start from the copy the home screen has been polling, so the screen
+    // opens on the real "all done" card / results at once instead of
+    // waiting a round trip. The socket's state_sync and the REST fetch below
+    // replace it with fresh state moments later.
+    const cached = queryClient.getQueryData<BattleMatchStateResponse>(battleKeys.pendingResult(matchId));
+    if (cached?.match_id === matchId) {
+      applySnapshot(cached);
+      if (cached.status === "completed" && cached.result) {
+        isTerminalRef.current = true;
+        setFinalResult(cached.result);
+      }
+    }
 
     // Connects immediately, in parallel with the REST hydration below --
     // sequencing them (REST then connect, as this used to) leaves a real
@@ -541,7 +575,7 @@ export function useBattleMatch(matchId: number | null) {
     connect();
     fetchMatchState(matchId)
       .then((state) => {
-        if (!unmountedRef.current) setMatchState(state);
+        if (!unmountedRef.current) applySnapshot(state);
       })
       .catch(() => {
         if (!unmountedRef.current) setInitialLoadError(true);
@@ -570,13 +604,27 @@ export function useBattleMatch(matchId: number | null) {
       reconnectAttemptRef.current = 0;
       fetchMatchState(matchId)
         .then((s) => {
-          if (!unmountedRef.current) setMatchState(s);
+          if (!unmountedRef.current) applySnapshot(s);
         })
         .catch(() => {})
         .finally(() => connect());
     });
     return () => sub.remove();
-  }, [matchId, isTerminal, connect, clearReconnectTimer]);
+  }, [matchId, isTerminal, connect, clearReconnectTimer, applySnapshot]);
+
+  // A Next/Skip whose reply never came back (dropped on a flaky connection)
+  // is sent again -- harmless, the server answers a repeat with the current
+  // question. A reconnect's state_sync covers the case where the socket itself died.
+  useEffect(() => {
+    if (!isMoving) return;
+    const id = setInterval(() => {
+      const pending = pendingMoveRef.current;
+      if (!pending || Date.now() - pending.sentAt < PENDING_MOVE_RESEND_MS) return;
+      pendingMoveRef.current = { ...pending, sentAt: Date.now() };
+      sendMove(pendingMoveRef.current);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isMoving, sendMove]);
 
   // Returns whether the ready message actually went out (socket open) --
   // callers that need to know immediately whether to disable a "Ready"
@@ -586,15 +634,21 @@ export function useBattleMatch(matchId: number | null) {
     return socketRef.current?.sendReady() ?? false;
   }, []);
 
-  // Editable answers: no one-shot guard -- callers may invoke this
-  // repeatedly as the player changes their selection, right up until the
-  // question locks (revealedQuestionIndex catches up to the current one via
-  // a "question_result" event), after which further sends are just dropped
-  // client-side rather than round-tripping to a guaranteed 409.
-  const submitAnswer = useCallback((questionId: number, selectedOption: string) => {
-    if (revealedQuestionIndexRef.current === currentQuestionIndexRef.current) return;
-    socketRef.current?.sendAnswer(questionId, selectedOption);
-  }, []);
+  // Next (an option) or Skip (null) for the current question. One move at a
+  // time: ignored while one is already in flight, so mashing the button sends
+  // it once. Returns false if it couldn't be sent at all (socket down) -- the
+  // caller keeps the question answerable; nothing is locked.
+  const moveOn = useCallback(
+    (questionId: number, selectedOption: string | null): boolean => {
+      if (pendingMoveRef.current) return true;
+      const move = { questionId, selectedOption, sentAt: Date.now() };
+      if (!sendMove(move)) return false;
+      pendingMoveRef.current = move;
+      setIsMoving(true);
+      return true;
+    },
+    [sendMove]
+  );
 
   const forfeit = useCallback(() => {
     socketRef.current?.sendForfeit();
@@ -606,15 +660,16 @@ export function useBattleMatch(matchId: number | null) {
     readyUserIds,
     disconnectInfo,
     finalResult,
-    lastAnswerFeedback,
+    review,
+    lastMoveRefusedByTime,
     initialLoadError,
-    ownScore,
     myProgress,
     opponentProgress,
-    revealedQuestionIndex,
+    serverOffsetMs,
+    isMoving,
     myUserId,
     sendReady,
-    submitAnswer,
+    moveOn,
     forfeit,
     manualRetry,
   };

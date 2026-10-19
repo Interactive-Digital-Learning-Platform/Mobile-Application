@@ -1,12 +1,13 @@
 import { battleClient } from "@/api/apiClients";
 import {
+  BattleAnalyticsResponse,
   BattleHistoryResponse,
   BattleMatchStateResponse,
+  BattleNextQuestionResponse,
   CompetitiveProfileResponse,
   LeaderboardResponse,
   QueueStatusResponse,
   SubmitBattleAnswerRequest,
-  SubmitBattleAnswerResponse,
 } from "@/types/battleModuleTypes";
 
 export async function fetchLeaderboard(
@@ -22,6 +23,11 @@ export async function fetchLeaderboard(
 
 export async function fetchBattleProfile(): Promise<CompetitiveProfileResponse> {
   const { data } = await battleClient.get<CompetitiveProfileResponse>("/battle/profile");
+  return data;
+}
+
+export async function fetchBattleAnalytics(): Promise<BattleAnalyticsResponse> {
+  const { data } = await battleClient.get<BattleAnalyticsResponse>("/battle/analytics");
   return data;
 }
 
@@ -63,8 +69,8 @@ export async function fetchMatchState(matchId: number): Promise<BattleMatchState
 export async function submitBattleAnswer(
   matchId: number,
   payload: SubmitBattleAnswerRequest
-): Promise<SubmitBattleAnswerResponse> {
-  const { data } = await battleClient.post<SubmitBattleAnswerResponse>(
+): Promise<BattleNextQuestionResponse> {
+  const { data } = await battleClient.post<BattleNextQuestionResponse>(
     `/battle/match/${matchId}/answer`,
     payload
   );

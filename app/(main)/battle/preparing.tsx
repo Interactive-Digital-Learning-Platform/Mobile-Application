@@ -20,9 +20,8 @@ import MatchStartPopup from "@/components/quiz-componets/MatchStartPopup";
 // countdown_started handler's own REST refetch, see hooks/use-battle-
 // match.tsx) -- so match-session.tsx never needs its own loading state, it
 // can render the live battle immediately on mount. Falls back to queue.tsx
-// on "cancelled" (AI failure) -- queue.tsx's own existing cancellation
-// effect (toast + auto-requeue) picks that up on remount, so it isn't
-// duplicated here.
+// on "cancelled" -- the remounted queue.tsx shows the reason and its own
+// mount-time join re-queues the player, so neither is duplicated here.
 export default function BattlePreparingScreen() {
   const router = useRouter();
   const { matchId: matchIdStr, subject } = useLocalSearchParams<{ matchId: string; subject: string }>();

@@ -1,6 +1,13 @@
 import { useEffect } from "react";
 import { Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { BattleAnswerProgress } from "@/types/battleModuleTypes";
 
 interface BattleProgressBarProps {
@@ -9,37 +16,46 @@ interface BattleProgressBarProps {
   currentIndex: number;
   answers: BattleAnswerProgress[];
   size?: "md" | "sm";
+  // "dark": for a coloured backdrop (the match screen's orange header) -- light label, translucent-dark empty
+  // segments and a white current segment. Answer colours are the same in both tones.
+  tone?: "light" | "dark";
 }
 
-type SegmentState = "correct" | "incorrect" | "skipped" | "current" | "pending";
+// No right/wrong colours: a live battle never reveals correctness, so a
+// segment only shows how far the player has got.
+type SegmentState = "answered" | "skipped" | "current" | "pending";
 
 function segmentState(order: number, currentIndex: number, answers: BattleAnswerProgress[]): SegmentState {
   const answer = answers.find((a) => a.question_order === order);
-  if (answer) {
-    // Every graded slot gets an entry now, including ones this participant
-    // never actually submitted anything for -- `answered` distinguishes
-    // that ("skipped", yellow) from an actual wrong answer ("incorrect", red).
-    if (!answer.answered) return "skipped";
-    return answer.is_correct ? "correct" : "incorrect";
-  }
-  if (order < currentIndex) return "skipped";
+  if (answer) return answer.answered ? "answered" : "skipped";
+  // Moved past but the progress event hasn't landed yet -- still done.
+  if (order < currentIndex) return "answered";
   if (order === currentIndex) return "current";
   return "pending";
 }
 
 const SEGMENT_CLASS: Record<SegmentState, string> = {
-  correct: "bg-emerald-500",
-  incorrect: "bg-rose-500",
+  answered: "bg-sky-500",
   skipped: "bg-amber-400",
   current: "bg-primary",
   pending: "bg-slate-200",
 };
 
-function Segment({ state, size }: { state: SegmentState; size: "md" | "sm" }) {
+const DARK_SEGMENT_CLASS: Record<SegmentState, string> = {
+  ...SEGMENT_CLASS,
+  answered: "bg-sky-300",
+  current: "bg-white",
+  pending: "bg-black/20",
+};
+
+function Segment({ state, size, tone }: { state: SegmentState; size: "md" | "sm"; tone: "light" | "dark" }) {
   const pulse = useSharedValue(1);
 
   useEffect(() => {
     if (state !== "current") {
+      // Stop the blink and go back to fully solid -- otherwise the segment
+      // keeps whatever opacity it was at mid-blink when the player moved on.
+      cancelAnimation(pulse);
       pulse.value = 1;
       return;
     }
@@ -50,8 +66,12 @@ function Segment({ state, size }: { state: SegmentState; size: "md" | "sm" }) {
 
   return (
     <Animated.View
-      className={`flex-1 rounded-full ${size === "sm" ? "h-1" : "h-2"} ${SEGMENT_CLASS[state]}`}
-      style={state === "current" ? pulseStyle : undefined}
+      className={`flex-1 rounded-full ${size === "sm" ? "h-1" : "h-2"} ${
+        (tone === "dark" ? DARK_SEGMENT_CLASS : SEGMENT_CLASS)[state]
+      }`}
+      // Always attached (detaching it left the last animated opacity stuck on
+      // the native view); it simply sits at 1 when the segment isn't current.
+      style={pulseStyle}
     />
   );
 }
@@ -62,11 +82,12 @@ export default function BattleProgressBar({
   currentIndex,
   answers,
   size = "md",
+  tone = "light",
 }: BattleProgressBarProps) {
   return (
     <View className="mb-1.5">
       <Text
-        className={`font-bold text-slate-400 uppercase tracking-wide mb-1 ${
+        className={`font-bold uppercase tracking-wide mb-1 ${tone === "dark" ? "text-white/80" : "text-slate-400"} ${
           size === "sm" ? "text-[9px]" : "text-[10px]"
         }`}
       >
@@ -74,7 +95,7 @@ export default function BattleProgressBar({
       </Text>
       <View className="flex-row gap-1">
         {Array.from({ length: count }, (_, i) => (
-          <Segment key={i} state={segmentState(i, currentIndex, answers)} size={size} />
+          <Segment key={i} state={segmentState(i, currentIndex, answers)} size={size} tone={tone} />
         ))}
       </View>
     </View>

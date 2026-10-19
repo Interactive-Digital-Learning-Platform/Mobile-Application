@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -31,6 +32,7 @@ import {
   Annoyed,
   Timer,
   Quote,
+  CloudOff,
   type LucideIcon,
 } from "lucide-react-native";
 
@@ -38,8 +40,9 @@ import AnswerReviewCard    from "@/components/quiz-componets/AnswerReviewCard";
 import ConfettiView        from "@/components/quiz-componets/ConfettiView";
 import RestartConfirmModal from "@/components/quiz-componets/RestartConfirmModal";
 import CircularProgressRing from "@/components/quiz-componets/CircularProgressRing";
-import { fetchMotivationalQuote } from "@/api/quizAPI";
-import type { QuestionOut, SubmitQuizResponse } from "@/types/quizModuleTypes";
+import { buildAnswerPayload, fetchMotivationalQuote, fetchQuizSession } from "@/api/quizAPI";
+import { useSubmitQuizMutation, useSubmitQuizTimeoutMutation } from "@/hooks/use-quiz";
+import type { QuestionOut, QuestionResult, SavedQuizResponse, SubmitQuizResponse } from "@/types/quizModuleTypes";
 import { ICON_COLORS } from "@/constants/quizStyles";
 
 interface ScoreTheme {
@@ -112,6 +115,44 @@ function getTheme(pct: number, isTimeout: boolean): ScoreTheme {
   };
 }
 
+// What this screen needs, from either the submit response or (if that never arrived) the completed session.
+interface ResultsData {
+  correct_count: number;
+  accuracy: number;
+  avg_response_time: number | null;
+  repeated_correct_count: number;
+  repeated_wrong_count: number;
+  question_results: QuestionResult[];
+}
+
+function fromSubmit(data: SubmitQuizResponse): ResultsData {
+  return {
+    correct_count: data.correct_count,
+    accuracy: data.accuracy,
+    avg_response_time: data.avg_response_time,
+    repeated_correct_count: data.repeated_correct_count,
+    repeated_wrong_count: data.repeated_wrong_count,
+    question_results: data.question_results ?? [],
+  };
+}
+
+// A submit can land on the server even though its response was lost -- the completed session then carries the
+// score and, now that it's complete, the answer key.
+function fromCompletedSession(session: SavedQuizResponse): ResultsData | null {
+  const done = session.completion;
+  if (!done) return null;
+  return {
+    correct_count: done.correct_count,
+    accuracy: done.accuracy,
+    avg_response_time: null,
+    repeated_correct_count: done.repeated_correct_count,
+    repeated_wrong_count: done.repeated_wrong_count,
+    question_results: session.questions.map((q) => ({
+      question_id: q.id, selected_answer: "", correct_answer: q.correct_answer ?? null, is_correct: null,
+    })),
+  };
+}
+
 export default function QuizResultsScreen() {
   const router = useRouter();
   const {
@@ -122,6 +163,8 @@ export default function QuizResultsScreen() {
     sessionId,
     answersJson,
     questionsJson,
+    questionTimesJson,
+    remainingTime,
     isTimeout,
     submitDataJson,
   } = useLocalSearchParams<{
@@ -132,6 +175,8 @@ export default function QuizResultsScreen() {
     sessionId:       string;
     answersJson:     string;
     questionsJson:   string;
+    questionTimesJson?: string;
+    remainingTime?:  string;
     isTimeout:       string;
     submitDataJson?: string;
   }>();
@@ -141,32 +186,70 @@ export default function QuizResultsScreen() {
 
   const answers: Record<number, number> =
     answersJson ? JSON.parse(answersJson) : {};
-  const questions: QuestionOut[] =
-    questionsJson ? JSON.parse(questionsJson) : [];
-  const submitData: SubmitQuizResponse | null =
+  const initialSubmit: SubmitQuizResponse | null =
     submitDataJson ? JSON.parse(submitDataJson) : null;
+  const [results, setResults] = useState<ResultsData | null>(initialSubmit ? fromSubmit(initialSubmit) : null);
+  // Without the submit response there's nothing to grade against: the answer key is only sent after submitting,
+  // so a local fallback would show 0%. Recover the real result from the server instead.
+  const [recovery, setRecovery] = useState<"idle" | "working" | "failed">(initialSubmit ? "idle" : "working");
 
-  // Falls back to computing correctness locally if the backend submit call
-  // never came back (submitData null) — still possible since the backend
-  // sends correct_answer along with each question.
-  const localCorrect = questions.filter((q, i) => {
-    const chosen = answers[i];
-    if (chosen === undefined || !q.options || !q.correct_answer) return false;
-    return q.options[chosen] === q.correct_answer;
-  }).length;
+  const rawQuestions: QuestionOut[] = questionsJson ? (JSON.parse(questionsJson) as QuestionOut[]) : [];
+  // The answer key isn't sent with the questions anymore (so it can't be read before submitting) -- it arrives
+  // per question in the submit response, merged in here for the review list.
+  const answerKey = new Map((results?.question_results ?? []).map((r) => [r.question_id, r.correct_answer]));
+  const questions: QuestionOut[] = rawQuestions.map((q) => ({
+    ...q,
+    correct_answer: answerKey.get(q.id) ?? q.correct_answer ?? null,
+  }));
 
-  const correctCount  = submitData?.correct_count  ?? localCorrect;
-  const accuracy      = submitData?.accuracy        ?? (totalQ > 0 ? Math.round((localCorrect / totalQ) * 100) : 0);
-  const avgTime       = submitData?.avg_response_time ?? null;
+  const { mutateAsync: submitNormal } = useSubmitQuizMutation();
+  const { mutateAsync: submitTimeout } = useSubmitQuizTimeoutMutation();
+
+  const recover = useCallback(async () => {
+    setRecovery("working");
+    const id = Number(sessionId);
+    try {
+      // Already completed on the server (only the response was lost)? Use that -- re-submitting would be a 409.
+      const saved = await fetchQuizSession(id).catch(() => null);
+      const completed = saved ? fromCompletedSession(saved) : null;
+      if (completed) {
+        setResults(completed);
+        setRecovery("idle");
+        return;
+      }
+      const payload = {
+        session_id: id,
+        answers: buildAnswerPayload(rawQuestions, answers, questionTimesJson ? JSON.parse(questionTimesJson) : {}),
+        ended_by: (timedOut ? "timeout" : "submitted") as "timeout" | "submitted",
+        remaining_time_at_end: timedOut ? 0 : Number(remainingTime ?? 0),
+        repeated_question_ids: [],
+      };
+      const data = await (timedOut ? submitTimeout(payload) : submitNormal(payload));
+      setResults(fromSubmit(data));
+      setRecovery("idle");
+    } catch {
+      setRecovery("failed");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, answersJson, questionsJson, questionTimesJson, remainingTime, timedOut]);
+
+  const recoveryStarted = useRef(false);
+  useEffect(() => {
+    if (results || recoveryStarted.current) return;
+    recoveryStarted.current = true;
+    recover();
+  }, [results, recover]);
+
+  const correctCount  = results?.correct_count ?? 0;
+  const accuracy      = results?.accuracy ?? 0;
+  const avgTime       = results?.avg_response_time ?? null;
   const skippedCount  = totalQ - Object.keys(answers).length;
-  const wrongCount    = correctCount > 0
-    ? totalQ - correctCount - skippedCount
-    : totalQ - localCorrect - skippedCount;
+  const wrongCount    = Math.max(0, totalQ - correctCount - skippedCount);
   const pct           = Math.round(accuracy);
   const theme         = getTheme(pct, timedOut);
 
-  const repeatedCorrect = submitData?.repeated_correct_count ?? 0;
-  const repeatedWrong   = submitData?.repeated_wrong_count   ?? 0;
+  const repeatedCorrect = results?.repeated_correct_count ?? 0;
+  const repeatedWrong   = results?.repeated_wrong_count   ?? 0;
   const hasRepeats      = repeatedCorrect + repeatedWrong > 0;
 
   const [showReview,  setShowReview]  = useState(false);
@@ -176,6 +259,8 @@ export default function QuizResultsScreen() {
   const [quoteLoading, setQuoteLoading] = useState(true);
 
   useEffect(() => {
+    // Only once there's a real score to react to.
+    if (!results) return;
     let cancelled = false;
 
     fetchMotivationalQuote({
@@ -200,7 +285,7 @@ export default function QuizResultsScreen() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [results !== null]);
 
   const heroY   = useSharedValue(-80);
   const heroOp  = useSharedValue(0);
@@ -234,6 +319,40 @@ export default function QuizResultsScreen() {
       },
     } as any);
   };
+
+  if (!results) {
+    return (
+      <SafeAreaView edges={["top"]} className="flex-1 bg-white items-center justify-center px-8">
+        {recovery === "failed" ? (
+          <>
+            <View className="w-16 h-16 rounded-full bg-rose-100 items-center justify-center mb-4">
+              <CloudOff size={28} color={ICON_COLORS.rose500} strokeWidth={2} />
+            </View>
+            <Text className="text-slate-800 font-black text-lg text-center mb-1">Couldn&apos;t submit your answers</Text>
+            <Text className="text-slate-400 text-sm text-center mb-6">
+              Your answers are saved on this screen. Check your connection and try again.
+            </Text>
+            <TouchableOpacity
+              className="bg-primary px-6 py-3.5 rounded-2xl mb-3"
+              activeOpacity={0.85}
+              onPress={recover}
+              accessibilityRole="button"
+            >
+              <Text className="text-white font-black text-sm">Try again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity className="px-6 py-3" activeOpacity={0.85} onPress={() => router.replace("/(tabs)/quiz")}>
+              <Text className="text-slate-500 font-bold text-sm">Back to Quizzes</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="large" color={ICON_COLORS.primary500} />
+            <Text className="text-slate-500 text-sm mt-4">Submitting your answers…</Text>
+          </>
+        )}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={["top"]} className={`flex-1 ${theme.screenBg}`}>
@@ -319,13 +438,6 @@ export default function QuizResultsScreen() {
               ) : null}
             </View>
 
-            {!submitData && (
-              <View className="mt-4 bg-white/10 rounded-xl px-4 py-2">
-                <Text className="text-white/60 text-[11px] text-center">
-                  Could not save to server — results shown locally
-                </Text>
-              </View>
-            )}
           </View>
         </Animated.View>
 

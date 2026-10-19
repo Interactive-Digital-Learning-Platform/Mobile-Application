@@ -1,5 +1,7 @@
 import {
   createConversation,
+  createShareLink as createShareLinkRequest,
+  deleteConversation as deleteConversationRequest,
   fetchMessageHistory,
   getAttachmentStatus,
   streamMessage,
@@ -14,14 +16,23 @@ import {
 import { ChatInputValues } from "@/schemas/chatSchemas";
 import {
   ChatAttachment,
+  ChatConversation,
   ChatLanguage,
   MessageType,
   UseChatReturn,
 } from "@/types/chatModuleTypes";
 import { useUser } from "@clerk/expo";
 import { FlashListRef } from "@shopify/flash-list";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  InfiniteData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+// Streamed tokens are flushed into React state at most once per this interval so
+// the Markdown body re-renders ~20x/sec while streaming instead of once per token.
+const STREAM_FLUSH_INTERVAL_MS = 50;
 
 export function useChat(): UseChatReturn {
   const { user } = useUser();
@@ -38,16 +49,28 @@ export function useChat(): UseChatReturn {
   const activeAssistantIDRef = useRef<string | null>(null);
   const isSendingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [messages, setMessages] = useState<MessageType[]>([]);
 
   const conversationIDRef = useRef<string | null>(null);
   const [conversationID, setConversationID] = useState<string | null>(null);
+  const [conversationTitle, setConversationTitle] = useState<string | null>(
+    null,
+  );
   const [language, setLanguage] = useState<ChatLanguage>("English");
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [beforeCursor, setBeforeCursor] = useState<string | undefined>(
     undefined,
   );
+  // Set when an existing conversation is opened and cleared once its history has
+  // been mapped into `messages`, so freshly created conversations never show the
+  // history loader.
+  const [hydratingConversationID, setHydratingConversationID] = useState<
+    string | null
+  >(null);
+  const [isDeletingConversation, setIsDeletingConversation] =
+    useState<boolean>(false);
 
   const clearEmbeddedPolls = useCallback(() => {
     embeddedPollTimersRef.current.forEach((timer) => clearTimeout(timer));
@@ -61,6 +84,9 @@ export function useChat(): UseChatReturn {
 
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+      }
+      if (streamFlushRef.current) {
+        clearTimeout(streamFlushRef.current);
       }
     };
   }, [clearEmbeddedPolls]);
@@ -82,7 +108,50 @@ export function useChat(): UseChatReturn {
     return id;
   }, [user?.id, setConversationIDSync, queryClient]);
 
-  const { data: messageHistory, isLoading: isLoadingHistory } = useQuery({
+  const applyConversationTitle = useCallback(
+    (targetConversationID: string, title: string) => {
+      if (targetConversationID === conversationIDRef.current) {
+        setConversationTitle(title);
+      }
+
+      let isCached = false;
+
+      queryClient.setQueryData<InfiniteData<ChatConversation[]>>(
+        ["ai-conversations", user?.id],
+        (data) => {
+          if (!data) return data;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) =>
+              page.map((conversation) => {
+                if (conversation.conversation_id !== targetConversationID) {
+                  return conversation;
+                }
+                isCached = true;
+                return conversation.title === title
+                  ? conversation
+                  : { ...conversation, title };
+              }),
+            ),
+          };
+        },
+      );
+
+      if (!isCached) {
+        queryClient.invalidateQueries({
+          queryKey: ["ai-conversations", user?.id],
+        });
+      }
+    },
+    [queryClient, user?.id],
+  );
+
+  const {
+    data: messageHistory,
+    isLoading: isLoadingHistory,
+    isError: isHistoryError,
+  } = useQuery({
     queryKey: ["ai-messages", conversationID],
     queryFn: () => fetchMessageHistory(conversationID!),
     enabled: Boolean(conversationID),
@@ -101,6 +170,7 @@ export function useChat(): UseChatReturn {
       createdAt: new Date(message.created_at),
       type: "text" as const,
       sources: message.sources,
+      documents: message.documents?.length ? message.documents : undefined,
       isTranslated: message.is_translated,
       translatedContent: message.translated_content ?? undefined,
       attachments: message.attachments?.length
@@ -119,6 +189,7 @@ export function useChat(): UseChatReturn {
     }));
 
     setMessages(mapped);
+    setHydratingConversationID(null);
   }, [messageHistory]);
 
   const scrollToLatestMessage = useCallback(() => {
@@ -229,6 +300,24 @@ export function useChat(): UseChatReturn {
       activeAssistantIDRef.current = assistantLocalID;
       tokenBufferRef.current = "";
 
+      const flushAssistantContent = () => {
+        const buffered = tokenBufferRef.current;
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.localID === assistantLocalID && msg.content !== buffered
+              ? { ...msg, content: buffered }
+              : msg,
+          ),
+        );
+      };
+
+      const cancelScheduledFlush = () => {
+        if (streamFlushRef.current) {
+          clearTimeout(streamFlushRef.current);
+          streamFlushRef.current = null;
+        }
+      };
+
       const sendableAttachment =
         attachment && attachment.serverID && attachment.status !== "failed"
           ? attachment
@@ -297,31 +386,43 @@ export function useChat(): UseChatReturn {
             },
             onToken: (token) => {
               tokenBufferRef.current += token;
-              const buffered = tokenBufferRef.current;
 
-              setMessages(
-                (prevMessages) => prevMessages.map((msg) =>
-                  msg.localID === assistantLocalID ?
-                    {
-                      ...msg,
-                      content: buffered
-                    } : msg,
-                )
-              );
-
-              scrollToLatestMessage();
+              if (streamFlushRef.current == null) {
+                streamFlushRef.current = setTimeout(() => {
+                  streamFlushRef.current = null;
+                  flushAssistantContent();
+                  scrollToLatestMessage();
+                }, STREAM_FLUSH_INTERVAL_MS);
+              }
             },
             onDone: (serverMessageID, meta) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
+                content: tokenBufferRef.current || msg.content,
                 serverID: serverMessageID || msg.serverID,
                 isLoading: false,
                 translationFailed: meta?.translationFailed ?? false,
+                sources: meta?.sources ?? msg.sources,
+                documents: meta?.documents?.length
+                  ? meta.documents
+                  : msg.documents,
               }));
+
+              const streamedConversationID = conversationIDRef.current;
+              if (meta?.conversationTitle && streamedConversationID) {
+                applyConversationTitle(
+                  streamedConversationID,
+                  meta.conversationTitle,
+                );
+              }
 
               hasPendingMessagesRef.current = false;
             },
             onError: (error) => {
+              cancelScheduledFlush();
+
               updateMessage(assistantLocalID, (msg) => ({
                 ...msg,
                 content: error,
@@ -334,6 +435,8 @@ export function useChat(): UseChatReturn {
           },
         });
       } catch (error) {
+        cancelScheduledFlush();
+
         updateMessage(assistantLocalID, (msg) => ({
           ...msg,
           content: "Something went wrong. Please try again! " + error,
@@ -343,6 +446,7 @@ export function useChat(): UseChatReturn {
 
         hasPendingMessagesRef.current = false;
       } finally {
+        cancelScheduledFlush();
         setIsStreaming(false);
         isSendingRef.current = false;
         tokenBufferRef.current = "";
@@ -356,15 +460,26 @@ export function useChat(): UseChatReturn {
       scrollToLatestMessage,
       queryClient,
       pollEmbeddedAttachment,
+      applyConversationTitle,
     ],
   );
 
   const stopStreaming = useCallback(() => {
     abortControllerRef.current?.abort();
 
+    if (streamFlushRef.current) {
+      clearTimeout(streamFlushRef.current);
+      streamFlushRef.current = null;
+    }
+
     const activeID = activeAssistantIDRef.current;
+    const buffered = tokenBufferRef.current;
     if (activeID) {
-      updateMessage(activeID, (msg) => ({ ...msg, isLoading: false }));
+      updateMessage(activeID, (msg) => ({
+        ...msg,
+        content: buffered || msg.content,
+        isLoading: false,
+      }));
     }
 
     hasPendingMessagesRef.current = false;
@@ -383,12 +498,14 @@ export function useChat(): UseChatReturn {
     isSendingRef.current = false;
     conversationIDRef.current = null;
     setConversationID(null);
+    setConversationTitle(null);
     setMessages([]);
     setBeforeCursor(undefined);
+    setHydratingConversationID(null);
   }, [clearEmbeddedPolls]);
 
   const openConversation = useCallback(
-    (nextConversationID: string) => {
+    (nextConversationID: string, title?: string | null) => {
       if (nextConversationID === conversationIDRef.current) return;
 
       abortControllerRef.current?.abort();
@@ -397,18 +514,84 @@ export function useChat(): UseChatReturn {
       isSendingRef.current = false;
       setMessages([]);
       setBeforeCursor(undefined);
+      setConversationTitle(title?.trim() || null);
+      setHydratingConversationID(nextConversationID);
       setConversationIDSync(nextConversationID);
     },
     [setConversationIDSync, clearEmbeddedPolls],
   );
 
+  // Deletes the open conversation, then drops it from the sidebar and message
+  // caches and resets to a fresh chat. Throws on failure so the screen can report it.
+  const deleteConversation = useCallback(async () => {
+    const targetConversationID = conversationIDRef.current;
+    if (!targetConversationID) return;
+    if (!user?.id) throw new Error("User session unavailable");
+
+    setIsDeletingConversation(true);
+    try {
+      await deleteConversationRequest({
+        conversationID: targetConversationID,
+        userID: user.id,
+      });
+
+      queryClient.setQueryData<InfiniteData<ChatConversation[]>>(
+        ["ai-conversations", user.id],
+        (data) => {
+          if (!data) return data;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) =>
+              page.filter(
+                (conversation) =>
+                  conversation.conversation_id !== targetConversationID,
+              ),
+            ),
+          };
+        },
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["ai-conversations", user.id],
+      });
+      queryClient.removeQueries({
+        queryKey: ["ai-messages", targetConversationID],
+      });
+
+      if (conversationIDRef.current === targetConversationID) {
+        startNewConversation();
+      }
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }, [user?.id, queryClient, startNewConversation]);
+
+  // Creates or refreshes the open conversation's share link; returns its token.
+  const createShareLink = useCallback(async () => {
+    const targetConversationID = conversationIDRef.current;
+    if (!targetConversationID) throw new Error("No conversation to share");
+    if (!user?.id) throw new Error("User session unavailable");
+
+    return createShareLinkRequest({
+      conversationID: targetConversationID,
+      userID: user.id,
+    });
+  }, [user?.id]);
+
+  const isLoadingConversation =
+    hydratingConversationID !== null &&
+    hydratingConversationID === conversationID &&
+    !isHistoryError;
+
   return {
     messages,
     conversationID,
+    conversationTitle,
     isStreaming,
     isSending: isStreaming,
     hasMoreHistory: messageHistory?.has_more ?? false,
     isLoadingHistory,
+    isLoadingConversation,
     chatRef,
     language,
     setLanguage,
@@ -416,6 +599,9 @@ export function useChat(): UseChatReturn {
     loadMoreHistory,
     startNewConversation,
     openConversation,
+    deleteConversation,
+    isDeletingConversation,
+    createShareLink,
     ensureConversation,
     stopStreaming,
   };

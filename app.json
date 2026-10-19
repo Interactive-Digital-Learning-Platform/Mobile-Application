@@ -44,7 +44,9 @@
       "@clerk/expo",
       "expo-secure-store",
       "expo-audio",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,

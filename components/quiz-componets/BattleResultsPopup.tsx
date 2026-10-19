@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, {
   useAnimatedStyle,
@@ -12,19 +12,21 @@ import {
   AlarmClock,
   Annoyed,
   BookOpen,
+  ChevronDown,
   ChevronsRight,
+  Flame,
   Frown,
   Home,
   TrendingDown,
   TrendingUp,
   Trophy,
+  Zap,
   type LucideIcon,
 } from "lucide-react-native";
 import { BATTLE_RESULT_STYLES, BattleResultTheme } from "@/constants/battleStyles";
 import { ICON_COLORS } from "@/constants/quizStyles";
-import { filterTestSubjectNames } from "@/constants/quizHelpers";
-import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
-import { BattleParticipantResult } from "@/types/battleModuleTypes";
+import { formatMathText } from "@/constants/quizHelpers";
+import { BattleParticipantResult, BattleQuestionReview, BattleQuestionReviewStatus } from "@/types/battleModuleTypes";
 import ConfettiView from "@/components/quiz-componets/ConfettiView";
 import LeagueBadge from "@/components/quiz-componets/LeagueBadge";
 
@@ -39,17 +41,6 @@ const RESULT_ICONS: Record<BattleResultTheme, { Icon: LucideIcon; confetti: bool
   draw:    { Icon: Annoyed,    confetti: false },
   forfeit: { Icon: AlarmClock, confetti: false },
 };
-
-function pickWeakSubject(analytics: ReturnType<typeof useAnalyticsMeQuery>["data"]): string | null {
-  if (!analytics) return null;
-  const topRecommendation = [...(analytics.recommendations ?? [])]
-    .sort((a, b) => a.priority - b.priority)
-    .find((r) => !!r.subject);
-  if (topRecommendation?.subject) return topRecommendation.subject;
-
-  const weakSubjects = filterTestSubjectNames(analytics.weak_subjects ?? []);
-  return weakSubjects[0] ?? null;
-}
 
 // One participant's column in the vs comparison -- score, streak, and
 // rating change stacked vertically, same shape for "You" and the opponent
@@ -89,11 +80,121 @@ function ParticipantStatColumn({ name, result }: { name: string; result: BattleP
   );
 }
 
+const REVIEW_STATUS_STYLES: Record<BattleQuestionReviewStatus, { label: string; chip: string; text: string }> = {
+  correct: { label: "Correct", chip: "bg-emerald-100", text: "text-emerald-700" },
+  incorrect: { label: "Wrong", chip: "bg-rose-100", text: "text-rose-600" },
+  skipped: { label: "Skipped", chip: "bg-amber-100", text: "text-amber-700" },
+  unanswered: { label: "Not reached", chip: "bg-slate-100", text: "text-slate-500" },
+};
+
+// One question of the end-of-match review: the right answer next to the
+// player's own pick, and what it scored.
+function ReviewRow({ item }: { item: BattleQuestionReview }) {
+  const status = REVIEW_STATUS_STYLES[item.status];
+  const picked = item.selected_option != null;
+  return (
+    <View className="py-3 border-t border-slate-100">
+      <View className="flex-row items-start gap-2">
+        <Text className="text-slate-400 text-xs font-black mt-0.5">Q{item.question_order + 1}</Text>
+        <Text className="flex-1 text-slate-800 text-sm font-bold">{formatMathText(item.question)}</Text>
+        <View className={`px-2 py-0.5 rounded-full ${status.chip}`}>
+          <Text className={`text-[10px] font-black ${status.text}`}>{status.label}</Text>
+        </View>
+      </View>
+      <View className="ml-7 mt-2 gap-1">
+        {picked && (
+          <Text className="text-xs text-slate-500">
+            Your answer:{" "}
+            <Text className={`font-bold ${item.status === "correct" ? "text-emerald-600" : "text-rose-500"}`}>
+              {formatMathText(item.selected_option ?? "")}
+            </Text>
+          </Text>
+        )}
+        {item.status !== "correct" && item.correct_answer != null && (
+          <Text className="text-xs text-slate-500">
+            Correct answer:{" "}
+            <Text className="font-bold text-emerald-600">{formatMathText(item.correct_answer)}</Text>
+          </Text>
+        )}
+        <Text className="text-xs text-slate-500">
+          Points: <Text className="font-black text-slate-800">+{item.total_question_score}</Text>
+          {item.speed_bonus > 0 || item.streak_bonus > 0
+            ? ` (${[
+                `${item.base_score}`,
+                item.speed_bonus > 0 ? `${item.speed_bonus} speed` : null,
+                item.streak_bonus > 0 ? `${item.streak_bonus} streak` : null,
+              ]
+                .filter(Boolean)
+                .join(" + ")})`
+            : ""}
+          {item.response_time_ms != null ? ` · ${(item.response_time_ms / 1000).toFixed(1)}s` : ""}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// Collapsed by default so the result itself stays the focus; tap to open.
+function AnswerReview({ review }: { review: BattleQuestionReview[] | null }) {
+  const [open, setOpen] = useState(false);
+  const correct = review?.filter((r) => r.status === "correct").length ?? 0;
+  // This player's bonus totals for the match -- only revealed now, at the end.
+  const speedTotal = review?.reduce((sum, r) => sum + r.speed_bonus, 0) ?? 0;
+  const streakTotal = review?.reduce((sum, r) => sum + r.streak_bonus, 0) ?? 0;
+  return (
+    <View className="bg-white rounded-2xl px-4 border border-slate-100 shadow-sm shadow-black/5">
+      <TouchableOpacity
+        className="flex-row items-center justify-between py-3.5"
+        activeOpacity={0.8}
+        disabled={!review}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Answer review"
+      >
+        <View>
+          <Text className="text-slate-800 text-sm font-black">Answer review</Text>
+          <Text className="text-slate-400 text-xs mt-0.5">
+            {review ? `${correct}/${review.length} correct` : "Loading your answers…"}
+          </Text>
+          {review && (speedTotal > 0 || streakTotal > 0) && (
+            <View className="flex-row gap-1.5 mt-1.5">
+              {speedTotal > 0 && (
+                <View className="flex-row items-center gap-1 bg-primary-50 px-2 py-0.5 rounded-full">
+                  <Zap size={11} color={ICON_COLORS.primary600} strokeWidth={2.5} />
+                  <Text className="text-primary-700 text-[11px] font-black">+{speedTotal} speed</Text>
+                </View>
+              )}
+              {streakTotal > 0 && (
+                <View className="flex-row items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full">
+                  <Flame size={11} color={ICON_COLORS.amber500} strokeWidth={2.5} />
+                  <Text className="text-amber-700 text-[11px] font-black">+{streakTotal} streak</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+        <View style={{ transform: [{ rotate: open ? "180deg" : "0deg" }] }}>
+          <ChevronDown size={20} color={ICON_COLORS.slate500} strokeWidth={2.5} />
+        </View>
+      </TouchableOpacity>
+      {open && review?.map((item) => <ReviewRow key={item.question_order} item={item} />)}
+    </View>
+  );
+}
+
 interface BattleResultsPopupProps {
   visible: boolean;
   subject: string;
   me: BattleParticipantResult;
   opponent: BattleParticipantResult | null;
+  // This player's own per-question review -- null while it's still loading.
+  review: BattleQuestionReview[] | null;
+  // The match clock ran out (rather than both players finishing) -- shown
+  // as a "Time's up" badge on the result card.
+  endedByTime?: boolean;
+  // This player's last Next/Skip reached the server after 0:00 and wasn't saved.
+  lastAnswerRefused?: boolean;
   onRematch: () => void;
   onHome: () => void;
 }
@@ -103,6 +204,9 @@ export default function BattleResultsPopup({
   subject,
   me,
   opponent,
+  review,
+  endedByTime = false,
+  lastAnswerRefused = false,
   onRematch,
   onHome,
 }: BattleResultsPopupProps) {
@@ -113,7 +217,13 @@ export default function BattleResultsPopup({
   // because the OPPONENT forfeited still reports as a plain "win" here, so
   // this covers that case with its own subtitle instead of the generic one.
   const opponentForfeited = opponent?.result === "forfeit";
-  const tagline = opponentForfeited ? "Opponent forfeited the match" : style.sub;
+  const tagline = opponentForfeited
+    ? "Opponent forfeited the match"
+    : lastAnswerRefused
+      ? "Your last answer came in after the clock ran out, so it wasn't counted."
+      : endedByTime
+        ? "The clock ran out before you both finished."
+        : style.sub;
   // Same fallback chain queue.tsx already uses for the same data gap (a
   // participant who deleted their account, or a username that never got
   // backfilled) -- a real name when there is one, else a stable ID-based
@@ -123,14 +233,14 @@ export default function BattleResultsPopup({
     : "Opponent";
 
   const router = useRouter();
-  const { data: analytics } = useAnalyticsMeQuery();
-  const weakSubject = pickWeakSubject(analytics);
-  const handlePracticeWeakTopic = () => {
-    if (!weakSubject) return;
-    router.push({
-      pathname: "/(main)/quiz/quiz-session",
-      params: { subject: weakSubject, questionCount: "10", timer: "10", grade: "10" },
-    } as any);
+  // dismissTo (not push): same rationale as onHome -- pops the whole
+  // battle/queue/match-session stack instead of leaving it mounted
+  // underneath. The mode param forces QuizHome onto its Practice tab
+  // specifically, since that tab navigator stays mounted in the background
+  // the whole time this battle was in progress and would otherwise still
+  // be showing whatever mode (likely Online) it was left on.
+  const handlePracticeHome = () => {
+    router.dismissTo({ pathname: "/(tabs)/quiz", params: { mode: "practice" } } as any);
   };
 
   const heroY = useSharedValue(-80);
@@ -170,7 +280,14 @@ export default function BattleResultsPopup({
             style={{ maxHeight: "92%" }}
           >
             {confetti && <ConfettiView count={100} />}
-            <View>
+            {/* flexShrink lets this give up height to the button footer
+                below once the two combined exceed the card's maxHeight (a
+                small device, a long opponent name wrapping, etc.) -- on
+                any device where everything already fits, nothing scrolls
+                and this looks identical to a plain View. Buttons are never
+                inside this ScrollView, so they're always fully visible;
+                only the result/stats content above them ever scrolls. */}
+            <ScrollView style={{ flexShrink: 1 }} showsVerticalScrollIndicator={false}>
               {/* View 1 -- match result only (win/loss/draw/forfeit), no
                   stats mixed in. */}
               <Animated.View
@@ -178,6 +295,12 @@ export default function BattleResultsPopup({
                 className={`mx-4 mt-5 rounded-3xl overflow-hidden shadow-lg ${style.bg}`}
               >
                 <View className="items-center px-6 pt-8 pb-8">
+                  {endedByTime && (
+                    <View className="flex-row items-center gap-1.5 bg-white/20 border border-white/30 px-3 py-1 rounded-full mb-4">
+                      <AlarmClock size={14} color={ICON_COLORS.white} strokeWidth={2.2} />
+                      <Text className="text-white text-xs font-black uppercase tracking-wide">Time&apos;s up</Text>
+                    </View>
+                  )}
                   <View className="w-20 h-20 rounded-full bg-white/20 border-2 border-white/30 justify-center items-center">
                     <Icon size={38} color={ICON_COLORS.white} strokeWidth={1.8} />
                   </View>
@@ -216,7 +339,12 @@ export default function BattleResultsPopup({
                   </View>
                 </View>
               </Animated.View>
-            </View>
+
+              {/* View 3 -- this player's own answers, question by question. */}
+              <Animated.View style={statsStyle} className="mx-4 mt-4 mb-4">
+                <AnswerReview review={review} />
+              </Animated.View>
+            </ScrollView>
 
             {/* Separate from the result/stats views above -- its own row of
                 actions, not part of that content block at all. */}
@@ -239,16 +367,14 @@ export default function BattleResultsPopup({
                 <Text className="text-slate-600 font-black text-base">Home</Text>
               </TouchableOpacity>
 
-              {weakSubject && (
-                <TouchableOpacity
-                  className="w-full flex-row justify-center items-center gap-2 py-1"
-                  activeOpacity={0.85}
-                  onPress={handlePracticeWeakTopic}
-                >
-                  <BookOpen size={16} color={ICON_COLORS.primary500} strokeWidth={2.5} />
-                  <Text className="text-primary font-bold text-sm">Practice {weakSubject}</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                className="w-full flex-row justify-center items-center gap-2 py-1"
+                activeOpacity={0.85}
+                onPress={handlePracticeHome}
+              >
+                <BookOpen size={16} color={ICON_COLORS.primary500} strokeWidth={2.5} />
+                <Text className="text-primary font-bold text-sm">Practice</Text>
+              </TouchableOpacity>
             </Animated.View>
           </View>
         )}

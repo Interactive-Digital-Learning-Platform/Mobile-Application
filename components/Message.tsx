@@ -1,22 +1,55 @@
+import { useMemo } from "react";
 import Markdown from "react-native-markdown-display";
 import { MessageType } from "@/types/chatModuleTypes";
-import { Text, View } from "react-native";
-import Animated, {
-  SlideInRight,
-  SlideInLeft,
-} from "react-native-reanimated";
+import { Pressable, Text, View } from "react-native";
+import Animated, { SlideInRight, SlideInLeft } from "react-native-reanimated";
+import { useRouter } from "expo-router";
+import { ChevronRight, FileText } from "lucide-react-native";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import MessageAttachment from "@/components/chat/MessageAttachment";
-import { chatMarkdownItInstance, chatMarkdownStyle } from "@/constants/markdownStyles";
+import GeneratedDocumentAttachment from "@/components/chat/GeneratedDocumentAttachment";
+import {
+  chatMarkdownItInstance,
+  chatMarkdownStyle,
+} from "@/constants/markdownStyles";
+import { stripInlineCitations } from "@/utils/chatText";
 
-export default function Message({ message }: { message: MessageType }) {
+const ASSISTANT_BUBBLE_BG = "#EEF3FB";
+const ASSISTANT_BUBBLE_BORDER = "#E2EAF4";
+const SOURCES_ACCENT = "#3C6DB0";
+
+export default function Message({
+  message,
+  onViewSources,
+}: {
+  message: MessageType;
+  // Overrides where "View sources" goes; by default it opens the sources
+  // screen for this message's server id.
+  onViewSources?: () => void;
+}) {
+  const router = useRouter();
   const isUser = message.role === "user";
-  const isTyping = !isUser && message.isLoading && !message.content;
 
-  const body =
+  const sourceCount = message.sources?.length ?? 0;
+  const sourceMessageID = message.serverID ?? message.id;
+  const showSources =
+    !isUser &&
+    !message.isLoading &&
+    !message.isError &&
+    sourceCount > 0 &&
+    !sourceMessageID.startsWith("local-");
+
+  const rawBody =
     message.isTranslated && message.translatedContent
       ? message.translatedContent
       : message.content;
+
+  const body = useMemo(
+    () => (isUser || message.isError ? rawBody : stripInlineCitations(rawBody)),
+    [isUser, message.isError, rawBody],
+  );
+
+  const isTyping = !isUser && message.isLoading && !body;
 
   const timeLabel = message.createdAt
     ? message.createdAt.toLocaleTimeString([], {
@@ -31,7 +64,12 @@ export default function Message({ message }: { message: MessageType }) {
       entering={isUser ? SlideInRight.duration(200) : SlideInLeft.duration(200)}
       className={`w-full h-auto flex-row ${isUser ? "justify-end" : "justify-start"} mb-5`}
     >
-      <View style={{ maxWidth: "80%", alignItems: isUser ? "flex-end" : "flex-start" }}>
+      <View
+        style={{
+          maxWidth: "80%",
+          alignItems: isUser ? "flex-end" : "flex-start",
+        }}
+      >
         {isUser ? (
           <View
             style={{
@@ -46,16 +84,25 @@ export default function Message({ message }: { message: MessageType }) {
             }}
           >
             {message.attachments?.map((att) => (
-              <MessageAttachment key={att.localID} attachment={att} onUserBubble />
+              <MessageAttachment
+                key={att.localID}
+                attachment={att}
+                onUserBubble
+              />
             ))}
-            <Text selectable className="text-md font-aregular text-white text-justify">
+            <Text
+              selectable
+              className="text-md font-aregular text-white text-justify"
+            >
               {body}
             </Text>
           </View>
         ) : (
           <View
             style={{
-              backgroundColor: "#F1F1F1",
+              backgroundColor: ASSISTANT_BUBBLE_BG,
+              borderWidth: 1,
+              borderColor: ASSISTANT_BUBBLE_BORDER,
               borderTopLeftRadius: 4,
               borderTopRightRadius: 18,
               borderBottomLeftRadius: 18,
@@ -74,7 +121,7 @@ export default function Message({ message }: { message: MessageType }) {
             ))}
             {isTyping ? (
               <TypingIndicator />
-            ) : message.isLoading ? (
+            ) : message.isError ? (
               <Text selectable className="text-md font-aregular text-justify">
                 {body}
               </Text>
@@ -91,8 +138,51 @@ export default function Message({ message }: { message: MessageType }) {
                 Shown in English — Sinhala translation unavailable.
               </Text>
             )}
+            {showSources && (
+              <View style={{ flexDirection: "row" }}>
+                <Pressable
+                  onPress={() =>
+                    onViewSources
+                      ? onViewSources()
+                      : router.push(`/(main)/sources/${sourceMessageID}` as any)
+                  }
+                  hitSlop={6}
+                  android_ripple={{ color: "rgba(60,109,176,0.22)" }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingVertical: 5,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    backgroundColor: "rgba(60,109,176,0.10)",
+                  }}
+                >
+                  <FileText size={12} color={SOURCES_ACCENT} />
+                  <Text
+                    numberOfLines={1}
+                    className="text-xs font-amedium"
+                    style={{ color: SOURCES_ACCENT, marginHorizontal: 5 }}
+                  >
+                    View sources
+                  </Text>
+                  <ChevronRight size={13} color={SOURCES_ACCENT} />
+                </Pressable>
+              </View>
+            )}
           </View>
         )}
+        {!isUser &&
+          !message.isLoading &&
+          (message.documents?.length ?? 0) > 0 && (
+            <View style={{ marginTop: 8, gap: 8, alignItems: "flex-start" }}>
+              {message.documents!.map((doc) => (
+                <GeneratedDocumentAttachment
+                  key={doc.document_id}
+                  document={doc}
+                />
+              ))}
+            </View>
+          )}
         {!isTyping && timeLabel !== "" && (
           <Text
             className={`text-xs ${isUser ? "font-aregular" : "font-alight"} mt-1`}
