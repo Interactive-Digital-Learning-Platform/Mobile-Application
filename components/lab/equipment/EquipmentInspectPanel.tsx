@@ -1,8 +1,10 @@
-import { Alert, Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 import { LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
 import { EquipmentInspectPanelProps } from "@/types/lab";
 import SheetHandle from "@/components/ui/SheetHandle";
+import RemoveEquipmentConfirm from "./RemoveEquipmentConfirm";
 
 const Row = ({ label, value }: { label: string; value: string }) => (
   <View className="flex-row justify-between py-1.5 border-b border-slate-100">
@@ -15,20 +17,17 @@ const Row = ({ label, value }: { label: string; value: string }) => (
 // lives in the LabRun state fetched for the workspace, so no extra network call is needed and
 // nothing is computed/invented client-side.
 export default function EquipmentInspectPanel({ instance, chemicalMap, friendlyName, onClose, onRemove }: EquipmentInspectPanelProps) {
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+
+  // Drop any open confirm step when a different item (or none) is inspected.
+  useEffect(() => setConfirmingRemove(false), [instance?.instanceId]);
+
   if (!instance) return null;
 
-  const handleRemove = () => {
-    Alert.alert("Remove equipment", "Remove this item from the bench? Anything inside it will be lost.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => {
-          onRemove?.(instance.instanceId);
-          onClose();
-        },
-      },
-    ]);
+  const confirmRemove = () => {
+    setConfirmingRemove(false);
+    onRemove?.(instance.instanceId);
+    onClose();
   };
 
   const title =
@@ -77,7 +76,7 @@ export default function EquipmentInspectPanel({ instance, chemicalMap, friendlyN
               <TouchableOpacity
                 className="flex-1 flex-row items-center justify-center gap-1.5 py-3 rounded-xl border border-rose-200"
                 activeOpacity={0.8}
-                onPress={handleRemove}
+                onPress={() => setConfirmingRemove(true)}
               >
                 <Trash2 size={15} color="#E11D48" strokeWidth={2} />
                 <Text className="text-rose-600 text-sm font-bold">Remove</Text>
@@ -88,6 +87,16 @@ export default function EquipmentInspectPanel({ instance, chemicalMap, friendlyN
             </TouchableOpacity>
           </View>
         </View>
+
+        {confirmingRemove && (
+          <RemoveEquipmentConfirm
+            instance={instance}
+            title={title}
+            chemicalMap={chemicalMap}
+            onCancel={() => setConfirmingRemove(false)}
+            onConfirm={confirmRemove}
+          />
+        )}
       </View>
     </Modal>
   );
