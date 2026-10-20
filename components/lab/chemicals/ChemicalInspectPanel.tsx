@@ -1,4 +1,5 @@
-import { Modal, ScrollView, Text, View } from "react-native";
+import { Modal, ScrollView, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ChemicalInspectPanelProps } from "@/types/lab";
 import Button from "@/components/ui/Button";
 import SheetHandle from "@/components/ui/SheetHandle";

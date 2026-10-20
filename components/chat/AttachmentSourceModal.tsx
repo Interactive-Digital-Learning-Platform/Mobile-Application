@@ -1,6 +1,7 @@
 import { colors } from "@/constants/colors";
 import { FileText, ImageIcon } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import ChatBottomSheet from "@/components/chat/ChatBottomSheet";
 
 type Props = {

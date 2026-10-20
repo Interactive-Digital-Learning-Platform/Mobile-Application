@@ -1,5 +1,7 @@
+import { notesErrorMessage } from "@/utils/noteErrors";
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, TouchableOpacity, TextInput, Modal, ScrollView, ActivityIndicator, StyleSheet} from 'react-native';
+import { View, TouchableOpacity, Modal, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import {ictCoverageApi} from '@/api/ictCoverageAPI';
 import {ICTConcept, ICTReview, ICTReference} from '@/schemas/ictCoverageSchemas';
 
@@ -9,8 +11,7 @@ const concerns: Record<string, string> = {
   prompt_or_heading_only: 'A heading or unanswered question does not establish coverage.',
   unanswered_instruction_block: 'These appear to be unanswered instructions rather than an explanation.',
 };
-const errorMessage = (error: any) => typeof error?.response?.data?.error === 'string'
-  ? error.response.data.error : 'The ICT check is unavailable. Check your connection and try again.';
+const errorMessage = (error: unknown) => notesErrorMessage(error);
 
 /** Student-requested check of edited text. No automatic note score/profile changes. */
 export default function ICTCoverageCard({text, grade = 10, initialConceptId}: {

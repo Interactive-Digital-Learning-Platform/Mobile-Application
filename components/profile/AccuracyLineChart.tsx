@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, type LayoutChangeEvent, type GestureResponderEvent } from "react-native";
+import { View, type LayoutChangeEvent, type GestureResponderEvent } from "react-native";
+import { scaleForAuthor, Text } from "@/components/ui/AppText";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 import type { AccuracyHistoryPoint, PerformanceTrend } from "@/types/quizModuleTypes";
 import { ICON_COLORS } from "@/constants/quizStyles";
@@ -119,7 +120,7 @@ export default function AccuracyLineChart({ history, trend }: AccuracyLineChartP
               <G key={p.key}>
                 <Rect x={p.x0} y={PAD.top} width={p.x1 - p.x0} height={plotH} fill={p.fill} />
                 <SvgText
-                  x={(p.x0 + p.x1) / 2} y={PAD.top - 8} fontSize={9} fontWeight="700"
+                  x={(p.x0 + p.x1) / 2} y={PAD.top - 8} fontSize={scaleForAuthor(9)} fontFamily="Author-Bold"
                   fill={ICON_COLORS.slate500} textAnchor="middle"
                 >
                   {`${p.label.toUpperCase()} · ${Math.round(p.avg)}%`}
@@ -130,7 +131,7 @@ export default function AccuracyLineChart({ history, trend }: AccuracyLineChartP
             {Y_TICKS.map((tick) => (
               <G key={tick}>
                 <Line x1={PAD.left} x2={PAD.left + plotW} y1={y(tick)} y2={y(tick)} stroke={GRID_COLOR} strokeWidth={1} />
-                <SvgText x={PAD.left - 6} y={y(tick) + 3} fontSize={9} fill={AXIS_TEXT_COLOR} textAnchor="end">
+                <SvgText x={PAD.left - 6} y={y(tick) + 3} fontSize={scaleForAuthor(9)} fontFamily="Author-Regular" fill={AXIS_TEXT_COLOR} textAnchor="end">
                   {`${tick}%`}
                 </SvgText>
               </G>
@@ -161,15 +162,15 @@ export default function AccuracyLineChart({ history, trend }: AccuracyLineChartP
             ))}
 
             <SvgText
-              x={x(n - 1) + 9} y={y(last.accuracy) + 3.5} fontSize={10} fontWeight="800" fill={ICON_COLORS.slate800}
+              x={x(n - 1) + 9} y={y(last.accuracy) + 3.5} fontSize={scaleForAuthor(10)} fontFamily="Author-Bold" fill={ICON_COLORS.slate800}
             >
               {`${Math.round(last.accuracy)}%`}
             </SvgText>
 
-            <SvgText x={PAD.left} y={CHART_HEIGHT - 4} fontSize={9} fill={AXIS_TEXT_COLOR} textAnchor="start">
+            <SvgText x={PAD.left} y={CHART_HEIGHT - 4} fontSize={scaleForAuthor(9)} fontFamily="Author-Regular" fill={AXIS_TEXT_COLOR} textAnchor="start">
               {formatDate(points[0].completed_at)}
             </SvgText>
-            <SvgText x={PAD.left + plotW} y={CHART_HEIGHT - 4} fontSize={9} fill={AXIS_TEXT_COLOR} textAnchor="end">
+            <SvgText x={PAD.left + plotW} y={CHART_HEIGHT - 4} fontSize={scaleForAuthor(9)} fontFamily="Author-Regular" fill={AXIS_TEXT_COLOR} textAnchor="end">
               {formatDate(last.completed_at)}
             </SvgText>
           </Svg>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { ChevronLeft, Clock3, GraduationCap, Leaf } from "lucide-react-native";

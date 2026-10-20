@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useRouter } from "expo-router";
 import Animated, {
   useAnimatedStyle,

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Svg, { Circle, Path } from "react-native-svg";
 import { Target, CalendarDays, Flame, LineChart, type LucideIcon } from "lucide-react-native";
 import { useDailyAnalyticsQuery } from "@/hooks/use-quiz";

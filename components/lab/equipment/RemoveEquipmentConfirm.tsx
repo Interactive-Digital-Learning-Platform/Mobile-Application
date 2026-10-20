@@ -1,4 +1,5 @@
-import { Pressable, Text, TouchableOpacity, View } from "react-native";
+import { Pressable, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { FadeIn, FadeOut, ZoomIn, ZoomOut } from "react-native-reanimated";
 import { Trash2, TriangleAlert } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

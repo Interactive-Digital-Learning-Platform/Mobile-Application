@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Route } from "lucide-react-native";
 import { JourneyStep } from "@/types/lab";
 import { SectionHeading } from "./primitives";

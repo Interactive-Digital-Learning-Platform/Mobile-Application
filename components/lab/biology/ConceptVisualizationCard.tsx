@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ChevronRight, Clock } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { formatGradeRange } from "@/constants/lab/experiment.constants";

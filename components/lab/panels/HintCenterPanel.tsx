@@ -1,4 +1,5 @@
-import { Modal, ScrollView, Text, View } from "react-native";
+import { Modal, ScrollView, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { BookOpen, FlaskConical, Sparkles, Unlock } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { HintCenterPanelProps } from "@/types/lab";

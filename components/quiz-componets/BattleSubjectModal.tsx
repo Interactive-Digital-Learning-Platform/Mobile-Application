@@ -1,4 +1,5 @@
-import { Modal, View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { Modal, View, TouchableOpacity, ScrollView } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useState, useEffect } from "react";
 import Animated, {
   useSharedValue,

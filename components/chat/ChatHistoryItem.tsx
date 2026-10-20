@@ -1,6 +1,7 @@
 import { ChatHistoryItemProps } from "@/types/chatModuleTypes";
 import { History } from "lucide-react-native";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 
 export default function ChatHistoryItem({
   conversation,

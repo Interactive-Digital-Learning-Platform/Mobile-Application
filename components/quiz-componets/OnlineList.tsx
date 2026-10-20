@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useRouter } from "expo-router";
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, CloudOff, Globe, Trophy } from "lucide-react-native";
 import Toast from "react-native-toast-message";

@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { ChevronDown, ChevronRight, Info, X, type LucideIcon } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Eye, Gauge, Lightbulb } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { INFO_COPY } from "@/constants/lab/report.constants";

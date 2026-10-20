@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { router } from "expo-router";
 import Svg, { Circle, Path } from "react-native-svg";
 import { Swords, ChevronRight } from "lucide-react-native";

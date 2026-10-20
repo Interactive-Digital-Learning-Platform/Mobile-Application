@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { materialsApi } from "@/api/notesAPI";
 import { createMaterialPoller, MaterialsOverview } from "@/utils/noteMaterials";
+import { notesErrorMessage } from "@/utils/noteErrors";
 
 export function useNotesMaterials(noteId: string, enabled: boolean) {
   const focused = useIsFocused();
@@ -50,8 +51,8 @@ export function useNotesMaterials(noteId: string, enabled: boolean) {
       const response = await materialsApi.generateMaterials(noteId, [type], controller.signal);
       if (!response.success) throw new Error("Request failed");
       if (!controller.signal.aborted) refresh();
-    } catch {
-      if (!controller.signal.aborted) setRequestError("We couldn't request your material. Please try again.");
+    } catch (error) {
+      if (!controller.signal.aborted) setRequestError(notesErrorMessage(error, "We couldn't request your material. Please try again in a moment."));
     } finally {
       if (mutation.current === controller) { mutation.current = null; setRequestingType(null); }
     }

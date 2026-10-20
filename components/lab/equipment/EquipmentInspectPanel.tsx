@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Trash2 } from "lucide-react-native";
 import { LAB_EQUIPMENT_CATALOG } from "@/constants/lab/equipment.constants";
 import { EquipmentInspectPanelProps } from "@/types/lab";

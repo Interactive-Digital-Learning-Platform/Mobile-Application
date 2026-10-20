@@ -1,4 +1,5 @@
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Modal, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Lightbulb } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { ChemicalType } from "@/types/lab";

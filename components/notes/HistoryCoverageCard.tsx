@@ -1,11 +1,12 @@
+import { notesErrorMessage } from "@/utils/noteErrors";
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, TouchableOpacity, TextInput, Modal, ScrollView, ActivityIndicator, StyleSheet} from 'react-native';
+import { View, TouchableOpacity, Modal, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import {historyCoverageApi} from '@/api/historyCoverageAPI';
 import {HistoryConcept, HistoryReview} from '@/schemas/historyCoverageSchemas';
 
 const labels = {present: 'Suggested complete', partial: 'Suggested partial', missing: 'Not found in this text'};
-const errorMessage = (error: any) => typeof error?.response?.data?.error === 'string'
-  ? error.response.data.error : 'The History check is unavailable. Check your connection and try again.';
+const errorMessage = (error: unknown) => notesErrorMessage(error);
 
 /** Student-requested check of edited text. No automatic note score/profile changes. */
 export default function HistoryCoverageCard({text, grade = 10, initialConceptId, noteId}: {
@@ -53,8 +54,8 @@ export default function HistoryCoverageCard({text, grade = 10, initialConceptId,
         if(saved.input){setText(saved.input.text);setConcept(saved.input.conceptId);setGrade(saved.input.conceptId.includes('-g10-')?10:11);setConfirmed(true);}
         if(saved.result){setResult(saved.result);setGrade(saved.result.concept.grade);setError('');}
         else setResult(null);
-        if(saved.state==='failed')setError(saved.error||'This check could not finish. Please try again.');
-        if(saved.state==='stale')setError('Your note changed. Review the current text and check again.');
+        if(saved.state==='failed')setError('This check could not finish. Please try again in a moment.');
+        if(saved.state==='stale')setError('This result needs a fresh check. Review the current note text and try again.');
         if(saved.state==='running'){
           if(Date.now()<until)timer=setTimeout(loadSaved,2500);
           else {setPollPaused(true);setBusy(false);}
@@ -111,7 +112,7 @@ export default function HistoryCoverageCard({text, grade = 10, initialConceptId,
       <Text style={s.notice}>Review required. These are candidate passages, not proof of correctness or student understanding. The History model has not been validated on real student handwriting.</Text>
       {result.prediction.evidence.points.map(p => <View key={p.pointId} style={s.point}><Text style={s.label}>{p.requirement}</Text><Text style={s.small}>Candidate passage — check its meaning</Text><Text selectable style={s.quote}>{p.semanticCandidateEvidence}</Text></View>)}
       {result.prediction.evidence.concerns.map((c, i) => <View key={i}><Text style={s.notice}>{c.reason || c.kind.replace(/_/g, ' ')}</Text><Text selectable style={s.quote}>{c.quote}</Text></View>)}
-      <Text style={s.small}>History V5.1 · {noteId&&savedState==='ready'?'Saved with this note':'On-demand review'} · This suggestion is not a grade.</Text>
+      <Text style={s.small}>History concept check · {noteId&&savedState==='ready'?'Saved with this note':'On-demand review'} · This suggestion is not a grade.</Text>
     </View>}
     <Modal visible={picker} transparent animationType="slide" onRequestClose={() => setPicker(false)}>
       <View style={s.overlay}><View style={s.sheet}><Text style={s.title}>Grade {selectedGrade} History concepts</Text><TextInput accessibilityLabel="Search History concepts" placeholder="Search concepts" value={query} onChangeText={setQuery} style={s.search}/><ScrollView keyboardShouldPersistTaps="handled">{concepts.filter(c => c.grade === selectedGrade && c.name.toLowerCase().includes(query.toLowerCase())).map(c => <TouchableOpacity key={c.id} accessibilityRole="button" onPress={() => {invalidate(); setConcept(c.id); setPicker(false);}} style={s.option}><Text style={s.body}>{c.name}</Text></TouchableOpacity>)}</ScrollView><TouchableOpacity onPress={() => setPicker(false)} accessibilityRole="button" style={s.button}><Text>Close</Text></TouchableOpacity></View></View>

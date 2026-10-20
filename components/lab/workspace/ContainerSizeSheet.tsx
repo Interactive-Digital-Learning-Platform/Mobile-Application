@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { SlideInDown, SlideOutDown } from "react-native-reanimated";
 
 // Shown right after a resizable container (test tube, beaker, flask, measuring cylinder) is

@@ -168,6 +168,8 @@ export const labClient = create({
 // /api/auth/sync and cached in providers/labAuthToken.ts, kept fresh by
 // providers/LabAuthSyncBoundary.tsx), not a Clerk token directly — unlike quizClient above.
 labClient.interceptors.request.use(async (config) => {
+  // /auth/sync sends the Clerk session token itself; keep it.
+  if (config.headers.Authorization) return config;
   const token = await getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

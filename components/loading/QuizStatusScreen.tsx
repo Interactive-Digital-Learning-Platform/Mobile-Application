@@ -6,7 +6,8 @@
 // `onComplete` so the caller can swap to the real quiz UI in sync with the
 // ring instead of cutting the animation off mid-fill.
 import { useState, useEffect } from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {

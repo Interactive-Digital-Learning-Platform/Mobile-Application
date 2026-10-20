@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { BookOpen } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { LabReportType } from "@/types/lab";

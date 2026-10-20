@@ -1,4 +1,5 @@
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Zap } from "lucide-react-native";
 import { QUICK_INSIGHT_META } from "@/constants/lab/report.constants";
 import { ICON_COLORS } from "@/constants/quizStyles";

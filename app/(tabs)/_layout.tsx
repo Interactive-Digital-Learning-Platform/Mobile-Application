@@ -1,4 +1,5 @@
-import { Tabs, useSegments } from "expo-router";
+import { useAuth } from "@clerk/expo";
+import { Redirect, Tabs, useSegments } from "expo-router";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform } from "react-native";
@@ -9,6 +10,7 @@ import icons from "@/constants/icons";
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const segments = useSegments();
+  const { isLoaded, isSignedIn } = useAuth();
   // The practical flow (app/(tabs)/lab/[experimentId]/*: info, equipment, chemicals, workspace,
   // report) is a focused, space-constrained activity — the bottom tab bar stays hidden there. The
   // Chemistry/Physics practical catalog (app/(tabs)/lab/practicals) and the Biology section
@@ -19,6 +21,10 @@ export default function TabLayout() {
     activeSegments.includes("[experimentId]") ||
     activeSegments.includes("practicals") ||
     activeSegments.includes("biology");
+
+  // Signed-in area only: if the session ends while these screens are still in the history (sign-out, expired
+  // session), leave for sign-in instead of rendering screens that fail without a user.
+  if (isLoaded && !isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
   return (
     <>

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Activity, CheckCircle2, Gauge, Timer } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

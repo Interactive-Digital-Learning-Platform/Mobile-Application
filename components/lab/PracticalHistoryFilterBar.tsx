@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Pressable, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import Animated from "react-native-reanimated";
 import { Check, ChevronDown, RotateCcw, SlidersHorizontal } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

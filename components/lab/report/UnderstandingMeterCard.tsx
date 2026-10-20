@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Brain } from "lucide-react-native";
 import { INFO_COPY, UNDERSTANDING_LEVELS } from "@/constants/lab/report.constants";
 import { UnderstandingView } from "@/types/lab";

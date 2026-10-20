@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { LayoutChangeEvent, Pressable, Text, View } from "react-native";
+import { LayoutChangeEvent, Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Route, Sparkles, Target, type LucideIcon } from "lucide-react-native";
 import Animated, {
   interpolate,

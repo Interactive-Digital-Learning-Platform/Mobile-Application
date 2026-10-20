@@ -2,7 +2,8 @@ import { GeneratedDocumentType } from "@/schemas/chatSchemas";
 import { downloadAndShareDocument } from "@/utils/documentDownload";
 import { Download, FileText } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 
 export default function GeneratedDocumentAttachment({
   document,
