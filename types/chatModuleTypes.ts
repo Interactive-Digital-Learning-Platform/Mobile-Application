@@ -50,10 +50,18 @@ export type TabIconType = {
 }
 
 export type QuickActionType = {
+  id: string,
   icon: LucideIcon,
   title : string,
-  prompt : string,
-  get?: () => string
+  // Opening phrase put into the composer; the student finishes it with their topic.
+  starter : string,
+  // Also open the attachment picker (e.g. to photograph a problem).
+  attach?: boolean
+}
+
+export type QuickActionProps = Pick<QuickActionType, "icon" | "title"> & {
+  onPress: () => void,
+  disabled?: boolean
 }
 
 export type CitationType = {
