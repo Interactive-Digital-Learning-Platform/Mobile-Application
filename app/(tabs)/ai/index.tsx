@@ -17,6 +17,7 @@ import {
   View,
   StatusBar,
   useWindowDimensions,
+  type TextInput as RNTextInput,
 } from "react-native";
 import { Text, TextInput } from "@/components/ui/AppText";
 import {
@@ -46,7 +47,7 @@ import { useAttachmentUpload } from "@/hooks/attachments/use-attachment-upload";
 import AttachmentPreviewBar from "@/components/chat/AttachmentPreviewBar";
 import AttachmentSourceModal from "@/components/chat/AttachmentSourceModal";
 import { Drawer } from "react-native-drawer-layout";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import ChatHistorySidebar from "@/components/chat/ChatHistorySidebar";
 import LanguageSelectorModal from "@/components/chat/LanguageSelectorModal";
 import ChatOptionsMenu from "@/components/chat/ChatOptionsMenu";
@@ -87,7 +88,11 @@ export default function AIChat() {
     height: number;
   } | null>(null);
 
-  const { control, handleSubmit, reset, watch } = useForm<ChatInputValues>({
+  const inputRef = useRef<RNTextInput>(null);
+  // Starter last inserted by a quick action, so tapping another one swaps it instead of stacking.
+  const activeStarterRef = useRef<string | null>(null);
+
+  const { control, handleSubmit, reset, watch, getValues, setValue } = useForm<ChatInputValues>({
     resolver: zodResolver(chatInputSchema),
     mode: "onChange",
     defaultValues: {
@@ -100,6 +105,7 @@ export default function AIChat() {
     if (!trimmed) return;
 
     reset({ message: "" });
+    activeStarterRef.current = null;
 
     if (!user?.id) {
       Toast.show({
@@ -140,6 +146,34 @@ export default function AIChat() {
         text2: "Unable to prepare the conversation. Try again.",
       });
     }
+  };
+
+  // Wait a frame so the new value has reached the native input, then put the cursor after it.
+  const focusComposerAtEnd = (length: number) => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelection(length, length);
+    });
+  };
+
+  // Puts the action's starter in front of whatever the student has typed; they finish it and send.
+  const handleQuickAction = async (action: QuickActionType) => {
+    const current = getValues("message") ?? "";
+    const previous = activeStarterRef.current;
+    const draft =
+      previous && current.startsWith(previous)
+        ? current.slice(previous.length)
+        : current;
+    const next = action.starter + draft.trimStart();
+
+    activeStarterRef.current = action.starter;
+    setValue("message", next, { shouldDirty: true, shouldValidate: true });
+
+    // Don't open the picker over a file that's already attached; a new pick would replace it.
+    if (action.attach && !upload.attachment) {
+      await handlePickAttachment();
+    }
+    focusComposerAtEnd(next.length);
   };
 
   // Creates the share link while the options panel shows a spinner, then hands
@@ -313,12 +347,13 @@ export default function AIChat() {
                           </Text>
                         </View>
                         <View className="w-full mt-8 flex-row flex-wrap justify-center gap-x-2 items-center gap-y-4">
-                          {quickActions.map((action: QuickActionType, index) => (
+                          {quickActions.map((action: QuickActionType) => (
                             <QuickAction
-                              key={index}
+                              key={action.id}
                               icon={action.icon}
                               title={action.title}
-                              prompt={action.prompt}
+                              onPress={() => handleQuickAction(action)}
+                              disabled={isAttachDisabled}
                             />
                           ))}
                         </View>
@@ -364,6 +399,7 @@ export default function AIChat() {
                       name="message"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
+                          ref={inputRef}
                           className="text-lg font-amedium w-full px-4 pt-4 pb-2"
                           placeholder="Ask anything..."
                           placeholderTextColor="#979797"
