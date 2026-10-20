@@ -18,7 +18,7 @@ import { ONBOARDING_SLIDES } from "@/constants/onboarding";
 import { markOnboardingSeen } from "@/utils/onboardingStorage";
 
 const LOGO_HEIGHT = 30;
-const LOGO_ASPECT = 1565 / 611;
+const LOGO_ASPECT = 1508 / 601;
 // Fixed so the pill keeps its size when the label changes from "Next" to "Get Started".
 const NEXT_BUTTON_WIDTH = 200;
 
