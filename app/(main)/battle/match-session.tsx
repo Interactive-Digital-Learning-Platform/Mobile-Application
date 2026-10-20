@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, ScrollView, StatusBar, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -546,7 +547,8 @@ export default function BattleMatchSessionScreen() {
           </View>
         </View>
 
-        {connectionStatus === "closed" && (
+        {/* Only while there's still a match to reconnect to -- once it's over, there's nothing to miss. */}
+        {connectionStatus === "closed" && matchState.status === "active" && (
           <View className="bg-white mx-5 mt-3 rounded-2xl px-3 py-2.5 flex-row items-center gap-2">
             <WifiOff size={14} color={ICON_COLORS.rose500} strokeWidth={2.5} />
             <Text className="text-rose-700 text-xs font-semibold flex-1">

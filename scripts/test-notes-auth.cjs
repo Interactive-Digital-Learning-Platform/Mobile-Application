@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
+const loadNotesModule = require('./helpers/notes-test-loader.cjs')();
 
 function clientModule() {
   const clients = [];
@@ -13,7 +14,8 @@ function clientModule() {
   }};
   const clerk = {loaded: true, session: null};
   const context = {exports: {}, process: {env: {EXPO_PUBLIC_API_GATEWAY_URL: 'https://gateway.example'}},
-    Promise, URL, setTimeout: callback => {callback(); return 0;}, require(name) {
+    Promise, URL, setTimeout: (callback, ms) => { if(ms !== 8000) callback(); return 0; }, clearTimeout() {}, require(name) {
+      if (name === '../utils/noteErrors') return loadNotesModule('utils/noteErrors.ts');
       if (name === 'axios') return axios;
       if (name === '@clerk/expo') return {getClerkInstance: () => clerk};
       if (name === './apiClients') return {SERVICE_URLS: {notes: 'https://gateway.example/api/notes'}};
@@ -41,7 +43,7 @@ test('signed-out or failed session lookup never sends an anonymous Notes request
   api.setClerkTokenGetter(async () => null);
   await assert.rejects(api.getNotesSessionToken(), /sign in/i);
   api.setClerkTokenGetter(async () => {throw new Error('session offline');});
-  await assert.rejects(api.getNotesSessionToken(), /offline/);
+  await assert.rejects(api.getNotesSessionToken(), /check your session/i);
 });
 
 test('an absolute or overridden asset address cannot receive a session token', async () => {
@@ -49,9 +51,9 @@ test('an absolute or overridden asset address cannot receive a session token', a
   api.setClerkTokenGetter(async () => {calls++; return 'private';});
   for (const client of [api.notesClient, api.notesAssetsClient]) {
     for (const url of ['https://evil.example/photo', '//evil.example/photo', '\\\\evil.example/photo', 'data:text/plain,example', '/photo\n']) {
-      await assert.rejects(client.authorize({url, baseURL: client.defaults.baseURL, headers: {}}), /Invalid/);
+      await assert.rejects(client.authorize({url, baseURL: client.defaults.baseURL, headers: {}}), /couldn't load/i);
     }
-    await assert.rejects(client.authorize({url: '/notes', baseURL: 'https://evil.example', headers: {}}), /Invalid/);
+    await assert.rejects(client.authorize({url: '/notes', baseURL: 'https://evil.example', headers: {}}), /couldn't load/i);
   }
   assert.equal(calls, 0);
 });
@@ -61,7 +63,7 @@ test('logged Notes errors retain useful status but discard bearer-bearing reques
   for (const client of [api.notesClient, api.notesAssetsClient]) {
     const failure = {message: 'Request failed', config: {headers: {Authorization: 'Bearer private-secret'}}, request: {private: 'private-secret'}, response: {status: 401, data: {error: 'Please sign in'}, config: {headers: {Authorization: 'Bearer private-secret'}}}};
     await assert.rejects(client.reject(failure), error => {
-      assert.equal(error.message, 'Please sign in'); assert.equal(error.response.status, 401);
+      assert.match(error.message, /sign in again/i); assert.equal(error.response.status, 401);
       assert.equal(error.config, undefined); assert.equal(error.request, undefined);
       assert.ok(!JSON.stringify(error).includes('private-secret'));
       return true;

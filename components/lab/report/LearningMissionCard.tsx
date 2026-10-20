@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { MISSION_META } from "@/constants/lab/report.constants";
 import { LearningMission } from "@/types/lab";
 import { Disclosure, EvidenceChip } from "./primitives";

@@ -1,5 +1,7 @@
 import { notesClient } from "@/api/notesClients";
 import { Platform } from "react-native";
+import { parseNotesResponse } from "@/utils/noteResponses";
+import { NotesServiceError, normalizeNotesError } from "@/utils/noteErrors";
 
 export interface NoteUploadContext {
   subject?: string;
@@ -19,20 +21,28 @@ export const RESEARCH_CONSENT_VERSION =
 
 export const notesApi = {
   // Get all notes for a user
-  getNotes: async (userId: string) => {
-    const response = await notesClient.get(`/notes?userId=${userId}`);
-    return response.data;
+  getNotes: async (userId: string, signal?: AbortSignal) => {
+    try {
+      const response = await notesClient.get(`/notes?userId=${encodeURIComponent(userId)}`, { signal });
+      return parseNotesResponse(response.data, "notes");
+    } catch (failure) {
+      const error = normalizeNotesError(failure);
+      // A missing collection route means the service/gateway is unavailable;
+      // it must not tell a student that their saved notes were deleted.
+      if (error.response?.status === 404) throw new NotesServiceError("unavailable");
+      throw error;
+    }
   },
 
   // Get a single note by ID
   getNote: async (noteId: string) => {
     const response = await notesClient.get(`/notes/${noteId}`,{timeout:15000});
-    return response.data;
+    return parseNotesResponse(response.data, "note");
   },
 
   retryAnalysis:async(noteId:string)=>{
     const response=await notesClient.post(`/notes/${noteId}/process`,{}, {timeout:15000});
-    return response.data;
+    return parseNotesResponse(response.data, "processing");
   },
 
   // Store the student's own response to a curriculum finding. A future
@@ -46,13 +56,13 @@ export const notesApi = {
       `/notes/${noteId}/concepts/${conceptId}/verification`,
       { status },
     );
-    return response.data;
+    return parseNotesResponse(response.data, "verification");
   },
 
   // Student-corrected context is persisted before the note is re-analysed.
   updateNoteContext: async (noteId: string, context: NoteUploadContext) => {
     const response = await notesClient.patch(`/notes/${noteId}/context`, context);
-    return response.data;
+    return parseNotesResponse(response.data, "processing");
   },
 
   updateResearchConsent: async (
@@ -66,13 +76,13 @@ export const notesApi = {
       status,
       ...(version ? { version } : {}),
     });
-    return response.data;
+    return parseNotesResponse(response.data, "consent");
   },
 
   // Delete a note
   deleteNote: async (noteId: string) => {
     const response = await notesClient.delete(`/notes/${noteId}`);
-    return response.data;
+    return parseNotesResponse(response.data, "deletion");
   },
 
   // Upload a note (single or multi-page)
@@ -84,12 +94,6 @@ export const notesApi = {
   ) => {
     try {
       const uris = Array.isArray(fileUris) ? fileUris : [fileUris];
-      console.log("Uploading note pages:", {
-        userId,
-        title,
-        pageCount: uris.length,
-        platform: Platform.OS,
-      });
 
       const formData = new FormData();
 
@@ -97,6 +101,7 @@ export const notesApi = {
         const uri = uris[i];
         if (Platform.OS === "web") {
           const response = await fetch(uri);
+          if (!response.ok) throw new NotesServiceError("invalid_response");
           const blob = await response.blob();
           formData.append("images", blob, `note-page-${i + 1}.jpg`);
         } else {
@@ -146,15 +151,10 @@ export const notesApi = {
         },
       );
 
-      return apiResponse.data;
-    } catch (error: any) {
-      console.error("Upload error details:", error);
-      if (error.message === "Network Error" && Platform.OS !== "web") {
-        throw new Error(
-          "We couldn't reach Notes. Check your connection and try again.",
-        );
-      }
-      throw error;
+      return parseNotesResponse(apiResponse.data, "upload");
+    } catch (error: unknown) {
+      // The upload screen handles this; never send raw transport errors to LogBox.
+      throw normalizeNotesError(error);
     }
   },
 };
@@ -163,13 +163,13 @@ export const materialsApi = {
   // Get all materials for a note (summary)
   getMaterials: async (noteId: string, signal?: AbortSignal) => {
     const response = await notesClient.get(`/materials/${noteId}`, { signal, timeout: 15000 });
-    return response.data;
+    return parseNotesResponse(response.data, "overview");
   },
 
   // Get specific material type
-  getMaterialByType: async (noteId: string, type: string) => {
-    const response = await notesClient.get(`/materials/${noteId}/${type}`);
-    return response.data;
+  getMaterialByType: async (noteId: string, type: string, signal?: AbortSignal) => {
+    const response = await notesClient.get(`/materials/${noteId}/${type}`, { signal, timeout: 15000 });
+    return parseNotesResponse(response.data, "material");
   },
 
   // Trigger material generation (all or specific types)
@@ -177,7 +177,7 @@ export const materialsApi = {
     const response = await notesClient.post(`/materials/${noteId}/generate`, {
       types,
     }, { signal, timeout: 15000 });
-    return response.data;
+    return parseNotesResponse(response.data, "generation");
   },
 };
 

@@ -10,7 +10,7 @@ const RETRY_DELAY_MS = 5000;
 // Retries until it succeeds, so starting the app before the lab service is up doesn't
 // leave every Lab request unauthenticated for the rest of the session.
 export const useAuthSync = () => {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const syncedClerkId = useRef<string | null>(null);
 
@@ -30,11 +30,16 @@ export const useAuthSync = () => {
 
     const sync = async () => {
       try {
-        const token = await syncUser({
-          clerkId: user.id,
-          name: user.fullName || user.username || "Student",
-          email: user.primaryEmailAddress?.emailAddress,
-        });
+        const clerkToken = await getToken();
+        if (!clerkToken) throw new Error("No Clerk session token available");
+        const token = await syncUser(
+          {
+            clerkId: user.id,
+            name: user.fullName || user.username || "Student",
+            email: user.primaryEmailAddress?.emailAddress,
+          },
+          clerkToken
+        );
         if (cancelled) return;
         await setAuthToken(token);
         syncedClerkId.current = user.id;
@@ -51,5 +56,5 @@ export const useAuthSync = () => {
       cancelled = true;
       clearTimeout(retryTimer);
     };
-  }, [isSignedIn, user]);
+  }, [isSignedIn, user, getToken]);
 };

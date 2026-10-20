@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Shield } from "lucide-react-native";
 import { getLeagueStyle } from "@/constants/battleStyles";
 import { League } from "@/types/battleModuleTypes";

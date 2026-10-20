@@ -6,10 +6,10 @@ import {
   NativeSyntheticEvent,
   RefreshControl,
   ScrollView,
-  Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { AlertTriangle, ChevronLeft, ChevronRight, Crown, User } from "lucide-react-native";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Text } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { CloudOff, Wifi } from "lucide-react-native";
 import { useIsOnline } from "@/hooks/use-online-status";

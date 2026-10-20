@@ -4,10 +4,9 @@ import {
   Modal,
   Platform,
   Pressable,
-  Text,
-  TextInput,
   View,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import { FlashList, FlashListRef } from "@shopify/flash-list";
 import { Send, Sparkles, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";

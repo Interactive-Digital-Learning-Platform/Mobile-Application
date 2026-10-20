@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import CustomButton from "@/components/CustomButton";
 import OtpCodeField from "@/components/auth/OtpCodeField";

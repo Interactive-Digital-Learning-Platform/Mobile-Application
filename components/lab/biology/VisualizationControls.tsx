@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Pause, Play, RotateCcw, SkipBack, SkipForward, type LucideIcon } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { VisualizationControlsProps } from "@/types/lab";

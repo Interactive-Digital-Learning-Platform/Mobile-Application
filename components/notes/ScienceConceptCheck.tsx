@@ -1,12 +1,14 @@
+import { notesErrorMessage } from "@/utils/noteErrors";
 import React,{useEffect,useRef,useState} from 'react';
-import {View,Text,TouchableOpacity,TextInput,ActivityIndicator,StyleSheet} from 'react-native';
+import { View, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, TextInput } from '@/components/ui/AppText';
 import {scienceCoverageApi} from '@/api/scienceCoverageAPI';
 import {ScienceConcept,SavedScienceReview} from '@/schemas/scienceReviewSchemas';
 import EnglishCoverageCard from './EnglishCoverageCard';
 import {colors} from '@/constants/colors';
 import {scienceModelStatus} from '@/utils/scienceModelStatus';
 
-const message=(error:any)=>typeof error?.response?.data?.error==='string'?error.response.data.error:'The Science check is unavailable. Check your connection and try again.';
+const message = (error: unknown) => notesErrorMessage(error);
 export default function ScienceConceptCheck({noteId,text,automaticCheck}:{noteId:string;text:string;automaticCheck?:unknown}) {
   const automatic=scienceModelStatus(automaticCheck);
   const initialConceptId=automatic.kind==='ready'?(automatic.check.suggestions[0]?.modelConceptId||automatic.check.suggestions[0]?.conceptId):undefined;
@@ -29,7 +31,7 @@ export default function ScienceConceptCheck({noteId,text,automaticCheck}:{noteId
       setSaved(state);setBusy(state.state==='running');
       if(state.input){setText(state.input.text);setConcept(state.input.conceptId);setConfirmed(true);setOpen(true);}
       if(state.state==='ready')setError('');
-      if(state.state==='failed')setError(state.error||'This check could not finish. Try again.');
+      if(state.state==='failed')setError('This check could not finish. Please try again in a moment.');
       if(state.state==='stale')setError('Your source note changed. Review its current text and check again.');
       if(state.state==='running'){if(Date.now()<until)timer=setTimeout(load,2000);else{setBusy(false);setPaused(true);}}
     }catch(e){if(!stopped){setBusy(false);setPaused(true);setError(message(e));}}}

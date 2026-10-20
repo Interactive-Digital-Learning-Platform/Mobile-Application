@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { CloudOff } from "lucide-react-native";
 import { useAnalyticsMeQuery } from "@/hooks/use-quiz";
 import { useIsOnline } from "@/hooks/use-online-status";

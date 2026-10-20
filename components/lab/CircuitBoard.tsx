@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import Svg, { Line } from "react-native-svg";
 import { colors } from "@/constants/colors";
 import { CIRCUIT_BOARDS, CIRCUIT_BOARD_VIEWBOX } from "@/constants/lab/circuitBoards.constants";

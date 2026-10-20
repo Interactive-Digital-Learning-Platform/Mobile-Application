@@ -1,4 +1,5 @@
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookOpen, CheckCircle2, ChevronLeft, Lightbulb, Sparkles, Target, TriangleAlert } from "lucide-react-native";

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Modal, View, Text, TouchableOpacity } from "react-native";
+import { Modal, View, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

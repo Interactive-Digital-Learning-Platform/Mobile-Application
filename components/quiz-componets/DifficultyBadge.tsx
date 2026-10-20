@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { getDifficultyStyle } from "@/constants/quizStyles";
 import { capitalize } from "@/constants/quizHelpers";
 

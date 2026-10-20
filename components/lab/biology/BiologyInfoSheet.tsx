@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import { BiologyInfoSheetProps } from "@/types/lab";

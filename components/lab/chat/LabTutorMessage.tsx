@@ -1,5 +1,6 @@
 import Markdown from "react-native-markdown-display";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { SlideInRight, SlideInLeft } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { MessageType } from "@/types/lab";

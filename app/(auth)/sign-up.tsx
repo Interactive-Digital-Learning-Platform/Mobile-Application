@@ -3,8 +3,9 @@ import Header from "@/components/Header";
 import InputField from "@/components/InputField";
 import { colors } from "@/constants/colors";
 import icons from "@/constants/icons";
-import { router, useNavigation } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useForm, Controller } from "react-hook-form";
 import {z} from "zod";
@@ -16,7 +17,6 @@ import Toast from "react-native-toast-message";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export default function Signup() {
-  const navigation = useNavigation();
 
   const { signUp, fetchStatus } = useSignUp();
 
@@ -79,7 +79,7 @@ export default function Signup() {
         showsVerticalScrollIndicator={false}
       >
         <View className="w-full flex-1 relative">
-          {navigation.canGoBack() && <Header />}
+          <Header />
           <View className="py-4 flex-col justify-center items-start">
             <Text className="text-4xl font-asemibold text-[#0F172A]">
               Let&apos;s Get Started 👋
@@ -153,7 +153,7 @@ export default function Signup() {
             <Text className="font-amedium text-lg text-[#979797]">
               Already have an account?
             </Text>
-            <Pressable onPress={() => router.push("/(auth)/sign-in")}>
+            <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(auth)/sign-in"))}>
               <Text className="font-amedium text-lg underline">Login</Text>
             </Pressable>
           </View>
