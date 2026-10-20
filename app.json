@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mobile-application",
+    "name": "nous",
     "slug": "mobile-application",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -32,12 +32,18 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/nous-logo.png",
-          "imageWidth": 220,
-          "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
             "backgroundColor": "#000000"
+          },
+          "resizeMode": "contain",
+          "ios": {
+            "image": "./assets/images/nous-logo.png",
+            "imageWidth": 220
+          },
+          "android": {
+            "image": "./assets/images/splash-android.png",
+            "imageWidth": 288
           }
         }
       ],
@@ -46,7 +52,15 @@
       "expo-audio",
       "expo-web-browser",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

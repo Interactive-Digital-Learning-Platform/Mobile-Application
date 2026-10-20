@@ -1,8 +1,6 @@
 import CustomButton from "@/components/CustomButton";
 import Header from "@/components/Header";
 import InputField from "@/components/InputField";
-import { colors } from "@/constants/colors";
-import icons from "@/constants/icons";
 import { router, useNavigation } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Text } from "@/components/ui/AppText";
@@ -188,19 +186,6 @@ export default function Signin() {
                 fetchStatus === "fetching" ||
                 phase !== "idle"
               }
-            />
-          </View>
-          <View className="mt-5 justify-center items-center">
-            <Text className="font-amedium text-xl">OR</Text>
-          </View>
-          <View className="mt-5">
-            <CustomButton
-              title="Sign in with Google"
-              handlePress={() => router.push("/(auth)/verify-email")}
-              image={icons.google_icon}
-              backgroundColor="white"
-              textStyles={{ color: colors.primaryBlack }}
-              borderColor={colors.borderColorLight}
             />
           </View>
           <View className="mt-8 flex-row gap-2 justify-center items-center mb-8">
