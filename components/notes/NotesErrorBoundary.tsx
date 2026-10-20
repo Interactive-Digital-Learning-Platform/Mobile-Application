@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { colors } from "@/constants/colors";
 
 /** Last resort for rendering failures inside Notes, never the other app tabs.

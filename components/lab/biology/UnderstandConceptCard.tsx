@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Brain, ChevronRight } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import Card from "@/components/ui/Card";

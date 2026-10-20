@@ -1,4 +1,5 @@
-import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { AlertTriangle, LogOut, X } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 

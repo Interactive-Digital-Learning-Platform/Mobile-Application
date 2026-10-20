@@ -5,7 +5,8 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import { X } from "lucide-react-native";
 import { ReactNode, useCallback, useEffect, useRef } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Props = {

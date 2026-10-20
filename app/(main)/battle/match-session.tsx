@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, ScrollView, StatusBar, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, {
   Easing,
   cancelAnimation,

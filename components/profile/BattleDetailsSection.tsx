@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Swords } from "lucide-react-native";
 import { useBattleAnalyticsQuery } from "@/hooks/use-battle";
 import { ICON_COLORS } from "@/constants/quizStyles";

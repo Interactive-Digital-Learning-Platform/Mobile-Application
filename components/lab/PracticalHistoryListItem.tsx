@@ -1,4 +1,5 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { FlaskConical } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 import Card from "@/components/ui/Card";

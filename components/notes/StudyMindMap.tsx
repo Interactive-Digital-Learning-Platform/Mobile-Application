@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import { GitBranch, Minus, Plus, Search, X } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import {

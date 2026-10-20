@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import Animated from "react-native-reanimated";
 import { DATE_PRESETS, GRADES, HISTORY_FILTER_SUBJECTS, SCORE_BANDS, STATUSES } from "@/constants/lab/history.constants";
 import { usePressScale } from "@/hooks/lab/use-press-scale";

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { Eye, EyeOff } from "lucide-react-native";
 import { cancelAnimation, Easing, runOnJS, useSharedValue, withTiming } from "react-native-reanimated";
 import { colors } from "@/constants/colors";

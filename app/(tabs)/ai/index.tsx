@@ -14,12 +14,11 @@ import {
   Platform,
   Pressable,
   Share,
-  Text,
-  TextInput,
   View,
   StatusBar,
   useWindowDimensions,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import {
   SafeAreaView,
   useSafeAreaInsets,

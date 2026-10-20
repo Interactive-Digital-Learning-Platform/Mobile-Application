@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, Text, TouchableOpacity, View } from "react-native";
+import { Modal, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ChevronLeft } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 

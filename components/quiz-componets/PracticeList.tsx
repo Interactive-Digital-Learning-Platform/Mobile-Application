@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, FlatList } from "react-native";
+import { View, TouchableOpacity, FlatList } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useState, useCallback, useEffect } from "react";
 import { Plus, ChevronDown, Check, Brain, WifiOff, AlertCircle, RefreshCw, Clock, CloudOff, type LucideIcon } from "lucide-react-native";
 import { useRouter, useFocusEffect } from "expo-router";

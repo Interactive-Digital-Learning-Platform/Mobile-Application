@@ -1,4 +1,5 @@
-import { Modal, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { Modal, View, TouchableOpacity, ActivityIndicator } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import Animated, { AnimatedStyle } from "react-native-reanimated";
 import { Clock, BarChart2, RotateCcw } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";

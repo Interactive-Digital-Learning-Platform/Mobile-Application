@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, Animated, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { ChevronLeft, ChevronRight, Lightbulb, RotateCcw } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 

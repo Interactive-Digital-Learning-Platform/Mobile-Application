@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, StyleSheet, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { BookOpen, CheckCircle2, CircleDashed, CircleHelp, ChevronDown, ChevronUp } from "lucide-react-native";
 import { colors } from "@/constants/colors";
 import { NoteCoverageBreakdown as Coverage } from "@/utils/noteCoverage";

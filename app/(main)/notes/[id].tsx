@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
   Modal,
-  TextInput,
   Alert,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {

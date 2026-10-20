@@ -1,17 +1,23 @@
 import { useAuth } from "@clerk/expo";
 import { router } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useUserSyncMutation } from "@/hooks/use-quiz";
+import { hasSeenOnboarding, markOnboardingSeen } from "@/utils/onboardingStorage";
 
 export default function Index() {
   const { isSignedIn, isLoaded } = useAuth();
   const { mutate: syncUser } = useUserSyncMutation();
   const syncTriggeredRef = useRef(false);
+  const [onboardingSeen, setOnboardingSeen] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    hasSeenOnboarding().then(setOnboardingSeen);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || onboardingSeen === null) return;
 
     if (isLoaded && isSignedIn) {
       // Best-effort background enrichment: makes sure `users.username` is
@@ -23,11 +29,13 @@ export default function Index() {
         syncTriggeredRef.current = true;
         syncUser(undefined);
       }
+      // Already signed in on this install (e.g. installed before onboarding existed): never show it after sign-out.
+      if (!onboardingSeen) markOnboardingSeen();
       router.replace("/(tabs)/ai");
     } else {
-      router.replace("/(auth)/sign-in");
+      router.replace(onboardingSeen ? "/(auth)/sign-in" : "/onboarding");
     }
-  }, [isLoaded, isSignedIn, syncUser]);
+  }, [isLoaded, isSignedIn, onboardingSeen, syncUser]);
 
   return (
     <SafeAreaView style={styles.root}>

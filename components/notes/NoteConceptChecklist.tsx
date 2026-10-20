@@ -1,5 +1,6 @@
 import React, {useState} from "react";
-import {ActivityIndicator,Modal,ScrollView,StyleSheet,Text,TouchableOpacity,View} from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import {ArrowUpRight,Check,ChevronRight,ClipboardCheck,Info,Plus,X} from "lucide-react-native";
 import {colors} from "@/constants/colors";
 import {ChecklistConcept,checklistNextSteps} from "@/utils/noteConceptChecklist";

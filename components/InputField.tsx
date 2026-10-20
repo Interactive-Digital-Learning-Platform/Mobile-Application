@@ -1,12 +1,11 @@
 import {
   StyleSheet,
-  Text,
   View,
-  TextInput,
   TextStyle,
   TouchableOpacity,
   Image,
 } from "react-native";
+import { Text, TextInput } from "@/components/ui/AppText";
 import React, { useState } from "react";
 import icons from "@/constants/icons";
 

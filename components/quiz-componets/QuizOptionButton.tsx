@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { CheckCircle2, XCircle } from "lucide-react-native";
 import { formatMathText } from "@/constants/quizHelpers";
 import { ICON_COLORS } from "@/constants/quizStyles";

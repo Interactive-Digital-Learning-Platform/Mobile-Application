@@ -1,4 +1,5 @@
-import { Modal, View, Text, TouchableOpacity } from "react-native";
+import { Modal, View, TouchableOpacity } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { RotateCcw, X, TriangleAlert } from "lucide-react-native";
 import { ICON_COLORS } from "@/constants/quizStyles";
 

@@ -1,7 +1,8 @@
 import { ChatAttachment } from "@/types/chatModuleTypes";
 import { Image } from "expo-image";
 import { FileText, RefreshCw, X } from "lucide-react-native";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
+import { Text } from "@/components/ui/AppText";
 
 type Props = {
   attachment: ChatAttachment | null;

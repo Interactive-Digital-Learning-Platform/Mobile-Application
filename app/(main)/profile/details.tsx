@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, StatusBar } from "react-native";
+import { View, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, StatusBar } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";

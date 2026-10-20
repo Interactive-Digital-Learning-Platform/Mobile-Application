@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Image, ImageProps, StyleProp, Text, TouchableOpacity, View, ViewStyle } from "react-native";
+import { ActivityIndicator, Image, ImageProps, StyleProp, TouchableOpacity, View, ViewStyle } from "react-native";
+import { Text } from "@/components/ui/AppText";
 import { useNotesAsset } from "@/hooks/use-notes-asset";
 import { colors } from "@/constants/colors";
 
